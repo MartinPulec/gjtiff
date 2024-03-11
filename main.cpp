@@ -140,4 +140,11 @@ int main(int argc, char **argv) {
               image_info[0].image_height);
 
   // cudaStreamSynchronize(stream);
+  for (unsigned int i = 0; i < num_images; i++) {
+    CHECK_CUDA(cudaFree(nvtiff_out[i]));
+  }
+
+  CHECK_NVTIFF(nvtiffStreamDestroy(tiff_stream));
+  CHECK_NVTIFF(nvtiffDecoderDestroy(decoder, stream));
+  CHECK_CUDA(cudaStreamDestroy(stream));
 }
