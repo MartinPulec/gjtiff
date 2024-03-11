@@ -31,6 +31,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cuda_runtime.h>
+#include <libgpujpeg/gpujpeg_common.h>
+#include <libgpujpeg/gpujpeg_encoder.h>
+#include <libgpujpeg/gpujpeg_type.h>
 #include <nvtiff.h>
 #include <vector>
 
@@ -57,6 +60,33 @@ using std::vector;
       exit(EXIT_FAILURE);                                                      \
     }                                                                          \
   }
+
+static void encode_jpeg(uint8_t *cuda_image, int width, int height) {
+  auto *gj_enc = gpujpeg_encoder_create(0);
+  assert(gj_enc != NULL);
+  gpujpeg_parameters param;
+  gpujpeg_set_default_parameters(&param);
+
+  gpujpeg_image_parameters param_image;
+  gpujpeg_image_set_default_parameters(&param_image);
+  param_image.width = width;
+  param_image.height = height;
+  param_image.comp_count = 1;
+  param_image.color_space = GPUJPEG_YCBCR_BT601;
+  param_image.pixel_format = GPUJPEG_U8;
+  gpujpeg_encoder_input encoder_input;
+  gpujpeg_encoder_input_set_gpu_image(&encoder_input, cuda_image);
+  uint8_t *out = nullptr;
+  size_t len = 0;
+  gpujpeg_encoder_encode(gj_enc, &param, &param_image, &encoder_input, &out,
+                         &len);
+
+  FILE *outf = fopen("out.jpg", "wb");
+  fwrite(out, len, 1, outf);
+  fclose(outf);
+
+  gpujpeg_encoder_destroy(gj_enc);
+}
 
 int main(int argc, char **argv) {
   assert(argc == 2);
@@ -105,5 +135,9 @@ int main(int argc, char **argv) {
 	fflush(stdout);
 
   CHECK_NVTIFF(nvtiffDecodeRange(tiff_stream, decoder, frameBeg, num_images, nvtiff_out.data(), stream));
-  cudaStreamSynchronize(stream);
+
+  encode_jpeg(nvtiff_out[0], image_info[0].image_width,
+              image_info[0].image_height);
+
+  // cudaStreamSynchronize(stream);
 }
