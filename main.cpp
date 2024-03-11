@@ -73,6 +73,7 @@ int main(int argc, char **argv) {
   CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, tiff_stream));
   uint32_t num_images = 0;
   CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
+  num_images = 1; // only one first tile for now
   vector<nvtiffImageInfo_t> image_info(num_images);
   vector<uint8_t *> nvtiff_out(num_images);
   vector<size_t> nvtiff_out_size(num_images);
@@ -96,13 +97,13 @@ int main(int argc, char **argv) {
         CHECK_CUDA(cudaMalloc(&nvtiff_out[image_id], nvtiff_out_size[image_id]));
     }
 
-	printf("Decoding %u, images [%d, %d], from file %s... ",
+	printf("Decoding %u, images [%d, %d], from file %s... \n",
 		nDecode,
 		frameBeg,
 		frameEnd,
 		fname);
 	fflush(stdout);
 
-  CHECK_NVTIFF(nvtiffDecode(tiff_stream, decoder, nvtiff_out.data(), stream));
+  CHECK_NVTIFF(nvtiffDecodeRange(tiff_stream, decoder, frameBeg, num_images, nvtiff_out.data(), stream));
   cudaStreamSynchronize(stream);
 }
