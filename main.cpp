@@ -61,7 +61,7 @@ using std::vector;
     }                                                                          \
   }
 
-static void encode_jpeg(uint8_t *cuda_image, int width, int height) {
+static void encode_jpeg(uint8_t *cuda_image, int comp_count, int width, int height) {
   auto *gj_enc = gpujpeg_encoder_create(0);
   assert(gj_enc != NULL);
   gpujpeg_parameters param;
@@ -71,9 +71,9 @@ static void encode_jpeg(uint8_t *cuda_image, int width, int height) {
   gpujpeg_image_set_default_parameters(&param_image);
   param_image.width = width;
   param_image.height = height;
-  param_image.comp_count = 1;
-  param_image.color_space = GPUJPEG_YCBCR_BT601;
-  param_image.pixel_format = GPUJPEG_U8;
+  param_image.comp_count = comp_count;
+  param_image.color_space = comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
+  param_image.pixel_format = comp_count == 1 ? GPUJPEG_U8 : GPUJPEG_444_U8_P012;
   gpujpeg_encoder_input encoder_input;
   gpujpeg_encoder_input_set_gpu_image(&encoder_input, cuda_image);
   uint8_t *out = nullptr;
@@ -136,8 +136,8 @@ int main(int argc, char **argv) {
 
   CHECK_NVTIFF(nvtiffDecodeRange(tiff_stream, decoder, frameBeg, num_images, nvtiff_out.data(), stream));
 
-  encode_jpeg(nvtiff_out[0], image_info[0].image_width,
-              image_info[0].image_height);
+  encode_jpeg(nvtiff_out[0], image_info[0].samples_per_pixel,
+              image_info[0].image_width, image_info[0].image_height);
 
   // cudaStreamSynchronize(stream);
   for (unsigned int i = 0; i < num_images; i++) {
