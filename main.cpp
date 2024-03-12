@@ -37,6 +37,8 @@
 #include <nvtiff.h>
 #include <vector>
 
+#include "kernels.hpp"
+
 using std::vector;
 
 #define DIV_UP(a, b) (((a) + ((b)-1)) / (b))
@@ -136,7 +138,13 @@ int main(int argc, char **argv) {
 
   CHECK_NVTIFF(nvtiffDecodeRange(tiff_stream, decoder, frameBeg, num_images, nvtiff_out.data(), stream));
 
-  encode_jpeg(nvtiff_out[0], image_info[0].samples_per_pixel,
+  uint8_t *in_8 = nvtiff_out[0];
+  uint8_t *tmpbuf = nullptr;
+  if (image_info[0].bits_per_pixel == 16) {
+    in_8 = tmpbuf = convert16_8((uint16_t *) nvtiff_out[0], nvtiff_out_size[0], stream);
+  }
+
+  encode_jpeg(in_8, image_info[0].samples_per_pixel,
               image_info[0].image_width, image_info[0].image_height);
 
   // cudaStreamSynchronize(stream);
