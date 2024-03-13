@@ -62,8 +62,9 @@
   }
 
 struct state_gjtiff {
-  state_gjtiff();
+  state_gjtiff(bool verbose);
   ~state_gjtiff();
+  bool verbose;
   // NVTIFF
   nvtiffStream_t tiff_stream{};
   nvtiffDecoder_t decoder{};
@@ -77,7 +78,7 @@ struct state_gjtiff {
   struct gpujpeg_encoder *gj_enc{};
 };
 
-state_gjtiff::state_gjtiff() {
+state_gjtiff::state_gjtiff(bool v) : verbose(v) {
   CHECK_CUDA(cudaStreamCreate(&stream));
   CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
   CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
@@ -100,7 +101,9 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
   const uint32_t num_images = 1;
   // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
   CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, s->tiff_stream));
-  CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
+  if (s->verbose) {
+    CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
+  }
   const int image_id = 0; // first image only
   CHECK_NVTIFF(
       nvtiffStreamGetImageInfo(s->tiff_stream, image_id, image_info));
@@ -175,10 +178,37 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen) {
   }
 }
 
-int main(int argc, char **argv) {
-  struct state_gjtiff s;
+static void show_help(const char *progname) {
+  printf("%s [-v] img1.tif [img2.tif...]\n\n", progname);
+  printf("Output will be \"basename ${name%%.*}.jpg\"\n");
+}
 
-  for (int i = 1; i < argc; ++i) {
+int main(int argc, char **argv) {
+  bool verbose = false;
+  const char *progname = argv[0];
+  argv++;
+  argc--;
+  while (*argv != nullptr && argv[0][0] == '-') {
+    argv++;
+    argc--;
+    if (strcmp(argv[-1], "--") == 0) {
+      break;
+    }
+    if (strcmp(argv[-1], "-h") == 0) {
+      show_help(progname);
+      return 0;
+    }
+    if (strcmp(argv[-1], "-v") == 0) {
+      verbose = true;
+    } else {
+      fprintf(stderr, "Unknown option: %s!\n", argv[-1]);
+      return 1;
+    }
+  }
+
+  struct state_gjtiff s(verbose);
+
+  for (int i = 0; i < argc; ++i) {
     const char *ifname = argv[i];
     char ofname[1024];
     set_ofname(ifname, ofname, sizeof ofname);
