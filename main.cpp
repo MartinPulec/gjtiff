@@ -28,6 +28,7 @@
  */
 
 #include <cassert>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -164,6 +165,10 @@ static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image,
                          &len);
 
   FILE *outf = fopen(ofname, "wb");
+  if (outf == nullptr) {
+    fprintf(stderr, "fopen %s: %s\n", ofname, strerror(errno));
+    return;
+  }
   fwrite(out, len, 1, outf);
   fclose(outf);
 }
@@ -184,13 +189,16 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen) {
 }
 
 static void show_help(const char *progname) {
-  printf("%s [-v] img1.tif [img2.tif...]\n\n", progname);
-  printf("Output will be \"basename ${name%%.*}.jpg\"\n");
+  printf("%s [-o <outdir>] [-v] img1.tif [img2.tif...]\n\n", progname);
+  printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
+  printf("Output directory must exist, implicitly \".\"\n");
 }
 
 int main(int argc, char **argv) {
   bool verbose = false;
+  char ofname[1024] = "./";
   const char *progname = argv[0];
+
   argv++;
   argc--;
   while (*argv != nullptr && argv[0][0] == '-') {
@@ -203,7 +211,16 @@ int main(int argc, char **argv) {
       show_help(progname);
       return 0;
     }
-    if (strcmp(argv[-1], "-v") == 0) {
+    if (strncmp(argv[-1], "-o", 2) == 0) {
+      if (strlen(argv[-1]) > 2) { // -o<dir>
+        snprintf(ofname, sizeof ofname, "%s/", argv[-1] + 2);
+      } else { // -o <dir>
+        assert(argv[0] != nullptr);
+        snprintf(ofname, sizeof ofname, "%s/", argv[0]);
+        argv++;
+        argc--;
+      }
+    } else if (strcmp(argv[-1], "-v") == 0) {
       verbose = true;
     } else {
       fprintf(stderr, "Unknown option: %s!\n", argv[-1]);
@@ -213,10 +230,10 @@ int main(int argc, char **argv) {
 
   struct state_gjtiff s(verbose);
 
+  const size_t d_pref_len = strlen(ofname);
   for (int i = 0; i < argc; ++i) {
     const char *ifname = argv[i];
-    char ofname[1024];
-    set_ofname(ifname, ofname, sizeof ofname);
+    set_ofname(ifname, ofname + d_pref_len, sizeof ofname - d_pref_len);
 
     nvtiffImageInfo_t image_info;
     size_t nvtiff_out_size;
