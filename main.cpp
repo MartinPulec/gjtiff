@@ -164,7 +164,8 @@ int main(int argc, char **argv) {
   nvtiffImageInfo_t image_info;
   size_t nvtiff_out_size;
   uint8_t *decoded = decode_tiff(&s, fname, &nvtiff_out_size, &image_info);
-  uint8_t *converted = convert_16_8(&s, decoded, image_info.bits_per_pixel, nvtiff_out_size);
+  uint8_t *converted =
+      convert_16_8(&s, decoded, image_info.bits_per_sample[0], nvtiff_out_size);
   encode_jpeg(&s, converted, image_info.samples_per_pixel,
               image_info.image_width, image_info.image_height);
 
