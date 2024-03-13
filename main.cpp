@@ -35,11 +35,8 @@
 #include <libgpujpeg/gpujpeg_encoder.h>
 #include <libgpujpeg/gpujpeg_type.h>
 #include <nvtiff.h>
-#include <vector>
 
 #include "kernels.hpp"
-
-using std::vector;
 
 #define DIV_UP(a, b) (((a) + ((b)-1)) / (b))
 
@@ -90,69 +87,67 @@ static void encode_jpeg(uint8_t *cuda_image, int comp_count, int width, int heig
   gpujpeg_encoder_destroy(gj_enc);
 }
 
-int main(int argc, char **argv) {
-  assert(argc == 2);
-  const char *fname = argv[1];
-  const int verbose = 1;
-  int frameBeg = INT_MIN;
-	int frameEnd = INT_MAX;
+struct state_gjtiff {
   nvtiffStream_t tiff_stream;
   nvtiffDecoder_t decoder;
   cudaStream_t stream;
-  CHECK_CUDA(cudaStreamCreate(&stream));
-  CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
-  CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
-  CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, tiff_stream));
-  uint32_t num_images = 0;
-  CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
-  num_images = 1; // only one first tile for now
-  vector<nvtiffImageInfo_t> image_info(num_images);
-  vector<uint8_t *> nvtiff_out(num_images);
-  vector<size_t> nvtiff_out_size(num_images);
+};
 
-  // BEGIN work (possibly) overlapped with H2D copy of the file data
-	if (verbose) {
-		CHECK_NVTIFF(nvtiffStreamPrint(tiff_stream));
-	}
-	
-	frameBeg = fmax(frameBeg, 0);
-	frameEnd = fmin(frameEnd, num_images-1);
-	const int nDecode = frameEnd-frameBeg+1;
+static void init(struct state_gjtiff *s) {
+  CHECK_CUDA(cudaStreamCreate(&s->stream));
+  CHECK_NVTIFF(nvtiffStreamCreate(&s->tiff_stream));
+  CHECK_NVTIFF(nvtiffDecoderCreateSimple(&s->decoder, s->stream));
+}
 
-	for (uint32_t image_id = 0; image_id < num_images; image_id++) {
-        CHECK_NVTIFF(nvtiffStreamGetImageInfo(tiff_stream, image_id, &image_info[image_id]));
-        nvtiff_out_size[image_id] = DIV_UP((size_t)image_info[image_id].bits_per_pixel * image_info[image_id].image_width, 8) *
-                                    (size_t)image_info[image_id].image_height;
-        if (image_info[image_id].photometric_int == NVTIFF_PHOTOMETRIC_PALETTE) {
-            nvtiff_out_size[image_id] = image_info[image_id].image_width * image_info[image_id].image_height * 3 * sizeof(uint16_t);
-        }
-        CHECK_CUDA(cudaMalloc(&nvtiff_out[image_id], nvtiff_out_size[image_id]));
-    }
+static void destroy(struct state_gjtiff *s) {
+  CHECK_NVTIFF(nvtiffStreamDestroy(s->tiff_stream));
+  CHECK_NVTIFF(nvtiffDecoderDestroy(s->decoder, s->stream));
+  CHECK_CUDA(cudaStreamDestroy(s->stream));
+}
 
-	printf("Decoding %u, images [%d, %d], from file %s... \n",
-		nDecode,
-		frameBeg,
-		frameEnd,
-		fname);
-	fflush(stdout);
+static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
+                            size_t *nvtiff_out_size,
+                            nvtiffImageInfo_t *image_info) {
+  const uint32_t num_images = 1;
+  // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
+  uint8_t * nvtiff_out;
+  CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, s->tiff_stream));
+  CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
+  const int image_id = 0; // first image only
+  CHECK_NVTIFF(
+      nvtiffStreamGetImageInfo(s->tiff_stream, image_id, image_info));
+  *nvtiff_out_size =
+      DIV_UP((size_t)image_info->bits_per_pixel * image_info->image_width, 8) *
+      (size_t)image_info->image_height;
+  assert(image_info->photometric_int != NVTIFF_PHOTOMETRIC_PALETTE);
+  CHECK_CUDA(cudaMalloc(&nvtiff_out, *nvtiff_out_size));
+  printf("Decoding from file %s... \n", fname);
+  CHECK_NVTIFF(nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id,
+                                 num_images, &nvtiff_out, s->stream));
+  return nvtiff_out;
+}
 
-  CHECK_NVTIFF(nvtiffDecodeRange(tiff_stream, decoder, frameBeg, num_images, nvtiff_out.data(), stream));
+int main(int argc, char **argv) {
+  assert(argc == 2);
+  const char *fname = argv[1];
+  struct state_gjtiff s;
+  init(&s);
 
-  uint8_t *in_8 = nvtiff_out[0];
+  nvtiffImageInfo_t image_info;
+  size_t nvtiff_out_size;
+  uint8_t *decoded = decode_tiff(&s, fname, &nvtiff_out_size, &image_info);
   uint8_t *tmpbuf = nullptr;
-  if (image_info[0].bits_per_pixel == 16) {
-    in_8 = tmpbuf = convert16_8((uint16_t *) nvtiff_out[0], nvtiff_out_size[0], stream);
+  uint8_t *in_8 = decoded;
+  if (image_info.bits_per_pixel == 16) {
+    in_8 = tmpbuf = convert16_8((uint16_t *) decoded, nvtiff_out_size, s.stream);
   }
 
-  encode_jpeg(in_8, image_info[0].samples_per_pixel,
-              image_info[0].image_width, image_info[0].image_height);
+  encode_jpeg(in_8, image_info.samples_per_pixel,
+              image_info.image_width, image_info.image_height);
 
   // cudaStreamSynchronize(stream);
-  for (unsigned int i = 0; i < num_images; i++) {
-    CHECK_CUDA(cudaFree(nvtiff_out[i]));
-  }
-
-  CHECK_NVTIFF(nvtiffStreamDestroy(tiff_stream));
-  CHECK_NVTIFF(nvtiffDecoderDestroy(decoder, stream));
-  CHECK_CUDA(cudaStreamDestroy(stream));
+  CHECK_CUDA(cudaFree(decoded));
+  CHECK_CUDA(cudaFree(tmpbuf));
+  CHECK_CUDA(cudaFree(nullptr));
+  destroy(&s);
 }
