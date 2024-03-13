@@ -194,16 +194,14 @@ static void show_help(const char *progname) {
   printf("Output directory must exist, implicitly \".\"\n");
 }
 
-int main(int argc, char **argv) {
+int main(int /* argc */, char **argv) {
   bool verbose = false;
   char ofname[1024] = "./";
   const char *progname = argv[0];
 
   argv++;
-  argc--;
   while (*argv != nullptr && argv[0][0] == '-') {
     argv++;
-    argc--;
     if (strcmp(argv[-1], "--") == 0) {
       break;
     }
@@ -218,7 +216,6 @@ int main(int argc, char **argv) {
         assert(argv[0] != nullptr);
         snprintf(ofname, sizeof ofname, "%s/", argv[0]);
         argv++;
-        argc--;
       }
     } else if (strcmp(argv[-1], "-v") == 0) {
       verbose = true;
@@ -231,8 +228,8 @@ int main(int argc, char **argv) {
   struct state_gjtiff s(verbose);
 
   const size_t d_pref_len = strlen(ofname);
-  for (int i = 0; i < argc; ++i) {
-    const char *ifname = argv[i];
+  for (; *argv != nullptr; ++argv) {
+    const char *ifname = argv[0];
     set_ofname(ifname, ofname + d_pref_len, sizeof ofname - d_pref_len);
 
     nvtiffImageInfo_t image_info;
