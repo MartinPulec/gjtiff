@@ -98,6 +98,7 @@ state_gjtiff::~state_gjtiff() {
 static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
                             size_t *nvtiff_out_size,
                             nvtiffImageInfo_t *image_info) {
+  printf("Decoding from file %s... \n", fname);
   const uint32_t num_images = 1;
   // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
   CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, s->tiff_stream));
@@ -116,7 +117,6 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
     CHECK_CUDA(cudaMalloc(&s->decoded, *nvtiff_out_size));
     s->decoded_allocated = *nvtiff_out_size;
   }
-  printf("Decoding from file %s... \n", fname);
   CHECK_NVTIFF(nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id,
                                  num_images, &s->decoded, s->stream));
   return s->decoded;
