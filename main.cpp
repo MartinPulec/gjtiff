@@ -60,9 +60,59 @@
     }                                                                          \
   }
 
-static void encode_jpeg(uint8_t *cuda_image, int comp_count, int width, int height) {
-  auto *gj_enc = gpujpeg_encoder_create(0);
-  assert(gj_enc != NULL);
+struct state_gjtiff {
+  // NVTIFF
+  nvtiffStream_t tiff_stream;
+  nvtiffDecoder_t decoder;
+  cudaStream_t stream;
+  uint8_t *decoded;
+  size_t decoded_allocated;
+  // GPUJPEG
+  struct gpujpeg_encoder *gj_enc;
+};
+
+static void init(struct state_gjtiff *s) {
+  CHECK_CUDA(cudaStreamCreate(&s->stream));
+  CHECK_NVTIFF(nvtiffStreamCreate(&s->tiff_stream));
+  CHECK_NVTIFF(nvtiffDecoderCreateSimple(&s->decoder, s->stream));
+  s->gj_enc = gpujpeg_encoder_create(s->stream);
+  assert(s->gj_enc != nullptr);
+}
+
+static void destroy(struct state_gjtiff *s) {
+  CHECK_NVTIFF(nvtiffStreamDestroy(s->tiff_stream));
+  CHECK_NVTIFF(nvtiffDecoderDestroy(s->decoder, s->stream));
+  CHECK_CUDA(cudaStreamDestroy(s->stream));
+  CHECK_CUDA(cudaFree(s->decoded));
+  gpujpeg_encoder_destroy(s->gj_enc);
+}
+
+static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
+                            size_t *nvtiff_out_size,
+                            nvtiffImageInfo_t *image_info) {
+  const uint32_t num_images = 1;
+  // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
+  CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, s->tiff_stream));
+  CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
+  const int image_id = 0; // first image only
+  CHECK_NVTIFF(
+      nvtiffStreamGetImageInfo(s->tiff_stream, image_id, image_info));
+  assert(image_info->photometric_int != NVTIFF_PHOTOMETRIC_PALETTE);
+  *nvtiff_out_size =
+      DIV_UP((size_t)image_info->bits_per_pixel * image_info->image_width, 8) *
+      (size_t)image_info->image_height;
+  if (*nvtiff_out_size > s->decoded_allocated) {
+    CHECK_CUDA(cudaFree(s->decoded));
+    CHECK_CUDA(cudaMalloc(&s->decoded, *nvtiff_out_size));
+    s->decoded_allocated = *nvtiff_out_size;
+  }
+  printf("Decoding from file %s... \n", fname);
+  CHECK_NVTIFF(nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id,
+                                 num_images, &s->decoded, s->stream));
+  return s->decoded;
+}
+
+static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image, int comp_count, int width, int height) {
   gpujpeg_parameters param;
   gpujpeg_set_default_parameters(&param);
 
@@ -77,60 +127,18 @@ static void encode_jpeg(uint8_t *cuda_image, int comp_count, int width, int heig
   gpujpeg_encoder_input_set_gpu_image(&encoder_input, cuda_image);
   uint8_t *out = nullptr;
   size_t len = 0;
-  gpujpeg_encoder_encode(gj_enc, &param, &param_image, &encoder_input, &out,
+  gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input, &out,
                          &len);
 
   FILE *outf = fopen("out.jpg", "wb");
   fwrite(out, len, 1, outf);
   fclose(outf);
-
-  gpujpeg_encoder_destroy(gj_enc);
-}
-
-struct state_gjtiff {
-  nvtiffStream_t tiff_stream;
-  nvtiffDecoder_t decoder;
-  cudaStream_t stream;
-};
-
-static void init(struct state_gjtiff *s) {
-  CHECK_CUDA(cudaStreamCreate(&s->stream));
-  CHECK_NVTIFF(nvtiffStreamCreate(&s->tiff_stream));
-  CHECK_NVTIFF(nvtiffDecoderCreateSimple(&s->decoder, s->stream));
-}
-
-static void destroy(struct state_gjtiff *s) {
-  CHECK_NVTIFF(nvtiffStreamDestroy(s->tiff_stream));
-  CHECK_NVTIFF(nvtiffDecoderDestroy(s->decoder, s->stream));
-  CHECK_CUDA(cudaStreamDestroy(s->stream));
-}
-
-static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
-                            size_t *nvtiff_out_size,
-                            nvtiffImageInfo_t *image_info) {
-  const uint32_t num_images = 1;
-  // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
-  uint8_t * nvtiff_out;
-  CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, s->tiff_stream));
-  CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
-  const int image_id = 0; // first image only
-  CHECK_NVTIFF(
-      nvtiffStreamGetImageInfo(s->tiff_stream, image_id, image_info));
-  *nvtiff_out_size =
-      DIV_UP((size_t)image_info->bits_per_pixel * image_info->image_width, 8) *
-      (size_t)image_info->image_height;
-  assert(image_info->photometric_int != NVTIFF_PHOTOMETRIC_PALETTE);
-  CHECK_CUDA(cudaMalloc(&nvtiff_out, *nvtiff_out_size));
-  printf("Decoding from file %s... \n", fname);
-  CHECK_NVTIFF(nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id,
-                                 num_images, &nvtiff_out, s->stream));
-  return nvtiff_out;
 }
 
 int main(int argc, char **argv) {
   assert(argc == 2);
   const char *fname = argv[1];
-  struct state_gjtiff s;
+  struct state_gjtiff s{};
   init(&s);
 
   nvtiffImageInfo_t image_info;
@@ -142,11 +150,10 @@ int main(int argc, char **argv) {
     in_8 = tmpbuf = convert16_8((uint16_t *) decoded, nvtiff_out_size, s.stream);
   }
 
-  encode_jpeg(in_8, image_info.samples_per_pixel,
+  encode_jpeg(&s, in_8, image_info.samples_per_pixel,
               image_info.image_width, image_info.image_height);
 
   // cudaStreamSynchronize(stream);
-  CHECK_CUDA(cudaFree(decoded));
   CHECK_CUDA(cudaFree(tmpbuf));
   CHECK_CUDA(cudaFree(nullptr));
   destroy(&s);
