@@ -30,6 +30,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <cuda_runtime.h>
 #include <libgpujpeg/gpujpeg_common.h>
 #include <libgpujpeg/gpujpeg_encoder.h>
@@ -132,7 +133,9 @@ static uint8_t *convert_16_8(struct state_gjtiff *s, uint8_t *in, int in_depth,
   return s->converted;
 }
 
-static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image, int comp_count, int width, int height) {
+static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image,
+                        int comp_count, int width, int height,
+                        const char *ofname) {
   gpujpeg_parameters param;
   gpujpeg_set_default_parameters(&param);
 
@@ -150,24 +153,43 @@ static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image, int comp_co
   gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input, &out,
                          &len);
 
-  FILE *outf = fopen("out.jpg", "wb");
+  FILE *outf = fopen(ofname, "wb");
   fwrite(out, len, 1, outf);
   fclose(outf);
 }
 
+static void set_ofname(const char *ifname, char *ofname, size_t buflen) {
+  if (strrchr(ifname, '/') != nullptr) {
+    snprintf(ofname, buflen, "%s", strrchr(ifname, '/') + 1);
+  } else {
+    snprintf(ofname, buflen, "%s", ifname);
+  }
+  if (strrchr(ofname, '.') != nullptr) {
+    char *ptr = strrchr(ofname, '.') + 1;
+    size_t avail_len = buflen - (ptr - ofname);
+    snprintf(ptr, avail_len, "jpg");
+  } else {
+    snprintf(ofname + strlen(ofname), buflen - strlen(ofname), ".jpg");
+  }
+}
+
 int main(int argc, char **argv) {
-  assert(argc == 2);
-  const char *fname = argv[1];
   struct state_gjtiff s{};
   init(&s);
 
-  nvtiffImageInfo_t image_info;
-  size_t nvtiff_out_size;
-  uint8_t *decoded = decode_tiff(&s, fname, &nvtiff_out_size, &image_info);
-  uint8_t *converted =
-      convert_16_8(&s, decoded, image_info.bits_per_sample[0], nvtiff_out_size);
-  encode_jpeg(&s, converted, image_info.samples_per_pixel,
-              image_info.image_width, image_info.image_height);
+  for (int i = 1; i < argc; ++i) {
+    const char *ifname = argv[i];
+    char ofname[1024];
+    set_ofname(ifname, ofname, sizeof ofname);
+
+    nvtiffImageInfo_t image_info;
+    size_t nvtiff_out_size;
+    uint8_t *decoded = decode_tiff(&s, ifname, &nvtiff_out_size, &image_info);
+    uint8_t *converted = convert_16_8(
+        &s, decoded, image_info.bits_per_sample[0], nvtiff_out_size);
+    encode_jpeg(&s, converted, image_info.samples_per_pixel,
+                image_info.image_width, image_info.image_height, ofname);
+  }
 
   // cudaStreamSynchronize(stream);
   destroy(&s);
