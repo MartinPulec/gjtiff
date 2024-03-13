@@ -62,34 +62,36 @@
   }
 
 struct state_gjtiff {
+  state_gjtiff();
+  ~state_gjtiff();
   // NVTIFF
-  nvtiffStream_t tiff_stream;
-  nvtiffDecoder_t decoder;
-  cudaStream_t stream;
-  uint8_t *decoded;
-  size_t decoded_allocated;
+  nvtiffStream_t tiff_stream{};
+  nvtiffDecoder_t decoder{};
+  cudaStream_t stream{};
+  uint8_t *decoded{};
+  size_t decoded_allocated{};
   // converted
-  uint8_t *converted;
-  size_t converted_allocated;
+  uint8_t *converted{};
+  size_t converted_allocated{};
   // GPUJPEG
-  struct gpujpeg_encoder *gj_enc;
+  struct gpujpeg_encoder *gj_enc{};
 };
 
-static void init(struct state_gjtiff *s) {
-  CHECK_CUDA(cudaStreamCreate(&s->stream));
-  CHECK_NVTIFF(nvtiffStreamCreate(&s->tiff_stream));
-  CHECK_NVTIFF(nvtiffDecoderCreateSimple(&s->decoder, s->stream));
-  s->gj_enc = gpujpeg_encoder_create(s->stream);
-  assert(s->gj_enc != nullptr);
+state_gjtiff::state_gjtiff() {
+  CHECK_CUDA(cudaStreamCreate(&stream));
+  CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
+  CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
+  gj_enc = gpujpeg_encoder_create(stream);
+  assert(gj_enc != nullptr);
 }
 
-static void destroy(struct state_gjtiff *s) {
-  CHECK_NVTIFF(nvtiffStreamDestroy(s->tiff_stream));
-  CHECK_NVTIFF(nvtiffDecoderDestroy(s->decoder, s->stream));
-  CHECK_CUDA(cudaStreamDestroy(s->stream));
-  CHECK_CUDA(cudaFree(s->decoded));
-  CHECK_CUDA(cudaFree(s->converted));
-  gpujpeg_encoder_destroy(s->gj_enc);
+state_gjtiff::~state_gjtiff() {
+  CHECK_NVTIFF(nvtiffStreamDestroy(tiff_stream));
+  CHECK_NVTIFF(nvtiffDecoderDestroy(decoder, stream));
+  CHECK_CUDA(cudaStreamDestroy(stream));
+  CHECK_CUDA(cudaFree(decoded));
+  CHECK_CUDA(cudaFree(converted));
+  gpujpeg_encoder_destroy(gj_enc);
 }
 
 static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
@@ -174,8 +176,7 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen) {
 }
 
 int main(int argc, char **argv) {
-  struct state_gjtiff s{};
-  init(&s);
+  struct state_gjtiff s;
 
   for (int i = 1; i < argc; ++i) {
     const char *ifname = argv[i];
@@ -190,7 +191,4 @@ int main(int argc, char **argv) {
     encode_jpeg(&s, converted, image_info.samples_per_pixel,
                 image_info.image_width, image_info.image_height, ofname);
   }
-
-  // cudaStreamSynchronize(stream);
-  destroy(&s);
 }
