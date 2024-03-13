@@ -101,7 +101,12 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
   printf("Decoding from file %s... \n", fname);
   const uint32_t num_images = 1;
   // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
-  CHECK_NVTIFF(nvtiffStreamParseFromFile(fname, s->tiff_stream));
+  nvtiffStatus_t e = nvtiffStreamParseFromFile(fname, s->tiff_stream);
+  if (e != NVTIFF_STATUS_SUCCESS) {
+    fprintf(stderr, "nvtiff error code %d in file '%s' in line %i\n", e,
+            __FILE__, __LINE__);
+    return nullptr;
+  }
   if (s->verbose) {
     CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
   }
@@ -216,6 +221,9 @@ int main(int argc, char **argv) {
     nvtiffImageInfo_t image_info;
     size_t nvtiff_out_size;
     uint8_t *decoded = decode_tiff(&s, ifname, &nvtiff_out_size, &image_info);
+    if (decoded == nullptr) {
+      continue;
+    }
     uint8_t *converted = convert_16_8(
         &s, decoded, image_info.bits_per_sample[0], nvtiff_out_size);
     encode_jpeg(&s, converted, image_info.samples_per_pixel,
