@@ -67,6 +67,9 @@ struct state_gjtiff {
   cudaStream_t stream;
   uint8_t *decoded;
   size_t decoded_allocated;
+  // converted
+  uint8_t *converted;
+  size_t converted_allocated;
   // GPUJPEG
   struct gpujpeg_encoder *gj_enc;
 };
@@ -84,6 +87,7 @@ static void destroy(struct state_gjtiff *s) {
   CHECK_NVTIFF(nvtiffDecoderDestroy(s->decoder, s->stream));
   CHECK_CUDA(cudaStreamDestroy(s->stream));
   CHECK_CUDA(cudaFree(s->decoded));
+  CHECK_CUDA(cudaFree(s->converted));
   gpujpeg_encoder_destroy(s->gj_enc);
 }
 
@@ -110,6 +114,22 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
   CHECK_NVTIFF(nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id,
                                  num_images, &s->decoded, s->stream));
   return s->decoded;
+}
+
+static uint8_t *convert_16_8(struct state_gjtiff *s, uint8_t *in, int in_depth,
+                             size_t in_size) {
+  if (in_depth == 8) {
+    return in;
+  }
+  assert(in_depth == 16);
+  const size_t out_size = in_size / 2;
+  if (out_size > s->converted_allocated) {
+    CHECK_CUDA(cudaFree(s->converted));
+    CHECK_CUDA(cudaMalloc(&s->converted, out_size));
+    s->converted_allocated = out_size;
+  }
+  convert_16_8_cuda((uint16_t *) in, s->converted, in_size, s->stream);
+  return s->converted;
 }
 
 static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image, int comp_count, int width, int height) {
@@ -144,17 +164,10 @@ int main(int argc, char **argv) {
   nvtiffImageInfo_t image_info;
   size_t nvtiff_out_size;
   uint8_t *decoded = decode_tiff(&s, fname, &nvtiff_out_size, &image_info);
-  uint8_t *tmpbuf = nullptr;
-  uint8_t *in_8 = decoded;
-  if (image_info.bits_per_pixel == 16) {
-    in_8 = tmpbuf = convert16_8((uint16_t *) decoded, nvtiff_out_size, s.stream);
-  }
-
-  encode_jpeg(&s, in_8, image_info.samples_per_pixel,
+  uint8_t *converted = convert_16_8(&s, decoded, image_info.bits_per_pixel, nvtiff_out_size);
+  encode_jpeg(&s, converted, image_info.samples_per_pixel,
               image_info.image_width, image_info.image_height);
 
   // cudaStreamSynchronize(stream);
-  CHECK_CUDA(cudaFree(tmpbuf));
-  CHECK_CUDA(cudaFree(nullptr));
   destroy(&s);
 }
