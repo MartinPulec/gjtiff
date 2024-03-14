@@ -4,6 +4,7 @@
 
 #include "libtiff.hpp"
 #include "kernels.hpp"
+#include "utils.hpp"
 
 using std::unique_ptr;
 
@@ -44,20 +45,13 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
     assert(tmp_buffer.get() != nullptr);
     tmp_buffer_allocated = read_size;
   }
-  struct timespec t0, t1;
-  if (log_level >= 2) {
-    timespec_get(&t0, TIME_UTC);
-  }
+  TIMER_START(TIFFReadRGBAImage, log_level);
   /// @todo
   // TIFFReadRow{Tile,Strip} would be faster
   const int rc =
       TIFFReadRGBAImageOriented(tif, image_info->image_width, image_info->image_height,
                         (uint32_t *)tmp_buffer.get(), ORIENTATION_TOPLEFT, 0);
-  if (log_level >= 2) {
-    timespec_get(&t1, TIME_UTC);
-    fprintf(stderr, "TIFFReadRGBAImage duration %f s\n",
-            t1.tv_sec - t0.tv_sec + (t1.tv_nsec - t0.tv_nsec) / 1000000000.0);
-  }
+  TIMER_STOP(TIFFReadRGBAImage, log_level);
   TIFFClose(tif);
   if (rc != 1) {
     fprintf(stderr, "libtiff decode image %s failed!\n", fname);
