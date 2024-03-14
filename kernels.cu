@@ -26,3 +26,19 @@ void convert_rgba_grayscale(uint8_t *in, uint8_t *out, size_t pix_count,
 {
   kernel_convert_rgba_grayscale<<<dim3((pix_count+255)/256), dim3(256), 0, stream>>>(in, out, pix_count);
 }
+
+__global__ void kernel_convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t datalen) {
+  int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
+  if (position > datalen) {
+    return;
+  }
+  out[position * 3] = in[position * 4];
+  out[position * 3 + 1] = in[position * 4 + 1];
+  out[position * 3 + 1] = in[position * 4 + 1];
+}
+
+void convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t pix_count,
+                            cudaStream_t stream)
+{
+  kernel_convert_rgba_rgb<<<dim3((pix_count+255)/256), dim3(256), 0, stream>>>(in, out, pix_count);
+}

@@ -71,9 +71,22 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
     cudaMalloc(decoded, out_size);
     *decoded_allocated = out_size;
   }
-  convert_rgba_grayscale(tmp_buffer.get(), *decoded,
-                         image_info->image_width * image_info->image_height,
-                         stream);
+  switch (image_info->samples_per_pixel) {
+  case 1:
+    convert_rgba_grayscale(tmp_buffer.get(), *decoded,
+                           image_info->image_width * image_info->image_height,
+                           stream);
+    break;
+  case 3:
+    convert_rgba_rgb(tmp_buffer.get(), *decoded,
+                     image_info->image_width * image_info->image_height,
+                     stream);
+    break;
+  default:
+    fprintf(stderr, "Unsupported sample count %d!\n",
+            image_info->samples_per_pixel);
+    return nullptr;
+  }
   *nvtiff_out_size = out_size;
   return *decoded;
 }
