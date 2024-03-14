@@ -38,6 +38,7 @@
 #include <libgpujpeg/gpujpeg_type.h>
 #include <nvtiff.h>
 
+#include "libtiff.hpp"
 #include "kernels.hpp"
 
 #define DIV_UP(a, b) (((a) + ((b)-1)) / (b))
@@ -72,6 +73,8 @@ struct state_gjtiff {
   cudaStream_t stream{};
   uint8_t *decoded{};
   size_t decoded_allocated{};
+  // libtiff
+  libtiff_state tiff_state;
   // converted
   uint8_t *converted{};
   size_t converted_allocated{};
@@ -103,7 +106,11 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
   const uint32_t num_images = 1;
   // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
   nvtiffStatus_t e = nvtiffStreamParseFromFile(fname, s->tiff_stream);
-  if (e != NVTIFF_STATUS_SUCCESS) {
+  if (e == NVTIFF_STATUS_TIFF_NOT_SUPPORTED) {
+    fprintf(stderr, "TIFF not supported by nvtiff, trying libtiff...\n");
+    return s->tiff_state.decode(fname, nvtiff_out_size, image_info,
+                                   &s->decoded, &s->decoded_allocated, s->stream);
+  } else if (e != NVTIFF_STATUS_SUCCESS) {
     fprintf(stderr, "nvtiff error code %d in file '%s' in line %i\n", e,
             __FILE__, __LINE__);
     return nullptr;
