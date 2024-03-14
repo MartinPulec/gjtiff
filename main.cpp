@@ -27,6 +27,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <cmath>
@@ -64,9 +65,9 @@
   }
 
 struct state_gjtiff {
-  state_gjtiff(bool verbose);
+  state_gjtiff(int log_level);
   ~state_gjtiff();
-  bool verbose;
+  int log_level;
   // NVTIFF
   nvtiffStream_t tiff_stream{};
   nvtiffDecoder_t decoder{};
@@ -82,7 +83,7 @@ struct state_gjtiff {
   struct gpujpeg_encoder *gj_enc{};
 };
 
-state_gjtiff::state_gjtiff(bool v) : verbose(v) {
+state_gjtiff::state_gjtiff(int l) : log_level(l), tiff_state(l) {
   CHECK_CUDA(cudaStreamCreate(&stream));
   CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
   CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
@@ -115,7 +116,7 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
             __FILE__, __LINE__);
     return nullptr;
   }
-  if (s->verbose) {
+  if (s->log_level >= 2) {
     CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
   }
   const int image_id = 0; // first image only
@@ -196,13 +197,13 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen) {
 }
 
 static void show_help(const char *progname) {
-  printf("%s [-o <outdir>] [-v] img1.tif [img2.tif...]\n\n", progname);
+  printf("%s [-o <outdir>] [-v[v]] img1.tif [img2.tif...]\n\n", progname);
   printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
   printf("Output directory must exist, implicitly \".\"\n");
 }
 
 int main(int /* argc */, char **argv) {
-  bool verbose = false;
+  int log_level = 0;
   char ofname[1024] = "./";
   const char *progname = argv[0];
 
@@ -224,15 +225,15 @@ int main(int /* argc */, char **argv) {
         snprintf(ofname, sizeof ofname, "%s/", argv[0]);
         argv++;
       }
-    } else if (strcmp(argv[-1], "-v") == 0) {
-      verbose = true;
+    } else if (strstr(argv[-1], "-v") == argv[-1]) {
+      log_level += std::count(argv[-1], argv[-1] + strlen(argv[-1]), 'v');
     } else {
       fprintf(stderr, "Unknown option: %s!\n", argv[-1]);
       return 1;
     }
   }
 
-  struct state_gjtiff s(verbose);
+  struct state_gjtiff s(log_level);
 
   const size_t d_pref_len = strlen(ofname);
   for (; *argv != nullptr; ++argv) {

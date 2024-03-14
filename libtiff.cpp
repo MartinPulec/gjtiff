@@ -19,11 +19,13 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
   TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &image_info->image_height);
   image_info->bits_per_sample[0] = 8;
   TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &image_info->samples_per_pixel);
-  fprintf(stderr,
-          "TIFF file %s: %" PRIu32 "x%" PRIu32 " %" PRIu32 " bits, %" PRIu32
-          " sample(s)\n",
-          fname, image_info->image_width, image_info->image_height,
-          image_info->bits_per_sample[0], image_info->samples_per_pixel);
+  if (log_level > 1) {
+    fprintf(stderr,
+            "TIFF file %s: %" PRIu32 "x%" PRIu32 " %" PRIu32 " bits, %" PRIu32
+            " sample(s)\n",
+            fname, image_info->image_width, image_info->image_height,
+            image_info->bits_per_sample[0], image_info->samples_per_pixel);
+  }
   const size_t read_size =
       image_info->image_width * image_info->image_height * sizeof(uint32_t);
   if (read_size > tmp_buffer_allocated) {
@@ -34,15 +36,20 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
     assert(tmp_buffer.get() != nullptr);
     tmp_buffer_allocated = read_size;
   }
-  // struct timespec t0, t1;
-  // timespec_get(&t0, TIME_UTC);
+  struct timespec t0, t1;
+  if (log_level >= 2) {
+    timespec_get(&t0, TIME_UTC);
+  }
   /// @todo
   // TIFFReadRow{Tile,Strip} would be faster
   const int rc =
       TIFFReadRGBAImage(tif, image_info->image_width, image_info->image_height,
                         (uint32_t *)tmp_buffer.get(), 0);
-  // timespec_get(&t1, TIME_UTC);
-  // fprintf(stderr, "%ld\n", t1.tv_nsec - t0.tv_nsec);
+  if (log_level >= 2) {
+    timespec_get(&t1, TIME_UTC);
+    fprintf(stderr, "TIFFReadRGBAImage duration %f s\n",
+            t1.tv_sec - t0.tv_sec + (t1.tv_nsec - t0.tv_nsec) / 1000000000.0);
+  }
   TIFFClose(tif);
   if (rc != 1) {
     fprintf(stderr, "libtiff decode image %s failed!\n", fname);
