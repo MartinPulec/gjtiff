@@ -65,9 +65,10 @@
   }
 
 struct state_gjtiff {
-  state_gjtiff(int log_level);
+  state_gjtiff(int log_level, bool use_libtiff);
   ~state_gjtiff();
   int log_level;
+  bool use_libtiff; // if nvCOMP not found, enforce libtiff
   // NVTIFF
   nvtiffStream_t tiff_stream{};
   nvtiffDecoder_t decoder{};
@@ -83,7 +84,8 @@ struct state_gjtiff {
   struct gpujpeg_encoder *gj_enc{};
 };
 
-state_gjtiff::state_gjtiff(int l) : log_level(l), tiff_state(l) {
+state_gjtiff::state_gjtiff(int l, bool u)
+    : log_level(l), use_libtiff(u), tiff_state(l) {
   CHECK_CUDA(cudaStreamCreate(&stream));
   CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
   CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
@@ -100,6 +102,16 @@ state_gjtiff::~state_gjtiff() {
   gpujpeg_encoder_destroy(gj_enc);
 }
 
+/**
+ * Decodes TIFF using nvTIFF.
+ *
+ * If DEFLATE-compressed TIFF is detected but nvCOMP not found in
+ * library lookup path (LD_LIBRARY_PATH on Linux), exit() is called
+ * unless enforced use of libtiff.
+ *
+ * If nvTIFF reports unsupported file, libtiff fallback is used regardless
+ * use_tiff is set.
+ */
 static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
                             size_t *nvtiff_out_size,
                             nvtiffImageInfo_t *image_info) {
@@ -132,8 +144,24 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
     CHECK_CUDA(cudaMalloc(&s->decoded, *nvtiff_out_size));
     s->decoded_allocated = *nvtiff_out_size;
   }
-  CHECK_NVTIFF(nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id,
-                                 num_images, &s->decoded, s->stream));
+  e = nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id, num_images,
+                        &s->decoded, s->stream);
+  if (e == NVTIFF_STATUS_NVCOMP_NOT_FOUND) {
+    fprintf(stderr, "nvCOMP needed for DEFLATE not found in path...%s\n",
+            s->use_libtiff ? " using libtiff" : "");
+    if (s->use_libtiff) {
+      return s->tiff_state.decode(fname, nvtiff_out_size, image_info,
+                                  &s->decoded, &s->decoded_allocated,
+                                  s->stream);
+    } else {
+      fprintf(stderr, "Use option '-l' to enforce libtiff fallback...\n");
+      exit(3);
+    }
+  } else if (e != NVTIFF_STATUS_SUCCESS) {
+    fprintf(stderr, "nvtiff error code %d in file '%s' in line %i\n", e,
+            __FILE__, __LINE__);
+    return nullptr;
+  }
   return s->decoded;
 }
 
@@ -205,6 +233,7 @@ static void show_help(const char *progname) {
 
 int main(int /* argc */, char **argv) {
   int log_level = 0;
+  bool use_libtiff = false;
   char ofname[1024] = "./";
   const char *progname = argv[0];
 
@@ -226,6 +255,8 @@ int main(int /* argc */, char **argv) {
         snprintf(ofname, sizeof ofname, "%s/", argv[0]);
         argv++;
       }
+    } else if (strcmp(argv[-1], "-l") == 0) {
+      use_libtiff = true;
     } else if (strstr(argv[-1], "-v") == argv[-1]) {
       log_level += std::count(argv[-1], argv[-1] + strlen(argv[-1]), 'v');
     } else {
@@ -234,7 +265,7 @@ int main(int /* argc */, char **argv) {
     }
   }
 
-  struct state_gjtiff s(log_level);
+  struct state_gjtiff s(log_level, use_libtiff);
 
   const size_t d_pref_len = strlen(ofname);
   for (; *argv != nullptr; ++argv) {

@@ -51,8 +51,8 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
   /// @todo
   // TIFFReadRow{Tile,Strip} would be faster
   const int rc =
-      TIFFReadRGBAImage(tif, image_info->image_width, image_info->image_height,
-                        (uint32_t *)tmp_buffer.get(), 0);
+      TIFFReadRGBAImageOriented(tif, image_info->image_width, image_info->image_height,
+                        (uint32_t *)tmp_buffer.get(), ORIENTATION_TOPLEFT, 0);
   if (log_level >= 2) {
     timespec_get(&t1, TIME_UTC);
     fprintf(stderr, "TIFFReadRGBAImage duration %f s\n",

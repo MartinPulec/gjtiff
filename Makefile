@@ -9,7 +9,7 @@ all: gjtiff
 	nvcc -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 gjtiff: kernels.o main.o libtiff.o
-	$(CXX) $^ -lcudart -lgpujpeg -lm -lnvcomp_gdeflate -lnvtiff -ltiff -o $@
+	$(CXX) $^ -lcudart -lgpujpeg -lm -lnvtiff -ltiff -o $@
 
 clean:
 	$(RM) *o gjtiff
