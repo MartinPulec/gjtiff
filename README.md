@@ -11,17 +11,24 @@ instead.
 
 # Requirements
 
+## Software
+
 Build:
 
-- CUDA + C++ compiler + make
+- CUDA toolkit + C++ compiler + make
 - [GPUJPEG](https://github.com/CESNET/GPUJPEG)
 - [nvTIFF](https://developer.nvidia.com/nvtiff-downloads)
 - [libTIFF](https://libtiff.gitlab.io/libtiff)
 
 Runtime:
 
-- CUDA device
+- NVIDIA proprietary drivers
 - [nvCOMP](https://developer.nvidia.com/nvcomp-download) for DEFLATE
+
+## Hardware
+
+- CUDA-capable device - GPUJPEG requires approximately 60 B of memory for a
+pixel, so 16K x 16K requires approximately 16 GB RAM.
 
 # Performance
 
@@ -30,3 +37,4 @@ Using _AMD Ryzen 9 7900X_ and _GeForce RTX 4080_:
 - 8K x 8K - 30 ms
 - 8K x 8K - 200 ms using CPU libtiff decoder
 - 16K x 16K - 96 ms (450 ms with initialization/reconfiguration)
+
