@@ -231,7 +231,8 @@ static void show_help(const char *progname) {
   printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
   printf("Output directory must exist, implicitly \".\"\n\n");
   printf("Options:\n");
-  printf("\t-l    - use libtiff if nvCOMP not available:\n");
+  printf("\t-d    - list of CUDA devices\n");
+  printf("\t-l    - use libtiff if nvCOMP not available\n");
   printf("\t-o    - output JPEG directory\n");
   printf("\t-v[v] - be verbose (2x for more messages)\n");
 }
@@ -247,6 +248,9 @@ int main(int /* argc */, char **argv) {
     argv++;
     if (strcmp(argv[-1], "--") == 0) {
       break;
+    }
+    if (strcmp(argv[-1], "-d") == 0) {
+      return !!gpujpeg_print_devices_info();
     }
     if (strcmp(argv[-1], "-h") == 0) {
       show_help(progname);
