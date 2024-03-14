@@ -1,11 +1,15 @@
+CXXFLAGS += -g -Wall -Wextra
+
 all: gjtiff
 
 %.o: %.cpp
-	g++ $< -c -I/usr/local/cuda/include -o $@
+	$(CXX) $(CXXFLAGS) $< -c -I/usr/local/cuda/include -o $@
 
-kernels.o: kernels.cu
-	nvcc -c $< -o $@
+%.o: %.cu
+	nvcc -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 gjtiff: kernels.o main.o libtiff.o
-	g++ $^ -lcudart -lgpujpeg -lm -lnvcomp_gdeflate -lnvtiff -ltiff -o $@
+	$(CXX) $^ -lcudart -lgpujpeg -lm -lnvcomp_gdeflate -lnvtiff -ltiff -o $@
 
+clean:
+	$(RM) *o gjtiff
