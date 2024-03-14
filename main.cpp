@@ -227,9 +227,13 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen) {
 }
 
 static void show_help(const char *progname) {
-  printf("%s [-o <outdir>] [-v[v]] img1.tif [img2.tif...]\n\n", progname);
+  printf("%s [-l] [-o <outdir>] [-v[v]] img1.tif [img2.tif...]\n\n", progname);
   printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
-  printf("Output directory must exist, implicitly \".\"\n");
+  printf("Output directory must exist, implicitly \".\"\n\n");
+  printf("Options:\n");
+  printf("\t-l    - use libtiff if nvCOMP not available:\n");
+  printf("\t-o    - output JPEG directory\n");
+  printf("\t-v[v] - be verbose (2x for more messages)\n");
 }
 
 int main(int /* argc */, char **argv) {
