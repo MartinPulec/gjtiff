@@ -7,6 +7,14 @@
 
 using std::unique_ptr;
 
+void nullTIFFErrorHandler(const char *, const char *, va_list) {}
+
+libtiff_state::libtiff_state(int l) : log_level(l) {
+  if (l == 0) {
+    TIFFSetWarningHandler(nullTIFFErrorHandler);
+  }
+}
+
 uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
                                nvtiffImageInfo_t *image_info, uint8_t **decoded,
                                size_t *decoded_allocated, cudaStream_t stream) {

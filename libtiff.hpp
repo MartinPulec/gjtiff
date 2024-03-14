@@ -5,7 +5,7 @@
 #include <memory>
 
 struct libtiff_state {
-  libtiff_state(int l) : log_level(l) {}
+  libtiff_state(int l);
   int log_level;
   std::unique_ptr<uint8_t[], void (*)(void *)> tmp_buffer{nullptr, free};
   size_t tmp_buffer_allocated = 0;
