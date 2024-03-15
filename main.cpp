@@ -232,6 +232,7 @@ static void show_help(const char *progname) {
   printf("Output directory must exist, implicitly \".\"\n\n");
   printf("Options:\n");
   printf("\t-d    - list of CUDA devices\n");
+  printf("\t-h    - show help\n");
   printf("\t-l    - use libtiff if nvCOMP not available\n");
   printf("\t-o    - output JPEG directory\n");
   printf("\t-v[v] - be verbose (2x for more messages)\n");
@@ -272,6 +273,11 @@ int main(int /* argc */, char **argv) {
       fprintf(stderr, "Unknown option: %s!\n", argv[-1]);
       return 1;
     }
+  }
+
+  if (argv[0] == nullptr) {
+    show_help(progname);
+    return 1;
   }
 
   struct state_gjtiff s(log_level, use_libtiff);
