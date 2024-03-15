@@ -65,6 +65,10 @@
     }                                                                          \
   }
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 struct state_gjtiff {
   state_gjtiff(int log_level, bool use_libtiff);
   ~state_gjtiff();
@@ -227,15 +231,37 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen) {
 }
 
 static void show_help(const char *progname) {
-  printf("%s [-l] [-o <outdir>] [-v[v]] img1.tif [img2.tif...]\n\n", progname);
+  printf("%s [options] img1.tif [img2.tif...]\n", progname);
+  printf("%s [options] -\n\n", progname);
+  printf("Options:\n");
+  printf("\t-d       - list of CUDA devices\n");
+  printf("\t-h       - show help\n");
+  printf("\t-l       - use libtiff if nvCOMP not available\n");
+  printf("\t-o <dir> - output JPEG directory\n");
+  printf("\t-v[v]    - be verbose (2x for more messages)\n");
+  printf("\n");
   printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
   printf("Output directory must exist, implicitly \".\"\n\n");
-  printf("Options:\n");
-  printf("\t-d    - list of CUDA devices\n");
-  printf("\t-h    - show help\n");
-  printf("\t-l    - use libtiff if nvCOMP not available\n");
-  printf("\t-o    - output JPEG directory\n");
-  printf("\t-v[v] - be verbose (2x for more messages)\n");
+  printf("If the '-' is given as an argument, newline-separated list of file "
+         "names\nis read from stdin.\n");
+}
+
+/// @returns filename to process either from argv or read from stdin
+static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
+                             size_t buflen) {
+  if (!from_stdin) {
+    return *(*argv)++;
+  }
+  char *ret = fgets(buf, buflen, stdin);
+  if (ret == nullptr) {
+    return ret;
+  }
+  // trim NL
+  const size_t line_len = strlen(buf);
+  if (buf[line_len - 1] == '\n') {
+    buf[line_len - 1] = '\0';
+  }
+  return buf;
 }
 
 int main(int /* argc */, char **argv) {
@@ -245,7 +271,7 @@ int main(int /* argc */, char **argv) {
   const char *progname = argv[0];
 
   argv++;
-  while (*argv != nullptr && argv[0][0] == '-') {
+  while (*argv != nullptr && argv[0][0] == '-' && strlen(*argv) != 1) {
     argv++;
     if (strcmp(argv[-1], "--") == 0) {
       break;
@@ -282,10 +308,12 @@ int main(int /* argc */, char **argv) {
 
   struct state_gjtiff s(log_level, use_libtiff);
 
+  char path_buf[PATH_MAX];
+  const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
   const size_t d_pref_len = strlen(ofname);
-  for (; *argv != nullptr; ++argv) {
+  while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
+                                        sizeof path_buf)) {
     TIMER_START(transcode, log_level);
-    const char *ifname = argv[0];
     set_ofname(ifname, ofname + d_pref_len, sizeof ofname - d_pref_len);
 
     nvtiffImageInfo_t image_info;
