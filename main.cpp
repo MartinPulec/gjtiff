@@ -81,7 +81,7 @@ struct state_gjtiff {
   uint8_t *decoded{};
   size_t decoded_allocated{};
   // libtiff
-  libtiff_state tiff_state;
+  libtiff_state state_libtiff;
   // converted
   uint8_t *converted{};
   size_t converted_allocated{};
@@ -90,7 +90,7 @@ struct state_gjtiff {
 };
 
 state_gjtiff::state_gjtiff(int l, bool u)
-    : log_level(l), use_libtiff(u), tiff_state(l) {
+    : log_level(l), use_libtiff(u), state_libtiff(l) {
   CHECK_CUDA(cudaStreamCreate(&stream));
   CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
   CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
@@ -127,9 +127,10 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
   if (e == NVTIFF_STATUS_TIFF_NOT_SUPPORTED) {
     fprintf(stderr, "%s not supported by nvtiff, trying libtiff...\n",
             fname);
-    return s->tiff_state.decode(fname, nvtiff_out_size, image_info, &s->decoded,
+    return s->state_libtiff.decode(fname, nvtiff_out_size, image_info, &s->decoded,
                                 &s->decoded_allocated, s->stream);
-  } else if (e != NVTIFF_STATUS_SUCCESS) {
+  }
+  if (e != NVTIFF_STATUS_SUCCESS) {
     fprintf(stderr, "nvtiff error code %d in file '%s' in line %i\n", e,
             __FILE__, __LINE__);
     return nullptr;
@@ -155,14 +156,14 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
     fprintf(stderr, "nvCOMP needed for DEFLATE not found in path...%s\n",
             s->use_libtiff ? " using libtiff" : "");
     if (s->use_libtiff) {
-      return s->tiff_state.decode(fname, nvtiff_out_size, image_info,
+      return s->state_libtiff.decode(fname, nvtiff_out_size, image_info,
                                   &s->decoded, &s->decoded_allocated,
                                   s->stream);
-    } else {
-      fprintf(stderr, "Use option '-l' to enforce libtiff fallback...\n");
-      exit(3);
     }
-  } else if (e != NVTIFF_STATUS_SUCCESS) {
+    fprintf(stderr, "Use option '-l' to enforce libtiff fallback...\n");
+    exit(3);
+  }
+  if (e != NVTIFF_STATUS_SUCCESS) {
     fprintf(stderr, "nvtiff error code %d in file '%s' in line %i\n", e,
             __FILE__, __LINE__);
     return nullptr;
