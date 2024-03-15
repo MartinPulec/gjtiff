@@ -43,6 +43,11 @@
 #include "libtiff.hpp"
 #include "utils.hpp"
 
+enum {
+  EXIT_ERR_SOME_FILES_NOT_TRANSCODED = 2,
+  EXIT_ERR_NVCOMP_NOT_FOUND = 3,
+};
+
 #define DIV_UP(a, b) (((a) + ((b)-1)) / (b))
 
 #define CHECK_CUDA(call)                                                       \
@@ -161,7 +166,7 @@ static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
                                   s->stream);
     }
     fprintf(stderr, "Use option '-l' to enforce libtiff fallback...\n");
-    exit(3);
+    exit(EXIT_ERR_NVCOMP_NOT_FOUND);
   }
   if (e != NVTIFF_STATUS_SUCCESS) {
     fprintf(stderr, "nvtiff error code %d in file '%s' in line %i\n", e,
@@ -282,7 +287,7 @@ int main(int /* argc */, char **argv) {
     }
     if (strcmp(argv[-1], "-h") == 0) {
       show_help(progname);
-      return 0;
+      return EXIT_SUCCESS;
     }
     if (strncmp(argv[-1], "-o", 2) == 0) {
       if (strlen(argv[-1]) > 2) { // -o<dir>
@@ -298,16 +303,17 @@ int main(int /* argc */, char **argv) {
       log_level += std::count(argv[-1], argv[-1] + strlen(argv[-1]), 'v');
     } else {
       fprintf(stderr, "Unknown option: %s!\n", argv[-1]);
-      return 1;
+      return EXIT_FAILURE;
     }
   }
 
   if (argv[0] == nullptr) {
     show_help(progname);
-    return 1;
+    return EXIT_FAILURE;
   }
 
   struct state_gjtiff state(log_level, use_libtiff);
+  int ret = EXIT_SUCCESS;
 
   char path_buf[PATH_MAX];
   const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
@@ -322,6 +328,7 @@ int main(int /* argc */, char **argv) {
     uint8_t *decoded =
         decode_tiff(&state, ifname, &nvtiff_out_size, &image_info);
     if (decoded == nullptr) {
+      ret = EXIT_ERR_SOME_FILES_NOT_TRANSCODED;
       continue;
     }
     uint8_t *converted = convert_16_8(
@@ -330,4 +337,6 @@ int main(int /* argc */, char **argv) {
                 image_info.image_width, image_info.image_height, ofname);
     TIMER_STOP(transcode, log_level);
   }
+
+  return ret;
 }
