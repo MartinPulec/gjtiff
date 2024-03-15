@@ -1,12 +1,13 @@
 CXXFLAGS += -g -Wall -Wextra
+NVCC ?= nvcc
 
 all: gjtiff
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) $< -c -I/usr/local/cuda/include -o $@
+	$(CXX) $(CXXFLAGS) $< -c -o $@
 
 %.o: %.cu
-	nvcc -Xcompiler "$(CXXFLAGS)" -c $< -o $@
+	$(NVCC) -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 gjtiff: kernels.o main.o libtiff.o
 	$(CXX) $^ -lcudart -lgpujpeg -lm -lnvtiff -ltiff -o $@
