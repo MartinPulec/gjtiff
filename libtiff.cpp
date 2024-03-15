@@ -2,8 +2,8 @@
 #include <cstdio>
 #include <tiffio.h>
 
-#include "libtiff.hpp"
 #include "kernels.hpp"
+#include "libtiff.hpp"
 #include "utils.hpp"
 
 using std::unique_ptr;
@@ -20,7 +20,7 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
                                nvtiffImageInfo_t *image_info, uint8_t **decoded,
                                size_t *decoded_allocated, cudaStream_t stream) {
   TIFF *tif = TIFFOpen(fname, "r");
-  if (!tif) {
+  if (tif == nullptr) {
     fprintf(stderr, "libtiff cannot open image %s!\n", fname);
     return nullptr;
   }
@@ -36,7 +36,7 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
             image_info->bits_per_sample[0], image_info->samples_per_pixel);
   }
   const size_t read_size =
-      image_info->image_width * image_info->image_height * sizeof(uint32_t);
+      sizeof(uint32_t) * image_info->image_width * image_info->image_height;
   if (read_size > tmp_buffer_allocated) {
     void *ptr = nullptr;
     cudaMallocManaged(&ptr, read_size);
@@ -57,9 +57,9 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
     fprintf(stderr, "libtiff decode image %s failed!\n", fname);
     return nullptr;
   }
-  const size_t out_size = image_info->image_width *
-                             image_info->image_height *
-                             image_info->samples_per_pixel;
+  const size_t out_size = (size_t)image_info->image_width *
+                          image_info->image_height *
+                          image_info->samples_per_pixel;
   if (out_size > *decoded_allocated) {
     cudaFree(*decoded);
     cudaMalloc(decoded, out_size);
@@ -67,13 +67,13 @@ uint8_t *libtiff_state::decode(const char *fname, size_t *nvtiff_out_size,
   }
   switch (image_info->samples_per_pixel) {
   case 1:
-    convert_rgba_grayscale(tmp_buffer.get(), *decoded,
-                           image_info->image_width * image_info->image_height,
-                           stream);
+    convert_rgba_grayscale(
+        tmp_buffer.get(), *decoded,
+        (size_t)image_info->image_width * image_info->image_height, stream);
     break;
   case 3:
     convert_rgba_rgb(tmp_buffer.get(), *decoded,
-                     image_info->image_width * image_info->image_height,
+                     (size_t)image_info->image_width * image_info->image_height,
                      stream);
     break;
   default:

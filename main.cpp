@@ -39,8 +39,8 @@
 #include <libgpujpeg/gpujpeg_type.h>
 #include <nvtiff.h>
 
-#include "libtiff.hpp"
 #include "kernels.hpp"
+#include "libtiff.hpp"
 #include "utils.hpp"
 
 #define DIV_UP(a, b) (((a) + ((b)-1)) / (b))
@@ -307,7 +307,7 @@ int main(int /* argc */, char **argv) {
     return 1;
   }
 
-  struct state_gjtiff s(log_level, use_libtiff);
+  struct state_gjtiff state(log_level, use_libtiff);
 
   char path_buf[PATH_MAX];
   const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
@@ -319,13 +319,14 @@ int main(int /* argc */, char **argv) {
 
     nvtiffImageInfo_t image_info;
     size_t nvtiff_out_size;
-    uint8_t *decoded = decode_tiff(&s, ifname, &nvtiff_out_size, &image_info);
+    uint8_t *decoded =
+        decode_tiff(&state, ifname, &nvtiff_out_size, &image_info);
     if (decoded == nullptr) {
       continue;
     }
     uint8_t *converted = convert_16_8(
-        &s, decoded, image_info.bits_per_sample[0], nvtiff_out_size);
-    encode_jpeg(&s, converted, image_info.samples_per_pixel,
+        &state, decoded, image_info.bits_per_sample[0], nvtiff_out_size);
+    encode_jpeg(&state, converted, image_info.samples_per_pixel,
                 image_info.image_width, image_info.image_height, ofname);
     TIMER_STOP(transcode, log_level);
   }
