@@ -37,6 +37,7 @@
 #include <libgpujpeg/gpujpeg_common.h>
 #include <libgpujpeg/gpujpeg_encoder.h>
 #include <libgpujpeg/gpujpeg_type.h>
+#include <libgpujpeg/gpujpeg_version.h>
 #include <nvtiff.h>
 
 #include "kernels.hpp"
@@ -202,7 +203,9 @@ static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image,
   gpujpeg_image_set_default_parameters(&param_image);
   param_image.width = width;
   param_image.height = height;
+#if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 25, 0)
   param_image.comp_count = comp_count;
+#endif
   param_image.color_space = comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
   param_image.pixel_format = comp_count == 1 ? GPUJPEG_U8 : GPUJPEG_444_U8_P012;
   gpujpeg_encoder_input encoder_input;
