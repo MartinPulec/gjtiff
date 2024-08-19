@@ -1,4 +1,4 @@
-CXXFLAGS += -g -Wall -Wextra
+CXXFLAGS += -g -Wall -Wextra -Wno-missing-field-initializers
 NVCC ?= nvcc
 
 all: gjtiff
@@ -9,7 +9,7 @@ all: gjtiff
 %.o: %.cu
 	$(NVCC) -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
-gjtiff: kernels.o main.o libtiff.o
+gjtiff: kernels.o libnvtiff.o libtiff.o main.o
 	$(CXX) $^ -lcudart -lgpujpeg -lm -lnvtiff -ltiff -o $@
 
 clean:

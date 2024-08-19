@@ -1,12 +1,5 @@
-/**
- * @file
- * For reference see:
- * <https://github.com/NVIDIA/CUDALibrarySamples/blob/9d3da0b1823d679ff0cc8e9ef05c6cc93dc5ad76/nvTIFF/nvTIFF-Decode-Encode/nvtiff_example.cu>
- */
 /*
- * Copyright (c) 2024,       CESNET, z. s. p. o.
- * Copyright (c) 2022 -2023, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2024 CESNET
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -30,7 +23,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
-#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <cuda_runtime.h>
@@ -38,41 +31,16 @@
 #include <libgpujpeg/gpujpeg_encoder.h>
 #include <libgpujpeg/gpujpeg_type.h>
 #include <libgpujpeg/gpujpeg_version.h>
-#include <nvtiff.h>
 
-#include "kernels.hpp"
+#include "defs.h"
+#include "libnvtiff.h"
 #include "libtiff.hpp"
 #include "utils.hpp"
 
 enum {
         EXIT_ERR_SOME_FILES_NOT_TRANSCODED = 2,
-        EXIT_ERR_NVCOMP_NOT_FOUND = 3,
+        EXIT_ERR_NVCOMP_NOT_FOUND = -ERR_NVCOMP_NOT_FOUND,
 };
-
-#define DIV_UP(a, b) (((a) + ((b) - 1)) / (b))
-
-#define CHECK_CUDA(call)                                                       \
-        {                                                                      \
-                cudaError_t err = call;                                        \
-                if (cudaSuccess != err) {                                      \
-                        fprintf(stderr,                                        \
-                                "Cuda error in file '%s' in line %i : %s.\n",  \
-                                __FILE__, __LINE__, cudaGetErrorString(err));  \
-                        exit(EXIT_FAILURE);                                    \
-                }                                                              \
-        }
-
-#define CHECK_NVTIFF(call)                                                     \
-        {                                                                      \
-                nvtiffStatus_t _e = (call);                                    \
-                if (_e != NVTIFF_STATUS_SUCCESS) {                             \
-                        fprintf(                                               \
-                            stderr,                                            \
-                            "nvtiff error code %d in file '%s' in line %i\n",  \
-                            _e, __FILE__, __LINE__);                           \
-                        exit(EXIT_FAILURE);                                    \
-                }                                                              \
-        }
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -83,17 +51,9 @@ struct state_gjtiff {
         ~state_gjtiff();
         int log_level;
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
-        // NVTIFF
-        nvtiffStream_t tiff_stream{};
-        nvtiffDecoder_t decoder{};
-        cudaStream_t stream{};
-        uint8_t *decoded{};
-        size_t decoded_allocated{};
-        // libtiff
+        cudaStream_t stream;
+        struct nvtiff_state *state_nvtiff;
         libtiff_state state_libtiff;
-        // converted
-        uint8_t *converted{};
-        size_t converted_allocated{};
         // GPUJPEG
         struct gpujpeg_encoder *gj_enc{};
 };
@@ -102,24 +62,20 @@ state_gjtiff::state_gjtiff(int l, bool u)
     : log_level(l), use_libtiff(u), state_libtiff(l)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
-        CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
-        CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
+        state_nvtiff = nvtiff_init(stream, l);
         gj_enc = gpujpeg_encoder_create(stream);
         assert(gj_enc != nullptr);
 }
 
 state_gjtiff::~state_gjtiff()
 {
-        CHECK_NVTIFF(nvtiffStreamDestroy(tiff_stream));
-        CHECK_NVTIFF(nvtiffDecoderDestroy(decoder, stream));
-        CHECK_CUDA(cudaStreamDestroy(stream));
-        CHECK_CUDA(cudaFree(decoded));
-        CHECK_CUDA(cudaFree(converted));
         gpujpeg_encoder_destroy(gj_enc);
+        nvtiff_destroy(state_nvtiff);
+        CHECK_CUDA(cudaStreamDestroy(stream));
 }
 
 /**
- * Decodes TIFF using nvTIFF.
+ * Decodes TIFF using nvTIFF with libtiff fallback
  *
  * If DEFLATE-compressed TIFF is detected but nvCOMP not found in
  * library lookup path (LD_LIBRARY_PATH on Linux), exit() is called
@@ -128,87 +84,26 @@ state_gjtiff::~state_gjtiff()
  * If nvTIFF reports unsupported file, libtiff fallback is used regardless
  * use_tiff is set.
  */
-static uint8_t *decode_tiff(struct state_gjtiff *s, const char *fname,
-                            size_t *nvtiff_out_size,
-                            nvtiffImageInfo_t *image_info)
+static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
 {
         printf("Decoding from file %s... \n", fname);
-        const uint32_t num_images = 1;
-        // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
-        nvtiffStatus_t e = nvtiffStreamParseFromFile(fname, s->tiff_stream);
-        if (e == NVTIFF_STATUS_TIFF_NOT_SUPPORTED) {
-                fprintf(stderr,
-                        "%s not supported by nvtiff, trying libtiff...\n",
-                        fname);
-                return s->state_libtiff.decode(
-                    fname, nvtiff_out_size, image_info, &s->decoded,
-                    &s->decoded_allocated, s->stream);
+        struct dec_image dec = nvtiff_decode(s->state_nvtiff, fname);
+        if (dec.rc == SUCCESS) {
+                return dec;
         }
-        if (e != NVTIFF_STATUS_SUCCESS) {
-                fprintf(stderr,
-                        "nvtiff error code %d in file '%s' in line %i\n", e,
-                        __FILE__, __LINE__);
-                return nullptr;
-        }
-        if (s->log_level >= 2) {
-                CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
-        }
-        const int image_id = 0; // first image only
-        CHECK_NVTIFF(
-            nvtiffStreamGetImageInfo(s->tiff_stream, image_id, image_info));
-        assert(image_info->photometric_int != NVTIFF_PHOTOMETRIC_PALETTE);
-        *nvtiff_out_size =
-            DIV_UP((size_t)image_info->bits_per_pixel * image_info->image_width,
-                   8) *
-            (size_t)image_info->image_height;
-        if (*nvtiff_out_size > s->decoded_allocated) {
-                CHECK_CUDA(cudaFree(s->decoded));
-                CHECK_CUDA(cudaMalloc(&s->decoded, *nvtiff_out_size));
-                s->decoded_allocated = *nvtiff_out_size;
-        }
-        e = nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id, num_images,
-                              &s->decoded, s->stream);
-        if (e == NVTIFF_STATUS_NVCOMP_NOT_FOUND) {
-                fprintf(stderr,
-                        "nvCOMP needed for DEFLATE not found in path...%s\n",
-                        s->use_libtiff ? " using libtiff" : "");
-                if (s->use_libtiff) {
-                        return s->state_libtiff.decode(
-                            fname, nvtiff_out_size, image_info, &s->decoded,
-                            &s->decoded_allocated, s->stream);
+        if (dec.rc == ERR_NVCOMP_NOT_FOUND) {
+                if (!s->use_libtiff) {
+                        fprintf(
+                            stderr,
+                            "Use option '-l' to enforce libtiff fallback...\n");
+                        exit(EXIT_ERR_NVCOMP_NOT_FOUND);
                 }
-                fprintf(stderr,
-                        "Use option '-l' to enforce libtiff fallback...\n");
-                exit(EXIT_ERR_NVCOMP_NOT_FOUND);
         }
-        if (e != NVTIFF_STATUS_SUCCESS) {
-                fprintf(stderr,
-                        "nvtiff error code %d in file '%s' in line %i\n", e,
-                        __FILE__, __LINE__);
-                return nullptr;
-        }
-        return s->decoded;
+        fprintf(stderr, "trying libtiff...\n");
+        return s->state_libtiff.decode(fname, s->stream);
 }
 
-static uint8_t *convert_16_8(struct state_gjtiff *s, uint8_t *in, int in_depth,
-                             size_t in_size)
-{
-        if (in_depth == 8) {
-                return in;
-        }
-        assert(in_depth == 16);
-        const size_t out_size = in_size / 2;
-        if (out_size > s->converted_allocated) {
-                CHECK_CUDA(cudaFree(s->converted));
-                CHECK_CUDA(cudaMalloc(&s->converted, out_size));
-                s->converted_allocated = out_size;
-        }
-        convert_16_8_cuda((uint16_t *)in, s->converted, in_size, s->stream);
-        return s->converted;
-}
-
-static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image,
-                        int comp_count, int width, int height,
+static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
                         const char *ofname)
 {
         gpujpeg_parameters param;
@@ -216,17 +111,17 @@ static void encode_jpeg(struct state_gjtiff *s, uint8_t *cuda_image,
 
         gpujpeg_image_parameters param_image;
         gpujpeg_image_set_default_parameters(&param_image);
-        param_image.width = width;
-        param_image.height = height;
+        param_image.width = uncomp.width;
+        param_image.height = uncomp.height;
 #if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 25, 0)
         param_image.comp_count = comp_count;
 #endif
         param_image.color_space =
-            comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
+            uncomp.comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
         param_image.pixel_format =
-            comp_count == 1 ? GPUJPEG_U8 : GPUJPEG_444_U8_P012;
+            uncomp.comp_count == 1 ? GPUJPEG_U8 : GPUJPEG_444_U8_P012;
         gpujpeg_encoder_input encoder_input;
-        gpujpeg_encoder_input_set_gpu_image(&encoder_input, cuda_image);
+        gpujpeg_encoder_input_set_gpu_image(&encoder_input, uncomp.data);
         uint8_t *out = nullptr;
         size_t len = 0;
         gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input,
@@ -352,20 +247,12 @@ int main(int /* argc */, char **argv)
                 set_ofname(ifname, ofname + d_pref_len,
                            sizeof ofname - d_pref_len);
 
-                nvtiffImageInfo_t image_info;
-                size_t nvtiff_out_size;
-                uint8_t *decoded =
-                    decode_tiff(&state, ifname, &nvtiff_out_size, &image_info);
-                if (decoded == nullptr) {
+                struct dec_image dec = decode_tiff(&state, ifname);
+                if (dec.data == nullptr) {
                         ret = EXIT_ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
                 }
-                uint8_t *converted =
-                    convert_16_8(&state, decoded, image_info.bits_per_sample[0],
-                                 nvtiff_out_size);
-                encode_jpeg(&state, converted, image_info.samples_per_pixel,
-                            image_info.image_width, image_info.image_height,
-                            ofname);
+                encode_jpeg(&state, dec, ofname);
                 TIMER_STOP(transcode, log_level);
         }
 

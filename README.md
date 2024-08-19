@@ -48,3 +48,9 @@ than calling it for a single image to amortize the initialization cost.
 - option to select CUDA device
 - various performance optimizations - eg. when image sizes change
 often, which is slow due to GPUJPEG reconfiguration
+
+# Sample images' notes
+
+- Copernicus/download/Landsat-8/OLI_TIRS/L1TP semm to be in visible range
+- Sentinel-1 need to have the levels adjusted
+- Sentinel-2 in J2K (the support needs to be added)
