@@ -1,2 +1,4 @@
+*.o
 compile_flags.txt
+gjtiff
 local/
