@@ -31,6 +31,7 @@
 #include <libgpujpeg/gpujpeg_encoder.h>
 #include <libgpujpeg/gpujpeg_type.h>
 #include <libgpujpeg/gpujpeg_version.h>
+#include <unistd.h>
 
 #include "defs.h"
 #include "libnvtiff.h"
@@ -190,27 +191,24 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
         return buf;
 }
 
-int main(int /* argc */, char **argv)
+int main(int argc, char **argv)
 {
         int log_level = 0;
         bool use_libtiff = false;
         char ofname[1024] = "./";
-        const char *progname = argv[0];
 
-        argv++;
-        while (*argv != nullptr && argv[0][0] == '-' && strlen(*argv) != 1) {
-                argv++;
-                if (strcmp(argv[-1], "--") == 0) {
-                        break;
-                }
-                if (strcmp(argv[-1], "-d") == 0) {
+        int opt = 0;
+        while ((opt = getopt(argc, argv, "+dhlo:v")) != -1) {
+                switch (opt) {
+                case 'd':
                         return !!gpujpeg_print_devices_info();
-                }
-                if (strcmp(argv[-1], "-h") == 0) {
-                        show_help(progname);
+                case 'h':
+                        show_help(argv[0]);
                         return EXIT_SUCCESS;
-                }
-                if (strncmp(argv[-1], "-o", 2) == 0) {
+                case 'l':
+                        use_libtiff = true;
+                        break;
+                case 'o':
                         if (strlen(argv[-1]) > 2) { // -o<dir>
                                 snprintf(ofname, sizeof ofname, "%s/",
                                          argv[-1] + 2);
@@ -219,19 +217,18 @@ int main(int /* argc */, char **argv)
                                 snprintf(ofname, sizeof ofname, "%s/", argv[0]);
                                 argv++;
                         }
-                } else if (strcmp(argv[-1], "-l") == 0) {
-                        use_libtiff = true;
-                } else if (strstr(argv[-1], "-v") == argv[-1]) {
-                        log_level += std::count(
-                            argv[-1], argv[-1] + strlen(argv[-1]), 'v');
-                } else {
-                        fprintf(stderr, "Unknown option: %s!\n", argv[-1]);
-                        return EXIT_FAILURE;
+                        break;
+                case 'v':
+                        log_level += 1;
+                        break;
+                default: /* '?' */
+                        show_help(argv[0]);
+                        exit(EXIT_FAILURE);
                 }
         }
 
-        if (argv[0] == nullptr) {
-                show_help(progname);
+        if (optind == argc) {
+                show_help(argv[0]);
                 return EXIT_FAILURE;
         }
 
@@ -241,6 +238,7 @@ int main(int /* argc */, char **argv)
         char path_buf[PATH_MAX];
         const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
         const size_t d_pref_len = strlen(ofname);
+        argv += optind;
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf)) {
                 TIMER_START(transcode, log_level);
