@@ -1,6 +1,7 @@
 #include "libtiff.hpp"
 
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <cuda_runtime.h>  // for cudaFree, cudaMallocManaged
 #include <tiff.h>
@@ -12,6 +13,21 @@
 #include "utils.hpp"
 
 void nullTIFFErrorHandler(const char *, const char *, va_list) {}
+
+struct libtiff_state {
+        libtiff_state(int l);
+        ~libtiff_state();
+        int log_level;
+
+        uint8_t *decoded = nullptr;
+        uint8_t *d_decoded = nullptr;
+        size_t decoded_allocated{};
+
+        uint8_t *d_converted = nullptr;
+        size_t d_converted_allocated = 0;
+
+        struct dec_image decode(const char *fname, cudaStream_t stream);
+};
 
 libtiff_state::libtiff_state(int l) : log_level(l)
 {
@@ -27,7 +43,7 @@ libtiff_state::~libtiff_state()
         CHECK_CUDA(cudaFree(d_converted));
 }
 
-struct dec_image libtiff_state::decode(const char *fname, void *stream)
+struct dec_image libtiff_state::decode(const char *fname, cudaStream_t stream)
 {
         TIFF *tif = TIFFOpen(fname, "r");
         if (tif == nullptr) {
@@ -85,4 +101,17 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
         }
         ret.data = d_converted;
         return ret;
+}
+
+struct libtiff_state *libtiff_create(int log_level) {
+        return new libtiff_state(log_level);
+}
+
+struct dec_image libtiff_decode(struct libtiff_state *s, const char *fname,
+                                void *stream) {
+        return s->decode(fname, (cudaStream_t) stream);
+}
+
+void libtiff_destroy(struct libtiff_state *s) {
+        delete s;
 }

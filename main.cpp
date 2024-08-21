@@ -20,7 +20,6 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <cstdint>
@@ -49,13 +48,13 @@ struct state_gjtiff {
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
         struct nvtiff_state *state_nvtiff;
-        libtiff_state state_libtiff;
+        struct libtiff_state *state_libtiff;
         // GPUJPEG
         struct gpujpeg_encoder *gj_enc{};
 };
 
 state_gjtiff::state_gjtiff(int l, bool u)
-    : log_level(l), use_libtiff(u), state_libtiff(l)
+    : log_level(l), use_libtiff(u), state_libtiff(libtiff_create(l))
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
         state_nvtiff = nvtiff_init(stream, l);
@@ -69,6 +68,7 @@ state_gjtiff::~state_gjtiff()
         gpujpeg_encoder_destroy(gj_enc);
         nvtiff_destroy(state_nvtiff);
         CHECK_CUDA(cudaStreamDestroy(stream));
+        libtiff_destroy(state_libtiff);
 }
 
 /**
@@ -96,7 +96,7 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
                 }
         }
         fprintf(stderr, "trying libtiff...\n");
-        return s->state_libtiff.decode(fname, s->stream);
+        return libtiff_decode(s->state_libtiff, fname, s->stream);
 }
 
 static void encode_jpeg(int log_level, struct state_gjtiff *s,
