@@ -83,7 +83,6 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
                 ERROR_MSG("Unsupported sample count %d!\n", ret.comp_count);
                 return {};
         }
-        ret.rc = SUCCESS;
         ret.data = d_converted;
         return ret;
 }

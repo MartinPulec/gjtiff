@@ -155,7 +155,6 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
                           __FILE__, __LINE__);
                 return {};
         }
-        ret.rc = SUCCESS;
         ret.width = image_info.image_width;
         ret.height = image_info.image_height;
         ret.comp_count = image_info.samples_per_pixel;

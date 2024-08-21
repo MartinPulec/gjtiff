@@ -10,13 +10,12 @@
 #endif
 
 enum rc {
-        ERR_NVCOMP_NOT_FOUND = -3,
-        ERR_GENERIC = 0,
-        SUCCESS = 1,
+        ERR_SOME_FILES_NOT_TRANSCODED = 2,
+        ERR_NVCOMP_NOT_FOUND = 3,
 };
 
 struct dec_image {
-        enum rc rc;
+        enum rc rc; ///< defined only if data=nullptr
         int width;
         int height;
         int comp_count;

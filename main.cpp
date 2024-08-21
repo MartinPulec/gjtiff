@@ -38,11 +38,6 @@
 #include "libtiff.hpp"
 #include "utils.hpp"
 
-enum {
-        EXIT_ERR_SOME_FILES_NOT_TRANSCODED = 2,
-        EXIT_ERR_NVCOMP_NOT_FOUND = -ERR_NVCOMP_NOT_FOUND,
-};
-
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -90,14 +85,14 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
 {
         printf("Decoding from file %s... \n", fname);
         struct dec_image dec = nvtiff_decode(s->state_nvtiff, fname);
-        if (dec.rc == SUCCESS) {
+        if (dec.data != nullptr) {
                 return dec;
         }
         if (dec.rc == ERR_NVCOMP_NOT_FOUND) {
                 if (!s->use_libtiff) {
                         ERROR_MSG(
                             "Use option '-l' to enforce libtiff fallback...\n");
-                        exit(EXIT_ERR_NVCOMP_NOT_FOUND);
+                        exit(ERR_NVCOMP_NOT_FOUND);
                 }
         }
         fprintf(stderr, "trying libtiff...\n");
@@ -253,7 +248,7 @@ int main(int argc, char **argv)
 
                 struct dec_image dec = decode_tiff(&state, ifname);
                 if (dec.data == nullptr) {
-                        ret = EXIT_ERR_SOME_FILES_NOT_TRANSCODED;
+                        ret = ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
                 }
                 encode_jpeg(log_level, &state, dec, ofname);
