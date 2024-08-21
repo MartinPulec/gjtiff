@@ -1,3 +1,6 @@
+#ifndef LIBTIFF_HPP_34DACD19_5FC8_4794_9338_EE857B47C642
+#define LIBTIFF_HPP_34DACD19_5FC8_4794_9338_EE857B47C642
+
 #include <cstdint>
 #include <memory>
 #include <cstdlib>   // for free
@@ -13,3 +16,5 @@ struct libtiff_state {
         size_t decoded_allocated{};
         struct dec_image decode(const char *fname, void *stream);
 };
+
+#endif // !defiend LIBTIFF_HPP_34DACD19_5FC8_4794_9338_EE857B47C642
