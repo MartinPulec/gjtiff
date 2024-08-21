@@ -1,4 +1,5 @@
 *.o
+.clang-tidy
 compile_flags.txt
 gjtiff
 local/

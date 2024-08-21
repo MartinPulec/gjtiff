@@ -4,9 +4,9 @@
 #include "utils.hpp" // ERROR_MSG
 
 #ifdef __cplusplus
-#include <cstdlib>   // EXIT_FAILURE
+#include <cstdlib>   // abort
 #else
-#include <stdlib.h>  // EXIT_FAILURE
+#include <stdlib.h>  // abort
 #endif
 
 enum rc {
@@ -29,8 +29,7 @@ struct dec_image {
                         ERROR_MSG(                                             \
                             "Cuda error in file '%s' in line %i : %s.\n",      \
                             __FILE__, __LINE__, cudaGetErrorString(err));      \
-                        exit(EXIT_FAILURE);                                    \
+                        abort();                                               \
                 }                                                              \
         }
-
 #endif // ! defined DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
