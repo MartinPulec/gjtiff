@@ -11,8 +11,6 @@
 #include "kernels.hpp"
 #include "utils.hpp"
 
-using std::unique_ptr;
-
 void nullTIFFErrorHandler(const char *, const char *, va_list) {}
 
 libtiff_state::libtiff_state(int l) : log_level(l)
@@ -20,6 +18,13 @@ libtiff_state::libtiff_state(int l) : log_level(l)
         if (l == 0) {
                 TIFFSetWarningHandler(nullTIFFErrorHandler);
         }
+}
+
+libtiff_state::~libtiff_state()
+{
+        CHECK_CUDA(cudaFreeHost(decoded));
+        CHECK_CUDA(cudaFree(d_decoded));
+        CHECK_CUDA(cudaFree(d_converted));
 }
 
 struct dec_image libtiff_state::decode(const char *fname, void *stream)
@@ -37,44 +42,41 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
         }
         const size_t read_size = sizeof(uint32_t) * ret.width *
                                  ret.height;
-        if (read_size > tmp_buffer_allocated) {
-                void *ptr = nullptr;
-                cudaMallocManaged(&ptr, read_size);
-                auto cfree = [](void *ptr) { cudaFree(ptr); };
-                tmp_buffer = unique_ptr<uint8_t[], void (*)(void *)>(
-                    (uint8_t *)ptr, cfree);
-                assert(tmp_buffer.get() != nullptr);
-                tmp_buffer_allocated = read_size;
+        if (read_size > decoded_allocated) {
+                CHECK_CUDA(cudaFreeHost(decoded));
+                CHECK_CUDA(cudaFree(d_decoded));
+                CHECK_CUDA(cudaMallocHost(&decoded, read_size));
+                CHECK_CUDA(cudaMalloc(&d_decoded, read_size));
+                decoded_allocated = read_size;
         }
         TIMER_START(TIFFReadRGBAImage, log_level);
         /// @todo
         // TIFFReadRow{Tile,Strip} would be faster
         const int rc = TIFFReadRGBAImageOriented(
             tif, ret.width, ret.height,
-            (uint32_t *)tmp_buffer.get(), ORIENTATION_TOPLEFT, 0);
+            (uint32_t *)decoded, ORIENTATION_TOPLEFT, 0);
         TIMER_STOP(TIFFReadRGBAImage, log_level);
         TIFFClose(tif);
         if (rc != 1) {
                 ERROR_MSG("libtiff decode image %s failed!\n", fname);
                 return {};
         }
+        CHECK_CUDA(cudaMemcpyAsync(d_decoded, decoded, read_size,
+                                   cudaMemcpyHostToDevice,
+                                   (cudaStream_t)stream));
         const size_t out_size = (size_t)ret.width * ret.height * ret.comp_count;
-        if (out_size > decoded_allocated) {
-                void *ptr = nullptr;
-                cudaMallocManaged(&ptr, read_size);
-                assert(ptr != nullptr);
-                auto cfree = [](void *ptr) { cudaFree(ptr); };
-                decoded = unique_ptr<uint8_t[], void (*)(void *)>(
-                    (uint8_t *)ptr, cfree);
-                decoded_allocated = out_size;
+        if (out_size > d_converted_allocated) {
+                CHECK_CUDA(cudaFree(d_converted));
+                CHECK_CUDA(cudaMalloc(&d_converted, out_size));
+                d_converted_allocated = out_size;
         }
         switch (ret.comp_count) {
         case 1:
-                convert_rgba_grayscale(tmp_buffer.get(), decoded.get(),
+                convert_rgba_grayscale(d_decoded, d_converted,
                                        (size_t)ret.width * ret.height, stream);
                 break;
         case 3:
-                convert_rgba_rgb(tmp_buffer.get(), decoded.get(),
+                convert_rgba_rgb(d_decoded, d_converted,
                                  (size_t)ret.width * ret.height, stream);
                 break;
         default:
@@ -82,6 +84,6 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
                 return {};
         }
         ret.rc = SUCCESS;
-        ret.data = decoded.get();
+        ret.data = d_converted;
         return ret;
 }
