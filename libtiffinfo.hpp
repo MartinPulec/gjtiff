@@ -24,6 +24,7 @@ struct tiff_info {
         };
         uint16_t photometric;
         bool single_plane;
+        bool big_endian;
         uint16_t minval;
         uint16_t maxval;
 };

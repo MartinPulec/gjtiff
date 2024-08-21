@@ -99,6 +99,7 @@ struct tiff_info get_tiff_info(TIFF *tif)
         TIFFGetField(tif, TIFFTAG_PHOTOMETRIC, &ret.photometric);
         TIFFGetField(tif, TIFFTAG_PLANARCONFIG, &u16val);
         ret.single_plane = u16val == PLANARCONFIG_CONTIG;
+        ret.big_endian = TIFFIsBigEndian(tif) != 0;
         TIFFGetField(tif, TIFFTAG_MAXSAMPLEVALUE, &ret.maxval);
         TIFFGetField(tif, TIFFTAG_MINSAMPLEVALUE, &ret.minval);
 
@@ -143,5 +144,6 @@ void print_tiff_info(struct tiff_info info)
                 }
         }
         printf("single plane: %d\n", (int) info.single_plane);
+        printf("big endian: %d\n", (int) info.big_endian);
 }
 
