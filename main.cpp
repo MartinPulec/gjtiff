@@ -104,8 +104,8 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
         return s->state_libtiff.decode(fname, s->stream);
 }
 
-static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
-                        const char *ofname)
+static void encode_jpeg(int log_level, struct state_gjtiff *s,
+                        struct dec_image uncomp, const char *ofname)
 {
         gpujpeg_parameters param;
         gpujpeg_set_default_parameters(&param);
@@ -125,9 +125,15 @@ static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
         gpujpeg_encoder_input_set_gpu_image(&encoder_input, uncomp.data);
         uint8_t *out = nullptr;
         size_t len = 0;
-        gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input,
-                               &out, &len);
+        if (gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input,
+                               &out, &len) != 0) {
+                ERROR_MSG("Failed to encode %s!\n", ofname);
+                return;
+        }
 
+        if (log_level >= 1) {
+                printf("%s encoded successfully\n", ofname);
+        }
         FILE *outf = fopen(ofname, "wb");
         if (outf == nullptr) {
                 ERROR_MSG("fopen %s: %s\n", ofname, strerror(errno));
@@ -250,7 +256,7 @@ int main(int argc, char **argv)
                         ret = EXIT_ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
                 }
-                encode_jpeg(&state, dec, ofname);
+                encode_jpeg(log_level, &state, dec, ofname);
                 TIMER_STOP(transcode, log_level);
         }
 
