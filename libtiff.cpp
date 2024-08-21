@@ -27,6 +27,8 @@ struct libtiff_state {
         size_t d_converted_allocated = 0;
 
         struct dec_image decode(const char *fname, cudaStream_t stream);
+
+        struct dec_image decode_fallback(TIFF *tif, cudaStream_t stream);
 };
 
 libtiff_state::libtiff_state(int l) : log_level(l)
@@ -43,19 +45,10 @@ libtiff_state::~libtiff_state()
         CHECK_CUDA(cudaFree(d_converted));
 }
 
-struct dec_image libtiff_state::decode(const char *fname, cudaStream_t stream)
+struct dec_image libtiff_state::decode_fallback(TIFF *tif, cudaStream_t stream)
 {
-        TIFF *tif = TIFFOpen(fname, "r");
-        if (tif == nullptr) {
-                ERROR_MSG("libtiff cannot open image %s!\n", fname);
-                return {};
-        }
         struct tiff_info tiffinfo = get_tiff_info(tif);
         struct dec_image ret = tiffinfo.common;
-        // image_info->bits_per_sample[0] = 8;
-        if (log_level > 1) {
-                print_tiff_info(tiffinfo);
-        }
         const size_t read_size = sizeof(uint32_t) * ret.width *
                                  ret.height;
         if (read_size > decoded_allocated) {
@@ -72,9 +65,9 @@ struct dec_image libtiff_state::decode(const char *fname, cudaStream_t stream)
             tif, ret.width, ret.height,
             (uint32_t *)decoded, ORIENTATION_TOPLEFT, 0);
         TIMER_STOP(TIFFReadRGBAImage, log_level);
-        TIFFClose(tif);
         if (rc != 1) {
-                ERROR_MSG("libtiff decode image %s failed!\n", fname);
+                ERROR_MSG("libtiff decode image %s failed!\n",
+                          TIFFFileName(tif));
                 return {};
         }
         CHECK_CUDA(cudaMemcpyAsync(d_decoded, decoded, read_size,
@@ -100,6 +93,24 @@ struct dec_image libtiff_state::decode(const char *fname, cudaStream_t stream)
                 return {};
         }
         ret.data = d_converted;
+        return ret;
+}
+
+struct dec_image libtiff_state::decode(const char *fname, cudaStream_t stream)
+{
+        TIFF *tif = TIFFOpen(fname, "r");
+        if (tif == nullptr) {
+                ERROR_MSG("libtiff cannot open image %s!\n", fname);
+                return {};
+        }
+        struct tiff_info tiffinfo = get_tiff_info(tif);
+        // image_info->bits_per_sample[0] = 8;
+        if (log_level > 1) {
+                print_tiff_info(tiffinfo);
+        }
+
+        struct dec_image ret = decode_fallback(tif, stream);
+        TIFFClose(tif);
         return ret;
 }
 
