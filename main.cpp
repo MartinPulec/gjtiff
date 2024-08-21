@@ -54,9 +54,10 @@ struct state_gjtiff {
 };
 
 state_gjtiff::state_gjtiff(int l, bool u)
-    : log_level(l), use_libtiff(u), state_libtiff(libtiff_create(l))
+    : log_level(l), use_libtiff(u)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
+        state_libtiff = libtiff_create(l, stream);
         state_nvtiff = nvtiff_init(stream, l);
         assert(state_nvtiff != nullptr);
         gj_enc = gpujpeg_encoder_create(stream);
@@ -96,7 +97,7 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
                 }
         }
         fprintf(stderr, "trying libtiff...\n");
-        return libtiff_decode(s->state_libtiff, fname, s->stream);
+        return libtiff_decode(s->state_libtiff, fname);
 }
 
 static void encode_jpeg(int log_level, struct state_gjtiff *s,

@@ -15,9 +15,11 @@
 void nullTIFFErrorHandler(const char *, const char *, va_list) {}
 
 struct libtiff_state {
-        libtiff_state(int l);
+        libtiff_state(int l, cudaStream_t stream);
         ~libtiff_state();
+
         int log_level;
+        cudaStream_t stream;
 
         uint8_t *decoded = nullptr;
         uint8_t *d_decoded = nullptr;
@@ -26,12 +28,12 @@ struct libtiff_state {
         uint8_t *d_converted = nullptr;
         size_t d_converted_allocated = 0;
 
-        struct dec_image decode(const char *fname, cudaStream_t stream);
+        struct dec_image decode(const char *fname);
 
-        struct dec_image decode_fallback(TIFF *tif, cudaStream_t stream);
+        struct dec_image decode_fallback(TIFF *tif);
 };
 
-libtiff_state::libtiff_state(int l) : log_level(l)
+libtiff_state::libtiff_state(int l, cudaStream_t s) : log_level(l), stream(s)
 {
         if (l == 0) {
                 TIFFSetWarningHandler(nullTIFFErrorHandler);
@@ -45,7 +47,7 @@ libtiff_state::~libtiff_state()
         CHECK_CUDA(cudaFree(d_converted));
 }
 
-struct dec_image libtiff_state::decode_fallback(TIFF *tif, cudaStream_t stream)
+struct dec_image libtiff_state::decode_fallback(TIFF *tif)
 {
         struct tiff_info tiffinfo = get_tiff_info(tif);
         struct dec_image ret = tiffinfo.common;
@@ -96,7 +98,7 @@ struct dec_image libtiff_state::decode_fallback(TIFF *tif, cudaStream_t stream)
         return ret;
 }
 
-struct dec_image libtiff_state::decode(const char *fname, cudaStream_t stream)
+struct dec_image libtiff_state::decode(const char *fname)
 {
         TIFF *tif = TIFFOpen(fname, "r");
         if (tif == nullptr) {
@@ -109,18 +111,18 @@ struct dec_image libtiff_state::decode(const char *fname, cudaStream_t stream)
                 print_tiff_info(tiffinfo);
         }
 
-        struct dec_image ret = decode_fallback(tif, stream);
+        struct dec_image ret = decode_fallback(tif);
         TIFFClose(tif);
         return ret;
 }
 
-struct libtiff_state *libtiff_create(int log_level) {
-        return new libtiff_state(log_level);
+struct libtiff_state *libtiff_create(int log_level, void *stream) {
+        return new libtiff_state(log_level, (cudaStream_t) stream);
 }
 
-struct dec_image libtiff_decode(struct libtiff_state *s, const char *fname,
-                                void *stream) {
-        return s->decode(fname, (cudaStream_t) stream);
+struct dec_image libtiff_decode(struct libtiff_state *s, const char *fname)
+{
+        return s->decode(fname);
 }
 
 void libtiff_destroy(struct libtiff_state *s) {
