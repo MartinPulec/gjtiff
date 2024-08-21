@@ -13,7 +13,15 @@ struct tiff_info {
         uint16_t compression;
         bool tiled;
         long strip_tile_size;
-        uint32_t rows_per_strip;
+        union {
+                struct {
+                        uint32_t rows_per_strip;
+                };
+                struct {
+                        uint32_t tile_width;
+                        uint32_t tile_height;
+                };
+        };
         uint16_t photometric;
         bool single_plane;
         uint16_t minval;

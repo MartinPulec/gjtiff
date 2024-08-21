@@ -89,7 +89,10 @@ struct tiff_info get_tiff_info(TIFF *tif)
         TIFFGetField(tif, TIFFTAG_SAMPLEFORMAT, &ret.sample_format);
         TIFFGetField(tif, TIFFTAG_COMPRESSION, &ret.compression);
         ret.tiled = TIFFIsTiled(tif);
-        if (!ret.tiled) {
+        if (ret.tiled) {
+                TIFFGetField(tif, TIFFTAG_TILEWIDTH, &ret.tile_width);
+                TIFFGetField(tif, TIFFTAG_TILELENGTH, &ret.tile_height);
+        } else {
                 TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &ret.rows_per_strip);
         }
         ret.strip_tile_size =  ret.tiled ? TIFFTileSize(tif) : TIFFStripSize(tif);
@@ -125,7 +128,10 @@ void print_tiff_info(struct tiff_info info)
         }
         printf("range: %hu-%hu\n", info.minval, info.maxval);
         printf("tiled: %d\n", (int) info.tiled);
-        if (!info.tiled) {
+        if (info.tiled) {
+                printf("tile width/height: %ux%u\n", info.tile_width,
+                       info.tile_height);
+        } else {
                 printf("rows per strip: %u\n", info.rows_per_strip);
         }
         printf("strip or tile size: %ld B\n", info.strip_tile_size);
