@@ -1,10 +1,14 @@
+#include "libtiff.hpp"
+
 #include <cassert>
 #include <cstdio>
 #include <cuda_runtime.h>  // for cudaFree, cudaMallocManaged
+#include <tiff.h>
 #include <tiffio.h>
 
+#include "defs.h"
+#include "libtiffinfo.hpp"
 #include "kernels.hpp"
-#include "libtiff.hpp"
 #include "utils.hpp"
 
 using std::unique_ptr;
@@ -25,14 +29,11 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
                 fprintf(stderr, "libtiff cannot open image %s!\n", fname);
                 return {};
         }
-        struct dec_image ret{};
-        TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &ret.width);
-        TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &ret.height);
+        struct tiff_info tiffinfo = get_tiff_info(tif);
+        struct dec_image ret = tiffinfo.common;
         // image_info->bits_per_sample[0] = 8;
-        TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &ret.comp_count);
         if (log_level > 1) {
-                fprintf(stderr, "TIFF file %s: %dx%d, %d sample(s)\n", fname,
-                        ret.width, ret.height, ret.comp_count);
+                print_tiff_info(tiffinfo);
         }
         const size_t read_size = sizeof(uint32_t) * ret.width *
                                  ret.height;
