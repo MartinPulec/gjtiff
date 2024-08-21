@@ -31,6 +31,7 @@ struct libtiff_state {
         struct dec_image decode(const char *fname);
 
         struct dec_image decode_fallback(TIFF *tif);
+        struct dec_image decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo);
 };
 
 libtiff_state::libtiff_state(int l, cudaStream_t s) : log_level(l), stream(s)
@@ -98,6 +99,52 @@ struct dec_image libtiff_state::decode_fallback(TIFF *tif)
         return ret;
 }
 
+struct dec_image
+libtiff_state::decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo)
+{
+        if (tiffinfo->sample_format != SAMPLEFORMAT_COMPLEXINT ||
+            tiffinfo->big_endian) {
+                return {};
+        }
+
+        struct dec_image ret = tiffinfo->common;
+
+        assert(tiffinfo->strip_tile_size > 0);
+        const tstrip_t numberOfStrips = TIFFNumberOfStrips(tif);
+        size_t decsize = tiffinfo->strip_tile_size * numberOfStrips;
+        if (decsize > decoded_allocated) {
+                CHECK_CUDA(cudaFreeHost(decoded));
+                CHECK_CUDA(cudaFree(d_decoded));
+                CHECK_CUDA(cudaMallocHost(&decoded, decsize));
+                CHECK_CUDA(cudaMalloc(&d_decoded, decsize));
+                decoded_allocated = decsize;
+        }
+        TIMER_START(TIFFReadEncodedStrip, log_level);
+        for (tstrip_t strip = 0; strip < numberOfStrips; ++strip) {
+                size_t offset = strip * tiffinfo->strip_tile_size;
+                const tmsize_t rc = TIFFReadEncodedStrip(
+                    tif, strip, decoded + offset, tiffinfo->strip_tile_size);
+                if (rc == -1) {
+                        ERROR_MSG("libtiff decode image %s failed!\n",
+                                  TIFFFileName(tif));
+                        return {};
+                }
+                CHECK_CUDA(cudaMemcpyAsync(d_decoded + offset, decoded + offset,
+                                           tiffinfo->strip_tile_size,
+                                           cudaMemcpyHostToDevice, stream));
+        }
+        TIMER_STOP(TIFFReadEncodedStrip, log_level);
+        const size_t converted_size = (size_t)ret.width * ret.height * ret.comp_count;
+        if (converted_size > d_converted_allocated) {
+                CHECK_CUDA(cudaFree(d_converted));
+                CHECK_CUDA(cudaMalloc(&d_converted, converted_size));
+                d_converted_allocated = converted_size;
+        }
+        convert_complex_int(d_decoded, d_converted, decsize, stream);
+        ret.data = d_converted;
+        return ret;
+}
+
 struct dec_image libtiff_state::decode(const char *fname)
 {
         TIFF *tif = TIFFOpen(fname, "r");
@@ -111,8 +158,16 @@ struct dec_image libtiff_state::decode(const char *fname)
                 print_tiff_info(tiffinfo);
         }
 
-        struct dec_image ret = decode_fallback(tif);
+        struct dec_image ret{};
+        if (!tiffinfo.tiled) {
+                ret = decode_stripped_complex(tif, &tiffinfo);
+        }
+
+        if (ret.data == nullptr) {
+                ret = decode_fallback(tif);
+        }
         TIFFClose(tif);
+
         return ret;
 }
 

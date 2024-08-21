@@ -13,6 +13,26 @@ void convert_16_8_cuda(uint16_t *in,uint8_t *out, size_t in_len, cudaStream_t st
   kernel_convert_16_8<<<dim3((in_len+255)/256), dim3(256), 0, stream>>>(in, out, count);
 }
 
+
+__global__ void kernel_convert_complex_int(const uint8_t *in, uint8_t *out,
+                                           size_t datalen)
+{
+        unsigned int position =
+            threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
+        if (position > datalen) {
+                return;
+        }
+        out[position] = in[4 * position + 1]; // take just MSB from real part
+}
+void convert_complex_int(const uint8_t *in, uint8_t *out, size_t in_len,
+                         cudaStream_t stream)
+{
+        const size_t count = in_len / 4;
+        kernel_convert_complex_int<<<dim3((count + 255) / 256), dim3(256), 0,
+                                     stream>>>(in, out, count);
+}
+
+
 __global__ void kernel_convert_rgba_grayscale(uint8_t *in, uint8_t *out, size_t datalen) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
   if (position > datalen) {

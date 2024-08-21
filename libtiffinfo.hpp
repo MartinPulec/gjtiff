@@ -12,7 +12,7 @@ struct tiff_info {
         uint16_t sample_format;
         uint16_t compression;
         bool tiled;
-        long strip_tile_size;
+        tmsize_t strip_tile_size;
         union {
                 struct {
                         uint32_t rows_per_strip;
