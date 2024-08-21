@@ -26,7 +26,7 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
 {
         TIFF *tif = TIFFOpen(fname, "r");
         if (tif == nullptr) {
-                fprintf(stderr, "libtiff cannot open image %s!\n", fname);
+                ERROR_MSG("libtiff cannot open image %s!\n", fname);
                 return {};
         }
         struct tiff_info tiffinfo = get_tiff_info(tif);
@@ -55,7 +55,7 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
         TIMER_STOP(TIFFReadRGBAImage, log_level);
         TIFFClose(tif);
         if (rc != 1) {
-                fprintf(stderr, "libtiff decode image %s failed!\n", fname);
+                ERROR_MSG("libtiff decode image %s failed!\n", fname);
                 return {};
         }
         const size_t out_size = (size_t)ret.width * ret.height * ret.comp_count;
@@ -78,8 +78,7 @@ struct dec_image libtiff_state::decode(const char *fname, void *stream)
                                  (size_t)ret.width * ret.height, stream);
                 break;
         default:
-                fprintf(stderr, "Unsupported sample count %d!\n",
-                        ret.comp_count);
+                ERROR_MSG("Unsupported sample count %d!\n", ret.comp_count);
                 return {};
         }
         ret.rc = SUCCESS;

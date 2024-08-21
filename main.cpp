@@ -95,8 +95,7 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
         }
         if (dec.rc == ERR_NVCOMP_NOT_FOUND) {
                 if (!s->use_libtiff) {
-                        fprintf(
-                            stderr,
+                        ERROR_MSG(
                             "Use option '-l' to enforce libtiff fallback...\n");
                         exit(EXIT_ERR_NVCOMP_NOT_FOUND);
                 }
@@ -131,7 +130,7 @@ static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
 
         FILE *outf = fopen(ofname, "wb");
         if (outf == nullptr) {
-                fprintf(stderr, "fopen %s: %s\n", ofname, strerror(errno));
+                ERROR_MSG("fopen %s: %s\n", ofname, strerror(errno));
                 return;
         }
         fwrite(out, len, 1, outf);

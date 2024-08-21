@@ -38,6 +38,7 @@
 
 #include "defs.h"          // for dec_image, CHECK_CUDA, rc
 #include "kernels.hpp"     // for convert_16_8_cuda
+#include "utils.hpp"       // for ERROR_MSG
 
 #define DIV_UP(a, b) (((a) + ((b) - 1)) / (b))
 
@@ -118,15 +119,12 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
         // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
         nvtiffStatus_t e = nvtiffStreamParseFromFile(fname, s->tiff_stream);
         if (e == NVTIFF_STATUS_TIFF_NOT_SUPPORTED) {
-                fprintf(stderr,
-                        "%s not supported by nvtiff\n",
-                        fname);
+                ERROR_MSG("%s not supported by nvtiff\n", fname);
                 return {};
         }
         if (e != NVTIFF_STATUS_SUCCESS) {
-                fprintf(stderr,
-                        "nvtiff error code %d in file '%s' in line %i\n", e,
-                        __FILE__, __LINE__);
+                ERROR_MSG("nvtiff error code %d in file '%s' in line %i\n", e,
+                          __FILE__, __LINE__);
                 return {};
         }
         if (s->log_level >= 2) {
@@ -149,14 +147,12 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
         e = nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id, num_images,
                               &s->decoded, s->stream);
         if (e == NVTIFF_STATUS_NVCOMP_NOT_FOUND) {
-                fprintf(stderr,
-                        "nvCOMP needed for DEFLATE not found in path...\n");
+                ERROR_MSG("nvCOMP needed for DEFLATE not found in path...\n");
                 return {ERR_NVCOMP_NOT_FOUND};
         }
         if (e != NVTIFF_STATUS_SUCCESS) {
-                fprintf(stderr,
-                        "nvtiff error code %d in file '%s' in line %i\n", e,
-                        __FILE__, __LINE__);
+                ERROR_MSG("nvtiff error code %d in file '%s' in line %i\n", e,
+                          __FILE__, __LINE__);
                 return {};
         }
         ret.rc = SUCCESS;
