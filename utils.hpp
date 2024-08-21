@@ -1,5 +1,10 @@
+#ifdef __cplusplus
 #include <ctime>
 #include <cstdio>
+#else
+#include <time.h>
+#include <stdio.h>
+#endif
 
 #define TIMER_DECLARE(name) struct timespec t0_##name, t1_##name
 #define TIMER_START(name, log_level)                                           \
