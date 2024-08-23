@@ -6,10 +6,10 @@ LDFLAGS += -L$(NVCC_DIR)/../lib64
 
 all: gjtiff
 
-%.o: %.cpp
+%.o: %.cpp $(wildcard *.h *.hpp)
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
-%.o: %.cu
+%.o: %.cu %.hpp
 	$(NVCC) $(CUDAFLAGS) -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 gjtiff: kernels.o libnvtiff.o libtiff.o libtiffinfo.o main.o
