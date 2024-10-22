@@ -2,20 +2,29 @@
 
 #include "defs.h"
 
-__global__ void kernel_convert_16_8(uint16_t *in, uint8_t *out, size_t datalen) {
+/*  __     __   .______           ___        ___   .______   
+ * /_ |   / /   |   _  \          \  \      / _ \  |   _  \  
+ *  | |  / /_   |  |_)  |     _____\  \    | (_) | |  |_)  | 
+ *  | | | '_ \  |   _  <     |______>  >    > _ <  |   _  <  
+ *  | | | (_) | |  |_)  |          /  /    | (_) | |  |_)  | 
+ *  |_|  \___/  |______/          /__/      \___/  |______/  
+*/
+__global__ void kernel_convert_16_8(uint16_t *in, uint8_t *out, size_t count, float scale) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
-  if (position > datalen) {
+  if (position > count) {
     return;
   }
-  out[position] = in[position] / 256;
+  out[position] = __saturatef(in[position] / scale) * 255;
 }
 
 void convert_16_8_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
 {
         const size_t count = (size_t)in->width * in->height;
         kernel_convert_16_8<<<dim3((count + 255) / 256), dim3(256), 0,
-                              stream>>>((uint16_t *)in->data, out, count);
+                              stream>>>((uint16_t *)in->data, out, count, 343);
 }
+
+
 
 __global__ void kernel_convert_complex_int(const uint8_t *in, uint8_t *out,
                                            size_t datalen)
