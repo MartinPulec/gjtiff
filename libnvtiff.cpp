@@ -92,16 +92,15 @@ void nvtiff_destroy(struct nvtiff_state *s)
         delete s;
 }
 
-static uint8_t *convert_16_8(struct nvtiff_state  *s, uint8_t *in,
-                             size_t in_size)
+static uint8_t *convert_16_8(struct nvtiff_state  *s, struct dec_image *img)
 {
-        const size_t out_size = in_size / 2;
+        const size_t out_size = (size_t) img->width * img->height;
         if (out_size > s->converted_allocated) {
                 CHECK_CUDA(cudaFree(s->converted));
                 CHECK_CUDA(cudaMalloc(&s->converted, out_size));
                 s->converted_allocated = out_size;
         }
-        convert_16_8_cuda((uint16_t *)in, s->converted, in_size, s->stream);
+        convert_16_8_cuda(img, s->converted, s->stream);
         return s->converted;
 }
 
@@ -158,11 +157,11 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
         ret.width = image_info.image_width;
         ret.height = image_info.image_height;
         ret.comp_count = image_info.samples_per_pixel;
+        ret.data = s->decoded;
         if (image_info.bits_per_sample[0] == 8) {
-                ret.data = s->decoded;
                 return ret;
         }
         assert(image_info.bits_per_sample[0] == 16);
-        ret.data = convert_16_8(s, s->decoded, nvtiff_out_size);
+        ret.data = convert_16_8(s, &ret);
         return ret;
 }

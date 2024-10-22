@@ -10,7 +10,7 @@ all: gjtiff
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
 %.o: %.cu %.hpp
-	$(NVCC) $(CUDAFLAGS) -Xcompiler "$(CXXFLAGS)" -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 gjtiff: kernels.o libnvtiff.o libtiff.o libtiffinfo.o main.o
 	$(CXX) $(LDFLAGS) $^ -lcudart -lgpujpeg -lm -lnvtiff -ltiff -o $@

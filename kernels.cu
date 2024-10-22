@@ -1,5 +1,7 @@
 #include "kernels.hpp"
 
+#include "defs.h"
+
 __global__ void kernel_convert_16_8(uint16_t *in, uint8_t *out, size_t datalen) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
   if (position > datalen) {
@@ -8,11 +10,12 @@ __global__ void kernel_convert_16_8(uint16_t *in, uint8_t *out, size_t datalen) 
   out[position] = in[position] / 256;
 }
 
-void convert_16_8_cuda(uint16_t *in,uint8_t *out, size_t in_len, cudaStream_t stream) {
-  const size_t count = in_len / 2;
-  kernel_convert_16_8<<<dim3((in_len+255)/256), dim3(256), 0, stream>>>(in, out, count);
+void convert_16_8_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
+{
+        const size_t count = (size_t)in->width * in->height;
+        kernel_convert_16_8<<<dim3((count + 255) / 256), dim3(256), 0,
+                              stream>>>((uint16_t *)in->data, out, count);
 }
-
 
 __global__ void kernel_convert_complex_int(const uint8_t *in, uint8_t *out,
                                            size_t datalen)
