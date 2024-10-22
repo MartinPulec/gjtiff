@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include "defs.h"
+#include "kernels.hpp"
 #include "libnvtiff.h"
 #include "libtiff.hpp"
 #include "utils.hpp"
@@ -255,6 +256,8 @@ int main(int argc, char **argv)
                 encode_jpeg(&state, dec, ofname);
                 TIMER_STOP(transcode, log_level);
         }
+
+        cleanup_cuda_kernels();
 
         return ret;
 }

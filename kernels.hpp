@@ -13,3 +13,5 @@ void convert_rgba_grayscale(uint8_t *in, uint8_t *out, size_t pix_count,
                             void *stream);
 void convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t pix_count,
                             void *stream);
+
+void cleanup_cuda_kernels(void);
