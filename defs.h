@@ -9,6 +9,8 @@
 #include <stdlib.h>  // abort
 #endif
 
+extern int log_level;
+
 enum rc {
         ERR_SOME_FILES_NOT_TRANSCODED = 2,
         ERR_NVCOMP_NOT_FOUND = 3,

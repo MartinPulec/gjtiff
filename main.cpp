@@ -41,10 +41,11 @@
 #define PATH_MAX 4096
 #endif
 
+int log_level = 0;
+
 struct state_gjtiff {
-        state_gjtiff(int log_level, bool use_libtiff);
+        state_gjtiff(bool use_libtiff);
         ~state_gjtiff();
-        int log_level;
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
         struct nvtiff_state *state_nvtiff;
@@ -53,12 +54,12 @@ struct state_gjtiff {
         struct gpujpeg_encoder *gj_enc{};
 };
 
-state_gjtiff::state_gjtiff(int l, bool u)
-    : log_level(l), use_libtiff(u)
+state_gjtiff::state_gjtiff(bool u)
+    : use_libtiff(u)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
-        state_libtiff = libtiff_create(l, stream);
-        state_nvtiff = nvtiff_init(stream, l);
+        state_libtiff = libtiff_create(log_level, stream);
+        state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
         gj_enc = gpujpeg_encoder_create(stream);
         assert(gj_enc != nullptr);
@@ -100,8 +101,8 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
         return libtiff_decode(s->state_libtiff, fname);
 }
 
-static void encode_jpeg(int log_level, struct state_gjtiff *s,
-                        struct dec_image uncomp, const char *ofname)
+static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
+                        const char *ofname)
 {
         gpujpeg_parameters param;
         gpujpeg_set_default_parameters(&param);
@@ -195,7 +196,6 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
 
 int main(int argc, char **argv)
 {
-        int log_level = 0;
         bool use_libtiff = false;
         char ofname[1024] = "./";
 
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        struct state_gjtiff state(log_level, use_libtiff);
+        struct state_gjtiff state( use_libtiff);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
@@ -252,7 +252,7 @@ int main(int argc, char **argv)
                         ret = ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
                 }
-                encode_jpeg(log_level, &state, dec, ofname);
+                encode_jpeg(&state, dec, ofname);
                 TIMER_STOP(transcode, log_level);
         }
 
