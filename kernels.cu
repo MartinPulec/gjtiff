@@ -8,6 +8,8 @@
 
 #include "defs.h"
 
+#define GAMMA 2
+
 /*  __     __   .______           ___        ___   .______   
  * /_ |   / /   |   _  \          \  \      / _ \  |   _  \  
  *  | |  / /_   |  |_)  |     _____\  \    | (_) | |  |_)  | 
@@ -20,7 +22,12 @@ __global__ void kernel_convert_16_8(uint16_t *in, uint8_t *out, size_t count, fl
   if (position > count) {
     return;
   }
-  out[position] = __saturatef(in[position] / scale) * 255;
+
+        float normalized = __saturatef(in[position] / scale);
+#ifdef GAMMA
+        normalized = pow(normalized, GAMMA);
+#endif
+        out[position] = normalized * 255;
 }
 
 static struct {
