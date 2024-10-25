@@ -122,7 +122,7 @@ void print_tiff_info(struct tiff_info info)
         }
         for (unsigned i = 0; i < ARR_SIZE(compressions); ++i) {
                 if (compressions[i].val == info.compression) {
-                        printf("sample format: %s (%s)\n", compressions[i].str,
+                        printf("compression: %s (%s)\n", compressions[i].str,
                                compressions[i].desc);
                         break;
                 }
