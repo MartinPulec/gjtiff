@@ -198,7 +198,7 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
 int main(int argc, char **argv)
 {
         bool use_libtiff = false;
-        char ofname[1024] = "./";
+        char ofdir[1024] = "./";
 
         int opt = 0;
         while ((opt = getopt(argc, argv, "+dhlo:v")) != -1) {
@@ -212,14 +212,7 @@ int main(int argc, char **argv)
                         use_libtiff = true;
                         break;
                 case 'o':
-                        if (strlen(argv[-1]) > 2) { // -o<dir>
-                                snprintf(ofname, sizeof ofname, "%s/",
-                                         argv[-1] + 2);
-                        } else { // -o <dir>
-                                assert(argv[0] != nullptr);
-                                snprintf(ofname, sizeof ofname, "%s/", argv[0]);
-                                argv++;
-                        }
+                        snprintf(ofdir, sizeof ofdir, "%s/", optarg);
                         break;
                 case 'v':
                         log_level += 1;
@@ -239,21 +232,21 @@ int main(int argc, char **argv)
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
-        const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
-        const size_t d_pref_len = strlen(ofname);
         argv += optind;
+        const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
+        const size_t d_pref_len = strlen(ofdir);
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf)) {
                 TIMER_START(transcode, log_level);
-                set_ofname(ifname, ofname + d_pref_len,
-                           sizeof ofname - d_pref_len);
+                set_ofname(ifname, ofdir + d_pref_len,
+                           sizeof ofdir - d_pref_len);
 
                 struct dec_image dec = decode_tiff(&state, ifname);
                 if (dec.data == nullptr) {
                         ret = ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
                 }
-                encode_jpeg(&state, dec, ofname);
+                encode_jpeg(&state, dec, ofdir);
                 TIMER_STOP(transcode, log_level);
         }
 
