@@ -1,8 +1,8 @@
 NVCC ?= nvcc
 NVCC_DIR := $(shell dirname $$(command -v $(NVCC)))
-CXXFLAGS += -g -Wall -Wextra -Wno-missing-field-initializers -I$(NVCC_DIR)/../include
+CXXFLAGS += -g -Wall -Wextra -Wno-missing-field-initializers -fopenmp -I$(NVCC_DIR)/../include
 CUDAFLAGS ?= 
-LDFLAGS += -L$(NVCC_DIR)/../lib64
+LDFLAGS += -fopenmp -L$(NVCC_DIR)/../lib64
 
 all: gjtiff
 

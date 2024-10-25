@@ -178,15 +178,17 @@ libtiff_state::decode_tiled(TIFF *tif, struct tiff_info *tiffinfo)
         const int dst_linesize = tiffinfo->common.width * bps;
         const int tile_linesize = tiffinfo->tile_width * bps;
         TIMER_START(TIFFReadEncodedTile, log_level);
+        bool error = false;
+        const char *tiff_name = TIFFFileName(tif);
+        #pragma omp parallel for
         for (tstrip_t tile = 0; tile < numberOfTiles; ++tile) {
                 size_t offset = tile * tiffinfo->strip_tile_size;
                 uint8_t *tile_data = decoded + offset;
+                TIFF *ttif = TIFFOpen(tiff_name, "r");
                 const tmsize_t rc = TIFFReadEncodedTile(
-                    tif, tile, tile_data, tiffinfo->strip_tile_size);
+                    ttif, tile, tile_data, tiffinfo->strip_tile_size);
                 if (rc == -1) {
-                        ERROR_MSG("libtiff decode image %s failed!\n",
-                                  TIFFFileName(tif));
-                        return {};
+                        continue;
                 }
                 size_t offset_x =
                     (tile % tile_count_vertical) * tiffinfo->tile_width;
@@ -201,6 +203,12 @@ libtiff_state::decode_tiled(TIFF *tif, struct tiff_info *tiffinfo)
                     d_decoded + dst_offset, dst_linesize, decoded + offset,
                     tile_linesize, (size_t)columns * bps, rows,
                     cudaMemcpyHostToDevice, stream));
+                TIFFClose(ttif);
+        }
+        if (error) {
+                ERROR_MSG("libtiff decode image %s failed!\n",
+                          TIFFFileName(tif));
+                return {};
         }
         TIMER_STOP(TIFFReadEncodedTile, log_level);
         const size_t converted_size =
