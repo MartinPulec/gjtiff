@@ -107,7 +107,8 @@ struct dec_image
 libtiff_state::decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo)
 {
         if (tiffinfo->sample_format != SAMPLEFORMAT_COMPLEXINT ||
-            tiffinfo->big_endian) {
+            tiffinfo->big_endian || tiffinfo->common.comp_count > 1 ||
+            tiffinfo->bits_per_sample != 32) {
                 return {};
         }
 
@@ -138,14 +139,21 @@ libtiff_state::decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo)
                                            cudaMemcpyHostToDevice, stream));
         }
         TIMER_STOP(TIFFReadEncodedStrip, log_level);
-        const size_t converted_size = (size_t)ret.width * ret.height * ret.comp_count;
+        const size_t converted_16b_size =
+            (size_t)ret.width * ret.height * ret.comp_count * 2;
+        const size_t converted_8b_size =
+            (size_t)ret.width * ret.height * ret.comp_count;
+        const size_t converted_size = converted_16b_size + converted_8b_size;
         if (converted_size > d_converted_allocated) {
                 CHECK_CUDA(cudaFree(d_converted));
                 CHECK_CUDA(cudaMalloc(&d_converted, converted_size));
                 d_converted_allocated = converted_size;
         }
-        convert_complex_int(d_decoded, d_converted, decsize, stream);
+        convert_complex_int_to_uint16(
+            (int16_t *)d_decoded, (uint16_t *)d_converted, decsize / 4, stream);
         ret.data = d_converted;
+        convert_16_8_cuda(&ret, d_converted + converted_16b_size, stream);
+        ret.data = d_converted + converted_16b_size;
         return ret;
 }
 

@@ -76,7 +76,14 @@ void convert_16_8_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
                                         res[0] + 2 * res[1]);
 }
 
-__global__ void kernel_convert_complex_int(const uint8_t *in, uint8_t *out,
+/*                             _                 __    _  __   _     
+ *    ___ ___  _ __ ___  _ __ | | _____  __      \ \  / |/ /_ | |__  
+ *   / __/ _ \| '_ ` _ \| '_ \| |/ _ \ \/ /  _____\ \ | | '_ \| '_ \ 
+ *  | (_| (_) | | | | | | |_) | |  __/>  <  |_____/ / | | (_) | |_) |
+ *   \___\___/|_| |_| |_| .__/|_|\___/_/\_\      /_/  |_|\___/|_.__/ 
+ *                      |_|                                          
+*/
+__global__ void kernel_convert_complex_int(const int16_t *in, uint16_t *out,
                                            size_t datalen)
 {
         unsigned int position =
@@ -84,12 +91,11 @@ __global__ void kernel_convert_complex_int(const uint8_t *in, uint8_t *out,
         if (position > datalen) {
                 return;
         }
-        out[position] = in[4 * position + 1]; // take just MSB from real part
+        out[position] = sqrt(pow(in[2 * position], 2) + pow(in[2 * position + 1], 2));
 }
-void convert_complex_int(const uint8_t *in, uint8_t *out, size_t in_len,
-                         cudaStream_t stream)
+void convert_complex_int_to_uint16(const int16_t *in, uint16_t *out,
+                                  size_t count, cudaStream_t stream)
 {
-        const size_t count = in_len / 4;
         kernel_convert_complex_int<<<dim3((count + 255) / 256), dim3(256), 0,
                                      stream>>>(in, out, count);
 }
