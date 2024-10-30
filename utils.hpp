@@ -22,6 +22,9 @@
   }
 
 #define FG_RED "\033[31m"
+#define FG_YELLOW "\033[33m"
 #define TERM_RESET "\033[0m"
 #define ERROR_MSG(fmt, ...)                                                    \
         fprintf(stderr, FG_RED fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
+#define WARN_MSG(fmt, ...)                                                    \
+        fprintf(stderr, FG_YELLOW fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)

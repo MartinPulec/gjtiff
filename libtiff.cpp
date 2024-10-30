@@ -243,6 +243,7 @@ struct dec_image libtiff_state::decode(const char *fname)
                                    : decode_stripped_complex(tif, &tiffinfo);
 
         if (ret.data == nullptr) {
+                WARN_MSG("using fallback decode for %s!\n", fname);
                 ret = decode_fallback(tif);
         }
         TIFFClose(tif);
