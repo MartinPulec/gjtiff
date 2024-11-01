@@ -134,6 +134,33 @@ void convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t pix_count,
                                   (cudaStream_t)stream>>>(in, out, pix_count);
 }
 
+__global__ void kernel_convert_planar_rgb_to_packed(uint8_t *in_r,
+                                                    uint8_t *in_g,
+                                                    uint8_t *in_b, uint8_t *out,
+                                                    int width, int spitch)
+{
+        int position_x = threadIdx.x + blockIdx.x * blockDim.x;
+        if (position_x > width) {
+                return;
+        }
+        int position_y = threadIdx.y + blockIdx.y * blockDim.y;
+        out[3 * (position_y * width + position_x)] =
+            in_r[position_y * spitch + position_x];
+        out[3 * (position_y * width + position_x) + 1] =
+            in_g[position_y * spitch + position_x];
+        out[3 * (position_y * width + position_x) + 2] =
+            in_b[position_y * spitch + position_x];
+}
+
+void convert_planar_rgb_to_packed(uint8_t **in, uint8_t *out, int width,
+                                  int spitch, int height, void *stream)
+{
+        kernel_convert_planar_rgb_to_packed<<<dim3((width + 255) / 256, height),
+                                              dim3(256), 0,
+                                              (cudaStream_t)stream>>>(
+            in[0], in[1], in[2], out, width, spitch);
+}
+
 void cleanup_cuda_kernels()
 {
         cudaFreeHost(state.scratch);

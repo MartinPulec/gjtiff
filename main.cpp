@@ -34,6 +34,7 @@
 
 #include "defs.h"
 #include "kernels.hpp"
+#include "libnvj2k.h"
 #include "libnvtiff.h"
 #include "libtiff.hpp"
 #include "utils.hpp"
@@ -49,6 +50,7 @@ struct state_gjtiff {
         ~state_gjtiff();
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
+        struct nvj2k_state *state_nvj2k;
         struct nvtiff_state *state_nvtiff;
         struct libtiff_state *state_libtiff;
         // GPUJPEG
@@ -60,6 +62,7 @@ state_gjtiff::state_gjtiff(bool u)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
         state_libtiff = libtiff_create(log_level, stream);
+        state_nvj2k = nvj2k_init(stream);
         state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
         gj_enc = gpujpeg_encoder_create(stream);
@@ -69,6 +72,7 @@ state_gjtiff::state_gjtiff(bool u)
 state_gjtiff::~state_gjtiff()
 {
         gpujpeg_encoder_destroy(gj_enc);
+        nvj2k_destroy(state_nvj2k);
         nvtiff_destroy(state_nvtiff);
         CHECK_CUDA(cudaStreamDestroy(stream));
         libtiff_destroy(state_libtiff);
@@ -86,7 +90,6 @@ state_gjtiff::~state_gjtiff()
  */
 static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
 {
-        printf("Decoding from file %s... \n", fname);
         struct dec_image dec = nvtiff_decode(s->state_nvtiff, fname);
         if (dec.data != nullptr) {
                 return dec;
@@ -100,6 +103,15 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
         }
         fprintf(stderr, "trying libtiff...\n");
         return libtiff_decode(s->state_libtiff, fname);
+}
+
+static dec_image decode(struct state_gjtiff *s, const char *fname)
+{
+        printf("Decoding from file %s... \n", fname);
+        if (strstr(fname, ".jp2") == fname + strlen(fname) - 4) {
+                return nvj2k_decode(s->state_nvj2k, fname);
+        }
+        return decode_tiff(s, fname);
 }
 
 static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
@@ -241,7 +253,7 @@ int main(int argc, char **argv)
                 set_ofname(ifname, ofdir + d_pref_len,
                            sizeof ofdir - d_pref_len);
 
-                struct dec_image dec = decode_tiff(&state, ifname);
+                struct dec_image dec = decode(&state, ifname);
                 if (dec.data == nullptr) {
                         ret = ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;

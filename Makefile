@@ -12,8 +12,8 @@ all: gjtiff
 %.o: %.cu %.hpp
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
-gjtiff: kernels.o libnvtiff.o libtiff.o libtiffinfo.o main.o
-	$(CXX) $(LDFLAGS) $^ -lcudart -lgpujpeg -lm -lnppc -lnpps -lnppist -lnvtiff -ltiff -o $@
+gjtiff: kernels.o libnvj2k.o libnvtiff.o libtiff.o libtiffinfo.o main.o
+	$(CXX) $(LDFLAGS) $^ -lcudart -lgpujpeg -lm -lnppc -lnpps -lnppist -lnvjpeg2k -lnvtiff -ltiff -o $@
 
 clean:
 	$(RM) *o gjtiff
