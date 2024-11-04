@@ -24,6 +24,8 @@ struct dec_image {
         unsigned char *data;
 };
 
+#define DEC_IMG_ERR(rc) {rc, 0, 0, 0, 0}
+
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \
                 cudaError_t err = call;                                        \

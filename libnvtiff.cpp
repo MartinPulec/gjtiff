@@ -147,7 +147,7 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
                               &s->decoded, s->stream);
         if (e == NVTIFF_STATUS_NVCOMP_NOT_FOUND) {
                 ERROR_MSG("nvCOMP needed for DEFLATE not found in path...\n");
-                return {ERR_NVCOMP_NOT_FOUND};
+                return DEC_IMG_ERR(ERR_NVCOMP_NOT_FOUND);
         }
         if (e != NVTIFF_STATUS_SUCCESS) {
                 ERROR_MSG("nvtiff error code %d in file '%s' in line %i\n", e,
