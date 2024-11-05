@@ -1,6 +1,7 @@
 #include "libnvj2k.h"
 
 #include <cerrno>              // for errno
+#include <cinttypes>           // for PRIu32, PRIu8
 #include <cstdint>             // for uint8_t
 #include <cstdio>              // for fseek, fclose, fopen, fread, ftell, FILE
 #include <cstdlib>             // for calloc, free
@@ -36,6 +37,10 @@ struct nvj2k_state {
         uint8_t *converted;
         size_t converted_allocated;
 };
+
+// prototypes
+static void print_j2k_info(const nvjpeg2kImageInfo_t *image_info,
+                           const nvjpeg2kImageComponentInfo_t *image_comp_info);
 
 /**
  * @todo error handling
@@ -102,6 +107,10 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         for (unsigned c = 0; c < image_info.num_components; c++) {
                 nvjpeg2kStreamGetImageComponentInfo(s->nvjpeg2k_stream,
                                                     &image_comp_info[c], c);
+        }
+
+        if (log_level >= LL_DEBUG) {
+                print_j2k_info(&image_info, image_comp_info);
         }
 
         nvjpeg2kImage_t output_image;
@@ -181,4 +190,22 @@ void nvj2k_destroy(struct nvj2k_state *s) {
         nvjpeg2kDecodeStateDestroy(s->decode_state);
         nvjpeg2kDestroy(s->nvjpeg2k_handle);
         free(s);
+}
+
+static void print_j2k_info(const nvjpeg2kImageInfo_t *image_info,
+                           const nvjpeg2kImageComponentInfo_t *image_comp_info)
+{
+        printf("Image size: %" PRIu32 "x%" PRIu32 ", tile size: %" PRIu32 "x%" PRIu32
+               ", num tiles: %" PRIu32 "x%" PRIu32 ", components: %" PRIu32 "\n",
+               image_info->image_width, image_info->image_height,
+               image_info->tile_width, image_info->tile_height,
+               image_info->num_tiles_x, image_info->num_tiles_y,
+               image_info->num_components);
+        for (unsigned i = 0; i < image_info->num_components; ++i) {
+                printf("\tcomponent #%u size %" PRIu32 "x%" PRIu32
+                       ", precision: %" PRIu8 ", sgn: %" PRIu8 "\n",
+                       i, image_comp_info[i].component_width,
+                       image_comp_info[i].component_height,
+                       image_comp_info[i].precision, image_comp_info[i].sgn);
+        }
 }

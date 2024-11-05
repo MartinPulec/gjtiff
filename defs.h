@@ -9,6 +9,9 @@
 #include <stdlib.h>  // abort
 #endif
 
+enum {
+        LL_DEBUG = 2,
+};
 extern int log_level;
 
 enum rc {
