@@ -41,6 +41,9 @@ struct nvj2k_state {
 // prototypes
 static void print_j2k_info(const nvjpeg2kImageInfo_t *image_info,
                            const nvjpeg2kImageComponentInfo_t *image_comp_info);
+static bool
+validate_equal_comps(const nvjpeg2kImageInfo_t *image_info,
+                     const nvjpeg2kImageComponentInfo_t *image_comp_info);
 
 /**
  * @todo error handling
@@ -109,6 +112,11 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                                                     &image_comp_info[c], c);
         }
 
+        if (!validate_equal_comps(&image_info, image_comp_info)) {
+                ERROR_MSG("%s: inequal components:\n", fname);
+                print_j2k_info(&image_info, image_comp_info);
+                return {};
+        }
         if (log_level >= LL_DEBUG) {
                 print_j2k_info(&image_info, image_comp_info);
         }
@@ -125,22 +133,6 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                                 (size_t)image_comp_info[0].component_width *
                                     bps * image_info.num_components,
                                 image_comp_info[0].component_height);
-        }
-        // check that all comps has the same size
-        for (int c = 1; c < image_info.num_components; c++) {
-                if (image_comp_info[c].component_width ==
-                        image_comp_info[0].component_width &&
-                    image_comp_info[c].component_height ==
-                        image_comp_info[0].component_height) {
-                        continue;
-                }
-                ERROR_MSG("%s: component #%d size %ux%u doesn't equal "
-                          "the first component (%ux%u)!\n",
-                          fname, c, image_comp_info[c].component_width,
-                          image_comp_info[c].component_height,
-                          image_comp_info[0].component_width,
-                          image_comp_info[0].component_height);
-                return {};
         }
         s->decode_output_width = image_comp_info[0].component_width;
         s->decode_output_height = image_comp_info[0].component_height;
@@ -208,4 +200,29 @@ static void print_j2k_info(const nvjpeg2kImageInfo_t *image_info,
                        image_comp_info[i].component_height,
                        image_comp_info[i].precision, image_comp_info[i].sgn);
         }
+}
+
+static bool
+validate_equal_comps(const nvjpeg2kImageInfo_t *image_info,
+                     const nvjpeg2kImageComponentInfo_t *image_comp_info)
+{
+        // check that all comps has the same size
+        for (unsigned c = 1; c < image_info->num_components; c++) {
+                if (image_comp_info[c].component_width !=
+                        image_comp_info[0].component_width) {
+                        return false;
+                }
+                if (image_comp_info[c].component_height !=
+                    image_comp_info[0].component_height) {
+                        return false;
+                }
+                if (image_comp_info[c].precision !=
+                    image_comp_info[0].precision) {
+                        return false;
+                }
+                if (image_comp_info[c].sgn != image_comp_info[0].sgn) {
+                        return false;
+                }
+        }
+        return true;
 }
