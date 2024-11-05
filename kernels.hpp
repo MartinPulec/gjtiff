@@ -15,5 +15,7 @@ void convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t pix_count,
                             void *stream);
 void convert_remove_pitch(uint8_t *in, uint8_t *out, int width, int spitch,
                           int height, void *stream);
+void convert_remove_pitch_16(uint16_t *in, uint16_t *out, int width, int spitch,
+                             int height, void *stream);
 
 void cleanup_cuda_kernels(void);

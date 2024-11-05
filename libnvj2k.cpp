@@ -117,15 +117,23 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 print_j2k_info(&image_info, image_comp_info);
                 return {};
         }
+        if (image_comp_info[0].sgn != 0) {
+                ERROR_MSG("%s: signed samples not yet supported!\n", fname);
+                print_j2k_info(&image_info, image_comp_info);
+        }
         if (log_level >= LL_DEBUG) {
                 print_j2k_info(&image_info, image_comp_info);
         }
 
         nvjpeg2kImage_t output_image;
+        int bps = 1;
         output_image.pixel_type = NVJPEG2K_UINT8;
         output_image.num_components = image_info.num_components;
+        if (image_comp_info[0].precision > 8) {
+                bps = 2;
+                output_image.pixel_type = NVJPEG2K_UINT16;
+        }
 
-        const int bps = 1;
         if (s->decode_output_width != image_comp_info[0].component_width ||
             s->decode_output_height != image_comp_info[0].component_height) {
                 cudaFree(s->decode_output);
@@ -154,22 +162,39 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         size_t conv_size = (size_t)s->decode_output_width *
                            s->decode_output_height * bps *
                            image_info.num_components;
+        if (bps == 2) {
+                conv_size += conv_size / 2;
+        }
         if (s->converted_allocated < conv_size) {
                 cudaFree(s->converted);
                 cudaMalloc((void **)&s->converted, conv_size);
                 s->converted_allocated = conv_size;
         }
 
-        convert_remove_pitch(
-            s->decode_output, s->converted,
-            (int)(s->decode_output_width * image_info.num_components),
-            (int)s->pitch_in_bytes, (int)s->decode_output_height,
-            s->cuda_stream);
+        struct dec_image ret;
+        ret.width = s->decode_output_width;
+        ret.height = s->decode_output_height;
+        ret.comp_count = (int) image_info.num_components;
+        ret.data = s->converted;
 
-        const struct dec_image ret = {(enum rc)0, (int)s->decode_output_width,
-                                      (int)s->decode_output_height,
-                                      (int)image_info.num_components,
-                                      s->converted};
+        if (bps == 1) {
+                convert_remove_pitch(
+                    s->decode_output, s->converted,
+                    (int)(s->decode_output_width * image_info.num_components),
+                    (int)s->pitch_in_bytes, (int)s->decode_output_height,
+                    s->cuda_stream);
+        } else {
+                convert_remove_pitch_16(
+                    (uint16_t *)s->decode_output,
+                    (uint16_t *)s->converted,
+                    (int)(s->decode_output_width * image_info.num_components),
+                    (int)s->pitch_in_bytes, (int)s->decode_output_height,
+                    s->cuda_stream);
+                convert_16_8_normalize_cuda(
+                    &ret, s->converted + conv_size / 3 * 2, s->cuda_stream);
+                ret.data = s->converted + conv_size / 3 * 2;
+        }
+
         return ret;
 }
 

@@ -134,7 +134,8 @@ void convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t pix_count,
                                   (cudaStream_t)stream>>>(in, out, pix_count);
 }
 
-__global__ void kernel_convert_remove_pitch(uint8_t *in, uint8_t *out,
+template<typename t>
+__global__ void kernel_convert_remove_pitch(t *in, t *out,
                                             int width, int spitch)
 {
         int position_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -154,9 +155,23 @@ __global__ void kernel_convert_remove_pitch(uint8_t *in, uint8_t *out,
 void convert_remove_pitch(uint8_t *in, uint8_t *out, int width, int spitch,
                           int height, void *stream)
 {
-        kernel_convert_remove_pitch<<<dim3((width + 255) / 256, height),
+        kernel_convert_remove_pitch<uint8_t><<<dim3((width + 255) / 256, height),
                                       dim3(256), 0, (cudaStream_t)stream>>>(
             in, out, width, spitch);
+}
+
+
+/**
+ * This function is not 100% necessary since GPUJPEG supports pitched
+ * input (but currently just RGB) but it won't perhaps dealinkg with it since
+ * CUDA kernels are quite fast
+ */
+void convert_remove_pitch_16(uint16_t *in, uint16_t *out, int width, int spitch,
+                          int height, void *stream)
+{
+        kernel_convert_remove_pitch<uint16_t><<<dim3((width + 255) / 256, height),
+                                      dim3(256), 0, (cudaStream_t)stream>>>(
+            in, out, width, spitch / 2);
 }
 
 void cleanup_cuda_kernels()
