@@ -37,7 +37,7 @@
 #include <cstdio>          // for fprintf, stderr, size_t
 
 #include "defs.h"          // for dec_image, CHECK_CUDA, rc
-#include "kernels.hpp"     // for convert_16_8_cuda
+#include "kernels.hpp"     // for convert_16_8_normalize_cuda
 #include "utils.hpp"       // for ERROR_MSG
 
 #define DIV_UP(a, b) (((a) + ((b) - 1)) / (b))
@@ -100,7 +100,7 @@ static uint8_t *convert_16_8(struct nvtiff_state  *s, struct dec_image *img)
                 CHECK_CUDA(cudaMalloc(&s->converted, out_size));
                 s->converted_allocated = out_size;
         }
-        convert_16_8_cuda(img, s->converted, s->stream);
+        convert_16_8_normalize_cuda(img, s->converted, s->stream);
         return s->converted;
 }
 

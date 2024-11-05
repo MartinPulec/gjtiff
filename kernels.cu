@@ -37,7 +37,7 @@ static struct {
 
 } state;
 
-void convert_16_8_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
+void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
 {
         if (nppGetStream() != stream) {
                 nppSetStream(stream);
