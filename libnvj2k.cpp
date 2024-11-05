@@ -14,7 +14,7 @@
 #include "utils.hpp"           // for ERROR_MSG, TIMER_START, TIMER_STOP
 
 enum {
-        NUM_COMPONENTS = 3,
+        MAX_COMPONENTS = 3,
 };
 
 struct nvj2k_state {
@@ -27,10 +27,10 @@ struct nvj2k_state {
         char *bitstream_buffer;
         size_t bitstream_buffer_allocated;
 
-        uint8_t *decode_output[NUM_COMPONENTS];
+        uint8_t *decode_output[MAX_COMPONENTS];
         unsigned decode_output_width,
             decode_output_height;
-        size_t pitch_in_bytes[NUM_COMPONENTS];
+        size_t pitch_in_bytes[MAX_COMPONENTS];
 
         uint8_t *converted;
         size_t converted_allocated;
@@ -82,16 +82,16 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         nvjpeg2kImageInfo_t image_info;
         nvjpeg2kStreamGetImageInfo(s->nvjpeg2k_stream, &image_info);
 
-        if (image_info.num_components != NUM_COMPONENTS) {
-                ERROR_MSG("%s: assumed %d components, got %d!\n", fname,
-                          (int)NUM_COMPONENTS, image_info.num_components);
+        if (image_info.num_components > MAX_COMPONENTS) {
+                ERROR_MSG("%s: assumed at most %d components, got %d!\n", fname,
+                          (int)MAX_COMPONENTS, image_info.num_components);
                 return {};
         }
 
         // assuming the decoding of images with 8 bit precision, and 3
         // components
 
-        nvjpeg2kImageComponentInfo_t image_comp_info[NUM_COMPONENTS];
+        nvjpeg2kImageComponentInfo_t image_comp_info[MAX_COMPONENTS];
 
         for (unsigned c = 0; c < image_info.num_components; c++) {
                 nvjpeg2kStreamGetImageComponentInfo(s->nvjpeg2k_stream,
@@ -102,7 +102,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
 
         if (s->decode_output_width != image_comp_info[0].component_width ||
             s->decode_output_height != image_comp_info[0].component_height) {
-                for (int i = 0; i < NUM_COMPONENTS; i++) {
+                for (int i = 0; i < image_info.num_components; i++) {
                         cudaFree(s->decode_output[i]);
                         cudaMallocPitch((void **)&s->decode_output[i],
                                         &s->pitch_in_bytes[i],
@@ -111,7 +111,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 }
         }
         // check that all comps has the same size
-        for (int c = 1; c < NUM_COMPONENTS; c++) {
+        for (int c = 1; c < image_info.num_components; c++) {
                 if (image_comp_info[c].component_width ==
                         image_comp_info[0].component_width &&
                     image_comp_info[c].component_height ==
@@ -146,26 +146,40 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         }
 
         size_t conv_size = (size_t)s->decode_output_width *
-                          s->decode_output_height * NUM_COMPONENTS;
+                          s->decode_output_height * image_info.num_components;
         if (s->converted_allocated < conv_size) {
                 cudaFree(s->converted);
                 cudaMalloc((void **)&s->converted, conv_size);
                 s->converted_allocated = conv_size;
         }
 
-        convert_planar_rgb_to_packed(
-            s->decode_output, s->converted, s->decode_output_width,
-            s->pitch_in_bytes[0], s->decode_output_height, s->cuda_stream);
+        switch (image_info.num_components) {
+        case 1:
+                convert_grayscale_remove_pitch(
+                    s->decode_output[0], s->converted, s->decode_output_width,
+                    s->pitch_in_bytes[0], s->decode_output_height,
+                    s->cuda_stream);
+        case 3:
+                convert_planar_rgb_to_packed(
+                    s->decode_output, s->converted, s->decode_output_width,
+                    s->pitch_in_bytes[0], s->decode_output_height,
+                    s->cuda_stream);
+        default:
+                ERROR_MSG("%s: unsupported component count %d!\n", fname,
+                          (int)image_info.num_components);
+                return {};
+        }
 
         const struct dec_image ret = {(enum rc)0, (int)s->decode_output_width,
                                       (int)s->decode_output_height,
-                                      NUM_COMPONENTS, s->converted};
+                                      (int)image_info.num_components,
+                                      s->converted};
         return ret;
 }
 
 void nvj2k_destroy(struct nvj2k_state *s) {
         cudaFreeHost(s->bitstream_buffer);
-        for (int c = 0; c < NUM_COMPONENTS; c++) {
+        for (int c = 0; c < MAX_COMPONENTS; c++) {
                 cudaFree(s->decode_output[c]);
         }
         cudaFree(s->converted);

@@ -161,6 +161,31 @@ void convert_planar_rgb_to_packed(uint8_t **in, uint8_t *out, int width,
             in[0], in[1], in[2], out, width, spitch);
 }
 
+__global__ void kernel_convert_grayscale_remove_pitch(uint8_t *in, uint8_t *out,
+                                                      int width, int spitch)
+{
+        int position_x = threadIdx.x + blockIdx.x * blockDim.x;
+        if (position_x > width) {
+                return;
+        }
+        int position_y = threadIdx.y + blockIdx.y * blockDim.y;
+        out[position_y * width + position_x] =
+            in[position_y * spitch + position_x];
+}
+
+/**
+ * This function is not 100% necessary since GPUJPEG could support pitched
+ * grayscale (currently just RGB) but it won't perhaps dealinkg with it since
+ * CUDA kernels are quite fast
+ */
+void convert_grayscale_remove_pitch(uint8_t *in, uint8_t *out, int width,
+                                    int spitch, int height, void *stream)
+{
+        kernel_convert_grayscale_remove_pitch<<<
+            dim3((width + 255) / 256, height), dim3(256), 0,
+            (cudaStream_t)stream>>>(in, out, width, spitch);
+}
+
 void cleanup_cuda_kernels()
 {
         cudaFreeHost(state.scratch);
