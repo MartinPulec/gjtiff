@@ -159,7 +159,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 s->converted_allocated = conv_size;
         }
 
-        convert_grayscale_remove_pitch(
+        convert_remove_pitch(
             s->decode_output, s->converted,
             (int)(s->decode_output_width * image_info.num_components),
             (int)s->pitch_in_bytes, (int)s->decode_output_height,
