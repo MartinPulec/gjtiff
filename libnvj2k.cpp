@@ -162,9 +162,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         size_t conv_size = (size_t)s->decode_output_width *
                            s->decode_output_height * bps *
                            image_info.num_components;
-        if (bps == 2) {
-                conv_size += conv_size / 2;
-        }
+        conv_size += conv_size / bps;
         if (s->converted_allocated < conv_size) {
                 cudaFree(s->converted);
                 cudaMalloc((void **)&s->converted, conv_size);
@@ -183,6 +181,9 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                     (int)(s->decode_output_width * image_info.num_components),
                     (int)s->pitch_in_bytes, (int)s->decode_output_height,
                     s->cuda_stream);
+                normalize_cuda(
+                    &ret, s->converted + conv_size / 2, s->cuda_stream);
+                ret.data = s->converted + conv_size / 2;
         } else {
                 convert_remove_pitch_16(
                     (uint16_t *)s->decode_output,
