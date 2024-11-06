@@ -11,13 +11,12 @@
 
 #define GAMMA 2
 
-/*  __     __   .______           ___        ___   .______   
- * /_ |   / /   |   _  \          \  \      / _ \  |   _  \  
- *  | |  / /_   |  |_)  |     _____\  \    | (_) | |  |_)  | 
- *  | | | '_ \  |   _  <     |______>  >    > _ <  |   _  <  
- *  | | | (_) | |  |_)  |          /  /    | (_) | |  |_)  | 
- *  |_|  \___/  |______/          /__/      \___/  |______/  
-*/
+/*                                   _ _         
+ *   _ __   ___  _ __ _ __ ___   __ _| (_)_______ 
+ *  | '_ \ / _ \| '__| '_ ` _ \ / _` | | |_  / _ \
+ *  | | | | (_) | |  | | | | | | (_| | | |/ /  __/
+ *  |_| |_|\___/|_|  |_| |_| |_|\__,_|_|_/___\___|
+ */
 __global__ void kernel_convert_16_8(uint16_t *in, uint8_t *out, size_t count, float scale) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
   if (position >= count) {
@@ -53,7 +52,16 @@ struct second_param<Ret(T1, T2, Args...)> {
 template <typename Func>
 using size_param_t = std::remove_pointer_t<typename second_param<Func>::type>;
 
-void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
+struct normalize_16b {
+        using type = uint16_t;
+        constexpr static auto mean_stddev_size = nppiMeanStdDevGetBufferHostSize_16u_C1R;
+        constexpr static auto mean_stddev = nppiMean_StdDev_16u_C1R;
+        constexpr static auto max_size = nppiMeanStdDevGetBufferHostSize_16u_C1R;
+        constexpr static auto max = nppiMax_16u_C1R;
+};
+
+template <typename t>
+void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
 {
         if (nppGetStream() != stream) {
                 nppSetStream(stream);
@@ -66,19 +74,19 @@ void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_
         ROI.height = in->height;
 
         // int in NPP 12.3 while size_t in 12.6
-        size_param_t<decltype(nppiMeanStdDevGetBufferHostSize_16u_C1R)>
+        size_param_t<typename std::remove_pointer<decltype(t::mean_stddev_size)>::type>
             stddev_scratch_len_req = 0;
-        size_param_t<decltype(nppiMeanStdDevGetBufferHostSize_16u_C1R)>
+        size_param_t<typename std::remove_pointer<decltype(t::max_size)>::type>
             max_scratch_len_req = 0;
 
         // GetBufferHostSize_16s_C1R_Ctx(ROI, &BufferSize, NppStreamContext);
-        nppiMeanStdDevGetBufferHostSize_16u_C1R(ROI, &stddev_scratch_len_req);
+        t::mean_stddev_size(ROI, &stddev_scratch_len_req);
         if ((int)stddev_scratch_len_req > state.stat[STDDEV_MEAN].len) {
                 cudaMallocHost((void **)(&state.stat[STDDEV_MEAN].data),
                                stddev_scratch_len_req);
                 state.stat[STDDEV_MEAN].len = (int)stddev_scratch_len_req;
         }
-        nppiMaxGetBufferHostSize_16u_C1R(ROI, &max_scratch_len_req);
+        t::max_size(ROI, &max_scratch_len_req);
         if ((int)max_scratch_len_req > state.stat[MAX].len) {
                 cudaMallocHost((void **)(&state.stat[MAX].data),
                                max_scratch_len_req);
@@ -93,7 +101,7 @@ void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_
                 cudaMalloc((void **)(&state.stat[MAX].d_res), sizeof(Npp16u));
         }
         NppStatus rc = NPP_NO_ERROR;
-        rc = nppiMean_StdDev_16u_C1R(
+        rc = t::mean_stddev(
             (Npp16u *)in->data, ROI.width * 2, ROI,
             (Npp8u *)state.stat[STDDEV_MEAN].data,
             &((Npp64f *)state.stat[STDDEV_MEAN].d_res)[0],
@@ -102,7 +110,7 @@ void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_
         Npp64f stddev_mean_res[2];
         cudaMemcpyAsync(stddev_mean_res, state.stat[STDDEV_MEAN].d_res, sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream);
 
-        rc = nppiMax_16u_C1R((Npp16u *)in->data, ROI.width * 2, ROI,
+        rc = t::max((Npp16u *)in->data, ROI.width * 2, ROI,
                                      (Npp8u*)state.stat[MAX].data, (Npp16u*)state.stat[MAX].d_res);
         assert(rc == 0);
         Npp16u max_res = 0;
@@ -117,8 +125,14 @@ void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_
         // scale to 0..\mu+2*\sigma
         float scale = MIN(stddev_mean_res[0] + 2 * stddev_mean_res[1], max_res);
         kernel_convert_16_8<<<dim3((count + 255) / 256), dim3(256), 0,
-                              stream>>>((uint16_t *)in->data, out, count,
+                              stream>>>((typename t::type *)in->data, out, count,
                                         scale);
+}
+
+void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out,
+                                 cudaStream_t stream)
+{
+        normalize_cuda<normalize_16b>(in, out, stream);
 }
 
 /*                             _                 __    _  __   _     
