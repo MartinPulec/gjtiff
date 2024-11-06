@@ -19,7 +19,7 @@
 */
 __global__ void kernel_convert_16_8(uint16_t *in, uint8_t *out, size_t count, float scale) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
-  if (position > count) {
+  if (position >= count) {
     return;
   }
 
@@ -88,7 +88,7 @@ __global__ void kernel_convert_complex_int(const int16_t *in, uint16_t *out,
 {
         unsigned int position =
             threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
-        if (position > datalen) {
+        if (position >= datalen) {
                 return;
         }
         out[position] = sqrt(pow(in[2 * position], 2) + pow(in[2 * position + 1], 2));
@@ -119,7 +119,7 @@ void convert_rgba_grayscale(uint8_t *in, uint8_t *out, size_t pix_count,
 
 __global__ void kernel_convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t datalen) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
-  if (position > datalen) {
+  if (position >= datalen) {
     return;
   }
   out[position * 3] = in[position * 4];
@@ -139,7 +139,7 @@ __global__ void kernel_convert_remove_pitch(t *in, t *out,
                                             int width, int spitch)
 {
         int position_x = threadIdx.x + blockIdx.x * blockDim.x;
-        if (position_x > width) {
+        if (position_x >= width) {
                 return;
         }
         int position_y = threadIdx.y + blockIdx.y * blockDim.y;
