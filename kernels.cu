@@ -82,7 +82,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         // assert(rc == 0);
         NppiSize ROI;
         ROI.width = in->width;
-        ROI.height = in->height;
+        ROI.height = in->height * in->comp_count;
 
         // int in NPP 12.3 while size_t in 12.6
         size_param_t<typename std::remove_pointer<decltype(t::mean_stddev_size)>::type>
@@ -133,7 +133,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
                        stddev_mean_res[1], max_res);
         }
 
-        const size_t count = (size_t)in->width * in->height;
+        const size_t count = (size_t)in->width * in->height * in->comp_count;
         // scale to 0..\mu+2*\sigma
         float scale = MIN(stddev_mean_res[0] + 2 * stddev_mean_res[1], max_res);
         kernel_normalize<typename t::type>
