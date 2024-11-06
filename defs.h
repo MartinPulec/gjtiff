@@ -40,3 +40,7 @@ struct dec_image {
                 }                                                              \
         }
 #endif // ! defined DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
+
+#define ARR_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))

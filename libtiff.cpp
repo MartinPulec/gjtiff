@@ -12,9 +12,6 @@
 #include "kernels.hpp"
 #include "utils.hpp"
 
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-
 void nullTIFFErrorHandler(const char *, const char *, va_list) {}
 
 struct libtiff_state {

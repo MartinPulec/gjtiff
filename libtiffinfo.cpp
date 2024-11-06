@@ -106,7 +106,6 @@ struct tiff_info get_tiff_info(TIFF *tif)
         return ret;
 }
 
-#define ARR_SIZE(arr) sizeof(arr) / sizeof(arr[0])
 void print_tiff_info(struct tiff_info info)
 {
         printf("width: %u\n", info.common.width);
