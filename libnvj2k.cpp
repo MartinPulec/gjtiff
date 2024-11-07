@@ -32,7 +32,8 @@ struct nvj2k_state {
         uint8_t *decode_output;
         unsigned decode_output_width,
             decode_output_height,
-            decode_output_comp_count;
+            decode_output_comp_count,
+            decode_output_bps;
         size_t pitch_in_bytes;
 
         uint8_t *converted;
@@ -127,7 +128,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         }
 
         nvjpeg2kImage_t output_image;
-        int bps = 1;
+        unsigned bps = 1;
         output_image.pixel_type = NVJPEG2K_UINT8;
         output_image.num_components = image_info.num_components;
         if (image_comp_info[0].precision > 8) {
@@ -136,6 +137,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         }
 
         if (s->decode_output_comp_count != output_image.num_components ||
+            s->decode_output_bps != bps ||
             s->decode_output_width != image_comp_info[0].component_width ||
             s->decode_output_height != image_comp_info[0].component_height) {
                 cudaFree(s->decode_output);
@@ -143,9 +145,11 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                                 (size_t)image_comp_info[0].component_width *
                                     bps * image_info.num_components,
                                 image_comp_info[0].component_height);
+                s->decode_output_width = image_comp_info[0].component_width;
+                s->decode_output_height = image_comp_info[0].component_height;
+                s->decode_output_bps = bps;
+                s->decode_output_comp_count = output_image.num_components;;
         }
-        s->decode_output_width = image_comp_info[0].component_width;
-        s->decode_output_height = image_comp_info[0].component_height;
 
         output_image.pixel_data = (void **) &s->decode_output;
         output_image.pitch_in_bytes = &s->pitch_in_bytes;
