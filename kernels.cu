@@ -89,6 +89,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         // NppStreamContext NppStreamContext;
         // rc = nppGetStreamContext(&NppStreamContext);
         // assert(rc == 0);
+        const int bps = sizeof(typename t::nv_type);
         NppiSize ROI;
         ROI.width = in->width;
         ROI.height = in->height * in->comp_count;
@@ -125,7 +126,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
                                       sizeof(Npp16u)));
         }
         CHECK_NPP(t::mean_stddev(
-            (typename t::nv_type *)in->data, ROI.width * 2, ROI,
+            (typename t::nv_type *)in->data, ROI.width * bps, ROI,
             (Npp8u *)state.stat[MEAN_STDDEV].data,
             &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[0],
             &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[1]));
@@ -133,7 +134,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         cudaMemcpyAsync(stddev_mean_res, state.stat[MEAN_STDDEV].d_res,
                         sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream);
 
-        CHECK_NPP(t::max((typename t::nv_type *)in->data, ROI.width * 2, ROI,
+        CHECK_NPP(t::max((typename t::nv_type *)in->data, ROI.width * bps, ROI,
                     (Npp8u *)state.stat[MAX].data,
                     (typename t::nv_type *)state.stat[MAX].d_res));
         typename t::nv_type max_res = 0;
