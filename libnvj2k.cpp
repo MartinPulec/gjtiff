@@ -31,7 +31,8 @@ struct nvj2k_state {
 
         uint8_t *decode_output;
         unsigned decode_output_width,
-            decode_output_height;
+            decode_output_height,
+            decode_output_comp_count;
         size_t pitch_in_bytes;
 
         uint8_t *converted;
@@ -134,7 +135,8 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 output_image.pixel_type = NVJPEG2K_UINT16;
         }
 
-        if (s->decode_output_width != image_comp_info[0].component_width ||
+        if (s->decode_output_comp_count != output_image.num_components ||
+            s->decode_output_width != image_comp_info[0].component_width ||
             s->decode_output_height != image_comp_info[0].component_height) {
                 cudaFree(s->decode_output);
                 cudaMallocPitch((void **)&s->decode_output, &s->pitch_in_bytes,
