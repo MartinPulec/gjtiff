@@ -4,3 +4,5 @@ IndentWidth: 8
 BreakBeforeBraces: Linux
 AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: false
+PenaltyBreakComment: 0
+PenaltyBreakAssignment: 100

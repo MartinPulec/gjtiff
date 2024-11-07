@@ -10,6 +10,7 @@
 #endif
 
 enum {
+        LL_VERBOSE = 1,
         LL_DEBUG = 2,
 };
 extern int log_level;

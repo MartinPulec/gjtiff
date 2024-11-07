@@ -83,6 +83,13 @@ struct normalize_16b {
 template <typename t>
 void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
 {
+        enum {
+                MEAN = 0,
+                STDDEV = 1,
+                MEAN_STDDEV_RES_COUNT = STDDEV + 1,
+                SIGMA_COUNT = 2, // nultiple of sigma to be added to the mean to
+                                 // obtain scale
+        };
         if (nppGetStream() != stream) {
                 CHECK_NPP(nppSetStream(stream));
         }
@@ -119,7 +126,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         // printf("%d\n", BufferSize);
         if (state.stat[MEAN_STDDEV].d_res == nullptr) {
                 CHECK_CUDA(cudaMalloc((void **)(&state.stat[MEAN_STDDEV].d_res),
-                                      2 * sizeof(Npp64f)));
+                                      MEAN_STDDEV_RES_COUNT * sizeof(Npp64f)));
         }
         if (state.stat[MAX].d_res == nullptr) {
                 CHECK_CUDA(cudaMalloc((void **)(&state.stat[MAX].d_res),
@@ -128,9 +135,9 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         CHECK_NPP(t::mean_stddev(
             (typename t::nv_type *)in->data, ROI.width * bps, ROI,
             (Npp8u *)state.stat[MEAN_STDDEV].data,
-            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[0],
-            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[1]));
-        Npp64f stddev_mean_res[2];
+            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[MEAN],
+            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[STDDEV]));
+        Npp64f stddev_mean_res[MEAN_STDDEV_RES_COUNT];
         cudaMemcpyAsync(stddev_mean_res, state.stat[MEAN_STDDEV].d_res,
                         sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream);
 
@@ -140,14 +147,16 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         typename t::nv_type max_res = 0;
         cudaMemcpyAsync(&max_res, state.stat[MAX].d_res, sizeof max_res, cudaMemcpyDeviceToHost, stream);
 
-        if (log_level >= 1) {
-                printf("MEAN: %f STDDEV: %f MAX: %hu\n", stddev_mean_res[0],
-                       stddev_mean_res[1], max_res);
+        if (log_level >= LL_VERBOSE) {
+                printf("MEAN: %f STDDEV: %f MAX: %hu\n", stddev_mean_res[MEAN],
+                       stddev_mean_res[STDDEV], max_res);
         }
 
         const size_t count = (size_t)in->width * in->height * in->comp_count;
         // scale to 0..\mu+2*\sigma
-        float scale = MIN(stddev_mean_res[0] + 2 * stddev_mean_res[1], max_res);
+        const float scale = MIN(stddev_mean_res[MEAN] +
+                                    SIGMA_COUNT * stddev_mean_res[STDDEV],
+                                max_res);
         kernel_normalize<typename t::type>
             <<<dim3((count + 255) / 256), dim3(256), 0, stream>>>(
                 (typename t::type *)in->data, out, count, scale);
