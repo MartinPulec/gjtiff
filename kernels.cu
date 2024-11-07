@@ -1,6 +1,5 @@
 #include "kernels.hpp"
 
-#include <cassert>
 #include <cstdio>
 #include <nppcore.h>
 #include <nppdefs.h>
@@ -17,6 +16,16 @@
  *  | | | | (_) | |  | | | | | | (_| | | |/ /  __/
  *  |_| |_|\___/|_|  |_| |_| |_|\__,_|_|_/___\___|
  */
+#define CHECK_NPP(call)                                                        \
+        {                                                                      \
+                NppStatus rc = call;                                           \
+                if (NPP_NO_ERROR != rc) {                                      \
+                        ERROR_MSG("NPP error in file '%s' in line %i : %d.\n", \
+                                  __FILE__, __LINE__, (int)rc);                \
+                        abort();                                               \
+                }                                                              \
+        }
+
  template <typename t>
 __global__ void kernel_normalize(t *in, uint8_t *out, size_t count, float scale) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
@@ -75,7 +84,7 @@ template <typename t>
 void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
 {
         if (nppGetStream() != stream) {
-                nppSetStream(stream);
+                CHECK_NPP(nppSetStream(stream));
         }
         // NppStreamContext NppStreamContext;
         // rc = nppGetStreamContext(&NppStreamContext);
@@ -91,42 +100,41 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
             max_scratch_len_req = 0;
 
         // GetBufferHostSize_16s_C1R_Ctx(ROI, &BufferSize, NppStreamContext);
-        t::mean_stddev_size(ROI, &stddev_scratch_len_req);
+        CHECK_NPP(t::mean_stddev_size(ROI, &stddev_scratch_len_req));
         if ((int)stddev_scratch_len_req > state.stat[STDDEV_MEAN].len) {
-                cudaFreeHost(state.stat[STDDEV_MEAN].data);
-                cudaMallocHost((void **)(&state.stat[STDDEV_MEAN].data),
-                               stddev_scratch_len_req);
+                CHECK_CUDA(cudaFreeHost(state.stat[STDDEV_MEAN].data));
+                CHECK_CUDA(
+                    cudaMallocHost((void **)(&state.stat[STDDEV_MEAN].data),
+                                   stddev_scratch_len_req));
                 state.stat[STDDEV_MEAN].len = (int)stddev_scratch_len_req;
         }
-        t::max_size(ROI, &max_scratch_len_req);
+        CHECK_NPP(t::max_size(ROI, &max_scratch_len_req));
         if ((int)max_scratch_len_req > state.stat[MAX].len) {
-                cudaFreeHost(state.stat[MAX].data);
-                cudaMallocHost((void **)(&state.stat[MAX].data),
-                               max_scratch_len_req);
+                CHECK_CUDA(cudaFreeHost(state.stat[MAX].data));
+                CHECK_CUDA(cudaMallocHost((void **)(&state.stat[MAX].data),
+                                          max_scratch_len_req));
                 state.stat[MAX].len = (int)max_scratch_len_req;
         }
         // printf("%d\n", BufferSize);
         if (state.stat[STDDEV_MEAN].d_res == nullptr) {
-                cudaMalloc((void **)(&state.stat[STDDEV_MEAN].d_res),
-                           2 * sizeof(Npp64f));
+                CHECK_CUDA(cudaMalloc((void **)(&state.stat[STDDEV_MEAN].d_res),
+                                      2 * sizeof(Npp64f)));
         }
         if (state.stat[MAX].d_res == nullptr) {
-                cudaMalloc((void **)(&state.stat[MAX].d_res), sizeof(Npp16u));
+                CHECK_CUDA(cudaMalloc((void **)(&state.stat[MAX].d_res),
+                                      sizeof(Npp16u)));
         }
-        NppStatus rc = NPP_NO_ERROR;
-        rc = t::mean_stddev(
+        CHECK_NPP(t::mean_stddev(
             (typename t::nv_type *)in->data, ROI.width * 2, ROI,
             (Npp8u *)state.stat[STDDEV_MEAN].data,
             &((Npp64f *)state.stat[STDDEV_MEAN].d_res)[0],
-            &((Npp64f *)state.stat[STDDEV_MEAN].d_res)[1]);
-        assert(rc == 0);
+            &((Npp64f *)state.stat[STDDEV_MEAN].d_res)[1]));
         Npp64f stddev_mean_res[2];
         cudaMemcpyAsync(stddev_mean_res, state.stat[STDDEV_MEAN].d_res, sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream);
 
-        rc = t::max((typename t::nv_type *)in->data, ROI.width * 2, ROI,
+        CHECK_NPP(t::max((typename t::nv_type *)in->data, ROI.width * 2, ROI,
                     (Npp8u *)state.stat[MAX].data,
-                    (typename t::nv_type *)state.stat[MAX].d_res);
-        assert(rc == 0);
+                    (typename t::nv_type *)state.stat[MAX].d_res));
         Npp16u max_res = 0;
         cudaMemcpyAsync(&max_res, state.stat[MAX].d_res, sizeof max_res, cudaMemcpyDeviceToHost, stream);
 
@@ -141,6 +149,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         kernel_normalize<typename t::type>
             <<<dim3((count + 255) / 256), dim3(256), 0, stream>>>(
                 (typename t::type *)in->data, out, count, scale);
+        CHECK_CUDA(cudaGetLastError());
 }
 
 void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out,
@@ -176,6 +185,7 @@ void convert_complex_int_to_uint16(const int16_t *in, uint16_t *out,
 {
         kernel_convert_complex_int<<<dim3((count + 255) / 256), dim3(256), 0,
                                      stream>>>(in, out, count);
+        CHECK_CUDA(cudaGetLastError());
 }
 
 
@@ -193,6 +203,7 @@ void convert_rgba_grayscale(uint8_t *in, uint8_t *out, size_t pix_count,
         kernel_convert_rgba_grayscale<<<dim3((pix_count + 255) / 256),
                                         dim3(256), 0, (cudaStream_t)stream>>>(
             in, out, pix_count);
+        CHECK_CUDA(cudaGetLastError());
 }
 
 __global__ void kernel_convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t datalen) {
@@ -210,6 +221,7 @@ void convert_rgba_rgb(uint8_t *in, uint8_t *out, size_t pix_count,
 {
         kernel_convert_rgba_rgb<<<dim3((pix_count + 255) / 256), dim3(256), 0,
                                   (cudaStream_t)stream>>>(in, out, pix_count);
+        CHECK_CUDA(cudaGetLastError());
 }
 
 template<typename t>
@@ -236,6 +248,7 @@ void convert_remove_pitch(uint8_t *in, uint8_t *out, int width, int spitch,
         kernel_convert_remove_pitch<uint8_t><<<dim3((width + 255) / 256, height),
                                       dim3(256), 0, (cudaStream_t)stream>>>(
             in, out, width, spitch);
+        CHECK_CUDA(cudaGetLastError());
 }
 
 
@@ -250,12 +263,13 @@ void convert_remove_pitch_16(uint16_t *in, uint16_t *out, int width, int spitch,
         kernel_convert_remove_pitch<uint16_t><<<dim3((width + 255) / 256, height),
                                       dim3(256), 0, (cudaStream_t)stream>>>(
             in, out, width, spitch / 2);
+        CHECK_CUDA(cudaGetLastError());
 }
 
 void cleanup_cuda_kernels()
 {
         for (unsigned i = 0; i < ARR_SIZE(state.stat); ++i) {
-                cudaFreeHost(state.stat[i].data);
-                cudaFree(state.stat[i].d_res);
+                CHECK_CUDA(cudaFreeHost(state.stat[i].data));
+                CHECK_CUDA(cudaFree(state.stat[i].d_res));
         }
 }
