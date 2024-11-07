@@ -93,12 +93,14 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         // GetBufferHostSize_16s_C1R_Ctx(ROI, &BufferSize, NppStreamContext);
         t::mean_stddev_size(ROI, &stddev_scratch_len_req);
         if ((int)stddev_scratch_len_req > state.stat[STDDEV_MEAN].len) {
+                cudaFreeHost(state.stat[STDDEV_MEAN].data);
                 cudaMallocHost((void **)(&state.stat[STDDEV_MEAN].data),
                                stddev_scratch_len_req);
                 state.stat[STDDEV_MEAN].len = (int)stddev_scratch_len_req;
         }
         t::max_size(ROI, &max_scratch_len_req);
         if ((int)max_scratch_len_req > state.stat[MAX].len) {
+                cudaFreeHost(state.stat[MAX].data);
                 cudaMallocHost((void **)(&state.stat[MAX].data),
                                max_scratch_len_req);
                 state.stat[MAX].len = (int)max_scratch_len_req;
