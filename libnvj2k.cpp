@@ -187,7 +187,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                     (int)(s->decode_output_width * image_info.num_components),
                     (int)s->pitch_in_bytes, (int)s->decode_output_height,
                     s->cuda_stream);
-                normalize_cuda(
+                normalize_8(
                     &ret, s->converted + conv_size / 2, s->cuda_stream);
                 ret.data = s->converted + conv_size / 2;
         } else {
