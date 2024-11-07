@@ -49,7 +49,7 @@ static struct {
 } state;
 /// indices to state.scratch
 enum {
-        STDDEV_MEAN = 0,
+        MEAN_STDDEV = 0,
         MAX = 1,
 };
 
@@ -101,12 +101,12 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
 
         // GetBufferHostSize_16s_C1R_Ctx(ROI, &BufferSize, NppStreamContext);
         CHECK_NPP(t::mean_stddev_size(ROI, &stddev_scratch_len_req));
-        if ((int)stddev_scratch_len_req > state.stat[STDDEV_MEAN].len) {
-                CHECK_CUDA(cudaFreeHost(state.stat[STDDEV_MEAN].data));
+        if ((int)stddev_scratch_len_req > state.stat[MEAN_STDDEV].len) {
+                CHECK_CUDA(cudaFreeHost(state.stat[MEAN_STDDEV].data));
                 CHECK_CUDA(
-                    cudaMallocHost((void **)(&state.stat[STDDEV_MEAN].data),
+                    cudaMallocHost((void **)(&state.stat[MEAN_STDDEV].data),
                                    stddev_scratch_len_req));
-                state.stat[STDDEV_MEAN].len = (int)stddev_scratch_len_req;
+                state.stat[MEAN_STDDEV].len = (int)stddev_scratch_len_req;
         }
         CHECK_NPP(t::max_size(ROI, &max_scratch_len_req));
         if ((int)max_scratch_len_req > state.stat[MAX].len) {
@@ -116,8 +116,8 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
                 state.stat[MAX].len = (int)max_scratch_len_req;
         }
         // printf("%d\n", BufferSize);
-        if (state.stat[STDDEV_MEAN].d_res == nullptr) {
-                CHECK_CUDA(cudaMalloc((void **)(&state.stat[STDDEV_MEAN].d_res),
+        if (state.stat[MEAN_STDDEV].d_res == nullptr) {
+                CHECK_CUDA(cudaMalloc((void **)(&state.stat[MEAN_STDDEV].d_res),
                                       2 * sizeof(Npp64f)));
         }
         if (state.stat[MAX].d_res == nullptr) {
@@ -126,11 +126,12 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         }
         CHECK_NPP(t::mean_stddev(
             (typename t::nv_type *)in->data, ROI.width * 2, ROI,
-            (Npp8u *)state.stat[STDDEV_MEAN].data,
-            &((Npp64f *)state.stat[STDDEV_MEAN].d_res)[0],
-            &((Npp64f *)state.stat[STDDEV_MEAN].d_res)[1]));
+            (Npp8u *)state.stat[MEAN_STDDEV].data,
+            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[0],
+            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[1]));
         Npp64f stddev_mean_res[2];
-        cudaMemcpyAsync(stddev_mean_res, state.stat[STDDEV_MEAN].d_res, sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream);
+        cudaMemcpyAsync(stddev_mean_res, state.stat[MEAN_STDDEV].d_res,
+                        sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream);
 
         CHECK_NPP(t::max((typename t::nv_type *)in->data, ROI.width * 2, ROI,
                     (Npp8u *)state.stat[MAX].data,
