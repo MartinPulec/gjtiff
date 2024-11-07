@@ -135,7 +135,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         CHECK_NPP(t::max((typename t::nv_type *)in->data, ROI.width * 2, ROI,
                     (Npp8u *)state.stat[MAX].data,
                     (typename t::nv_type *)state.stat[MAX].d_res));
-        Npp16u max_res = 0;
+        typename t::nv_type max_res = 0;
         cudaMemcpyAsync(&max_res, state.stat[MAX].d_res, sizeof max_res, cudaMemcpyDeviceToHost, stream);
 
         if (log_level >= 1) {
