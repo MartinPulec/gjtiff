@@ -30,10 +30,8 @@ struct nvj2k_state {
         size_t bitstream_buffer_allocated;
 
         uint8_t *decode_output;
-        unsigned decode_output_width,
-            decode_output_height,
-            decode_output_comp_count,
-            decode_output_bps;
+        unsigned dec_out_linesize_allocated,
+            dec_out_height_allocated;
         size_t pitch_in_bytes;
 
         uint8_t *converted;
@@ -136,19 +134,19 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 output_image.pixel_type = NVJPEG2K_UINT16;
         }
 
-        if (s->decode_output_comp_count != output_image.num_components ||
-            s->decode_output_bps != bps ||
-            s->decode_output_width != image_comp_info[0].component_width ||
-            s->decode_output_height != image_comp_info[0].component_height) {
+        const unsigned linesize = image_comp_info[0].component_width * bps *
+                                  image_info.num_components;
+        if (linesize > s->dec_out_linesize_allocated ||
+            image_comp_info[0].component_height > s->dec_out_height_allocated) {
+                s->dec_out_linesize_allocated = MAX(
+                    s->dec_out_linesize_allocated, linesize);
+                s->dec_out_height_allocated = MAX(
+                    s->dec_out_height_allocated,
+                    image_comp_info[0].component_height);
                 cudaFree(s->decode_output);
                 cudaMallocPitch((void **)&s->decode_output, &s->pitch_in_bytes,
-                                (size_t)image_comp_info[0].component_width *
-                                    bps * image_info.num_components,
-                                image_comp_info[0].component_height);
-                s->decode_output_width = image_comp_info[0].component_width;
-                s->decode_output_height = image_comp_info[0].component_height;
-                s->decode_output_bps = bps;
-                s->decode_output_comp_count = output_image.num_components;;
+                                s->dec_out_linesize_allocated,
+                                s->dec_out_height_allocated);
         }
 
         output_image.pixel_data = (void **) &s->decode_output;
@@ -165,9 +163,8 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 return {};
         }
 
-        size_t conv_size = (size_t)s->decode_output_width *
-                           s->decode_output_height * bps *
-                           image_info.num_components;
+        size_t conv_size = (size_t)linesize *
+                           image_comp_info[0].component_height;
         conv_size += conv_size / bps;
         if (s->converted_allocated < conv_size) {
                 cudaFree(s->converted);
@@ -176,16 +173,16 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         }
 
         struct dec_image ret;
-        ret.width = s->decode_output_width;
-        ret.height = s->decode_output_height;
+        ret.width = (int)image_comp_info[0].component_width;
+        ret.height = (int)image_comp_info[0].component_height;
         ret.comp_count = (int) image_info.num_components;
         ret.data = s->converted;
 
         if (bps == 1) {
                 convert_remove_pitch(
                     s->decode_output, s->converted,
-                    (int)(s->decode_output_width * image_info.num_components),
-                    (int)s->pitch_in_bytes, (int)s->decode_output_height,
+                    (int)(image_comp_info[0].component_width * image_info.num_components),
+                    (int)s->pitch_in_bytes, (int)image_comp_info[0].component_height,
                     s->cuda_stream);
                 normalize_8(
                     &ret, s->converted + conv_size / 2, s->cuda_stream);
@@ -194,8 +191,8 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 convert_remove_pitch_16(
                     (uint16_t *)s->decode_output,
                     (uint16_t *)s->converted,
-                    (int)(s->decode_output_width * image_info.num_components),
-                    (int)s->pitch_in_bytes, (int)s->decode_output_height,
+                    (int)(image_comp_info[0].component_width * image_info.num_components),
+                    (int)s->pitch_in_bytes, (int)image_comp_info[0].component_height,
                     s->cuda_stream);
                 convert_16_8_normalize_cuda(
                     &ret, s->converted + conv_size / 3 * 2, s->cuda_stream);
