@@ -63,8 +63,7 @@ template <typename Func>
 using size_param_t = std::remove_pointer_t<typename second_param<Func>::type>;
 
 struct normalize_8b {
-        using type = uint8_t;
-        using nv_type = Npp8u;
+        using nv_type = uint8_t; // typedefed as Npp8 in NPP
         constexpr static auto mean_stddev_size = nppiMeanStdDevGetBufferHostSize_8u_C1R;
         constexpr static auto mean_stddev = nppiMean_StdDev_8u_C1R;
         constexpr static auto max_size = nppiMeanStdDevGetBufferHostSize_8u_C1R;
@@ -72,8 +71,7 @@ struct normalize_8b {
 };
 
 struct normalize_16b {
-        using type = uint16_t;
-        using nv_type = Npp16u;
+        using nv_type = uint16_t; // typedefed as Npp16 in NPP
         constexpr static auto mean_stddev_size = nppiMeanStdDevGetBufferHostSize_16u_C1R;
         constexpr static auto mean_stddev = nppiMean_StdDev_16u_C1R;
         constexpr static auto max_size = nppiMeanStdDevGetBufferHostSize_16u_C1R;
@@ -157,9 +155,9 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         const float scale = MIN(stddev_mean_res[MEAN] +
                                     SIGMA_COUNT * stddev_mean_res[STDDEV],
                                 max_res);
-        kernel_normalize<typename t::type>
+        kernel_normalize<typename t::nv_type>
             <<<dim3((count + 255) / 256), dim3(256), 0, stream>>>(
-                (typename t::type *)in->data, out, count, scale);
+                (typename t::nv_type *)in->data, out, count, scale);
         CHECK_CUDA(cudaGetLastError());
 }
 
