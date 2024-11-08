@@ -10,7 +10,7 @@
 #include "defs.h"
 #include "libtiffinfo.hpp"
 #include "kernels.hpp"
-#include "utils.hpp"
+#include "utils.h"
 
 void nullTIFFErrorHandler(const char *, const char *, va_list) {}
 

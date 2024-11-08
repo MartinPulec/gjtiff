@@ -12,7 +12,7 @@
 
 #include "defs.h"              // for dec_image, log_level, rc
 #include "kernels.hpp"         // for convert_planar_rgb_to_packed
-#include "utils.hpp"           // for ERROR_MSG, TIMER_START, TIMER_STOP
+#include "utils.h"             // for ERROR_MSG, TIMER_START, TIMER_STOP
 
 enum {
         MAX_COMPONENTS = 3,

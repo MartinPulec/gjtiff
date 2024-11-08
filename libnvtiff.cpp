@@ -38,7 +38,7 @@
 
 #include "defs.h"          // for dec_image, CHECK_CUDA, rc
 #include "kernels.hpp"     // for convert_16_8_normalize_cuda
-#include "utils.hpp"       // for ERROR_MSG
+#include "utils.h"         // for ERROR_MSG
 
 #define DIV_UP(a, b) (((a) + ((b) - 1)) / (b))
 

@@ -1,7 +1,7 @@
 #ifndef DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
 #define DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
 
-#include "utils.hpp" // ERROR_MSG
+#include "utils.h"   // ERROR_MSG
 
 #ifdef __cplusplus
 #include <cstdlib>   // abort

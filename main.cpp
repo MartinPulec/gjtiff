@@ -37,7 +37,7 @@
 #include "libnvj2k.h"
 #include "libnvtiff.h"
 #include "libtiff.hpp"
-#include "utils.hpp"
+#include "utils.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096

@@ -1,5 +1,5 @@
-#ifndef UTILS_HPP_3A62EF66_2DE8_441D_8381_B3FBB49EC015
-#define UTILS_HPP_3A62EF66_2DE8_441D_8381_B3FBB49EC015
+#ifndef UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015
+#define UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015
 
 #ifdef __cplusplus
 #include <cstdio>
@@ -34,4 +34,4 @@
 #define WARN_MSG(fmt, ...)                                                    \
         fprintf(stderr, FG_YELLOW fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
 
-#endif // defined UTILS_HPP_3A62EF66_2DE8_441D_8381_B3FBB49EC015
+#endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015
