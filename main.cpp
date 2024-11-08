@@ -249,7 +249,7 @@ int main(int argc, char **argv)
         const size_t d_pref_len = strlen(ofdir);
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf)) {
-                TIMER_START(transcode, log_level);
+                TIMER_START(transcode, LL_DEBUG);
                 set_ofname(ifname, ofdir + d_pref_len,
                            sizeof ofdir - d_pref_len);
 
@@ -259,7 +259,7 @@ int main(int argc, char **argv)
                         continue;
                 }
                 encode_jpeg(&state, dec, ofdir);
-                TIMER_STOP(transcode, log_level);
+                TIMER_STOP(transcode);
         }
 
         cleanup_cuda_kernels();

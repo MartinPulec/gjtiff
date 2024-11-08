@@ -62,13 +62,13 @@ struct dec_image libtiff_state::decode_fallback(TIFF *tif)
                 CHECK_CUDA(cudaMalloc(&d_decoded, read_size));
                 decoded_allocated = read_size;
         }
-        TIMER_START(TIFFReadRGBAImage, log_level);
+        TIMER_START(TIFFReadRGBAImage, LL_DEBUG);
         /// @todo
         // TIFFReadRow{Tile,Strip} would be faster
         const int rc = TIFFReadRGBAImageOriented(
             tif, ret.width, ret.height,
             (uint32_t *)decoded, ORIENTATION_TOPLEFT, 0);
-        TIMER_STOP(TIFFReadRGBAImage, log_level);
+        TIMER_STOP(TIFFReadRGBAImage);
         if (rc != 1) {
                 ERROR_MSG("libtiff decode image %s failed!\n",
                           TIFFFileName(tif));
@@ -121,7 +121,7 @@ libtiff_state::decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo)
                 CHECK_CUDA(cudaMalloc(&d_decoded, decsize));
                 decoded_allocated = decsize;
         }
-        TIMER_START(TIFFReadEncodedStrip, log_level);
+        TIMER_START(TIFFReadEncodedStrip, LL_DEBUG);
         for (tstrip_t strip = 0; strip < numberOfStrips; ++strip) {
                 size_t offset = strip * tiffinfo->strip_tile_size;
                 const tmsize_t rc = TIFFReadEncodedStrip(
@@ -135,7 +135,7 @@ libtiff_state::decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo)
                                            tiffinfo->strip_tile_size,
                                            cudaMemcpyHostToDevice, stream));
         }
-        TIMER_STOP(TIFFReadEncodedStrip, log_level);
+        TIMER_STOP(TIFFReadEncodedStrip);
         const size_t converted_16b_size =
             (size_t)ret.width * ret.height * ret.comp_count * 2;
         const size_t converted_8b_size =
@@ -183,7 +183,7 @@ libtiff_state::decode_tiled(TIFF *tif, struct tiff_info *tiffinfo)
         const int bps = tiffinfo->bits_per_sample / 8;
         const int dst_linesize = tiffinfo->common.width * bps;
         const int tile_linesize = tiffinfo->tile_width * bps;
-        TIMER_START(TIFFReadEncodedTile, log_level);
+        TIMER_START(TIFFReadEncodedTile, LL_DEBUG);
         bool error = false;
         const char *tiff_name = TIFFFileName(tif);
         #pragma omp parallel for
@@ -216,7 +216,7 @@ libtiff_state::decode_tiled(TIFF *tif, struct tiff_info *tiffinfo)
                           TIFFFileName(tif));
                 return {};
         }
-        TIMER_STOP(TIFFReadEncodedTile, log_level);
+        TIMER_STOP(TIFFReadEncodedTile);
         const size_t converted_size =
             (size_t) ret.height * dst_linesize * ret.comp_count;
         if (converted_size > d_converted_allocated) {

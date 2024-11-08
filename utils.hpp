@@ -1,3 +1,6 @@
+#ifndef UTILS_HPP_3A62EF66_2DE8_441D_8381_B3FBB49EC015
+#define UTILS_HPP_3A62EF66_2DE8_441D_8381_B3FBB49EC015
+
 #ifdef __cplusplus
 #include <cstdio>
 #include <ctime>
@@ -6,20 +9,22 @@
 #include <stdio.h>
 #endif
 
-#define TIMER_DECLARE(name)                                                    \
+#define TIMER_DECLARE(name, enabled)                                           \
         struct timespec t0_##name = {0, 0};                                    \
-        struct timespec t1_##name = {0, 0}
-#define TIMER_START(name, log_level)                                           \
-  TIMER_DECLARE(name);                                                         \
-  if (log_level >= 2)                                                          \
-  timespec_get(&t0_##name, TIME_UTC)
-#define TIMER_STOP(name, log_level)                                            \
-  if (log_level >= 2) {                                                        \
-    timespec_get(&t1_##name, TIME_UTC);                                        \
-    fprintf(stderr, #name " duration %f s\n",                                  \
-            t1_##name.tv_sec - t0_##name.tv_sec +                              \
-                (t1_##name.tv_nsec - t0_##name.tv_nsec) / 1000000000.0);       \
-  }
+        struct timespec t1_##name = {0, 0};                                    \
+        int name##_enabled = enabled;
+#define TIMER_START(name, req_ll)                                              \
+        TIMER_DECLARE(name, log_level >= req_ll);                              \
+        if (name##_enabled)                                                     \
+                timespec_get(&t0_##name, TIME_UTC)
+#define TIMER_STOP(name)                                                       \
+        if (name##_enabled) {                                                   \
+                timespec_get(&t1_##name, TIME_UTC);                            \
+                fprintf(stderr, #name " duration %f s\n",                      \
+                        t1_##name.tv_sec - t0_##name.tv_sec +                  \
+                            (t1_##name.tv_nsec - t0_##name.tv_nsec) /          \
+                                1000000000.0);                                 \
+        }
 
 #define FG_RED "\033[31m"
 #define FG_YELLOW "\033[33m"
@@ -28,3 +33,5 @@
         fprintf(stderr, FG_RED fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
 #define WARN_MSG(fmt, ...)                                                    \
         fprintf(stderr, FG_YELLOW fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
+
+#endif // defined UTILS_HPP_3A62EF66_2DE8_441D_8381_B3FBB49EC015
