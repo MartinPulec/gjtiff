@@ -104,6 +104,21 @@ static uint8_t *convert_16_8(struct nvtiff_state  *s, struct dec_image *img)
         return s->converted;
 }
 
+/// check file emptiness - nvtiff calls exit() for emtpy files so get around
+/// this
+static bool is_empty(const char *fname)
+{
+        FILE *f = fopen(fname, "rb");
+        if (f == nullptr) {
+                perror("fopen");
+                return false;
+        }
+        fseek(f, 0, SEEK_END);
+        long off = ftell(f);
+        fclose(f);
+        return off == 0;
+}
+
 /**
  * Decodes TIFF using nvTIFF.
  *
@@ -115,6 +130,10 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
 {
         struct dec_image ret{};
         const uint32_t num_images = 1;
+        if (is_empty(fname)) {
+               ERROR_MSG("%s is empty!\n", fname);
+               return {};
+        }
         // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
         nvtiffStatus_t e = nvtiffStreamParseFromFile(fname, s->tiff_stream);
         if (e == NVTIFF_STATUS_TIFF_NOT_SUPPORTED) {
