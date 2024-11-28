@@ -60,7 +60,7 @@ struct second_param<Ret(T1, T2, Args...)> {
 };
 // Helper to deduce the function type
 template <typename Func>
-using size_param_t = std::remove_pointer_t<typename second_param<Func>::type>;
+using size_param_t = typename std::remove_pointer<typename second_param<Func>::type>::type;
 
 struct normalize_8b {
         using nv_type = uint8_t; // typedefed as Npp8 in NPP
@@ -89,7 +89,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
                                  // obtain scale
         };
         if (nppGetStream() != stream) {
-                CHECK_NPP(nppSetStream(stream));
+                nppSetStream(stream);
         }
         // NppStreamContext NppStreamContext;
         // rc = nppGetStreamContext(&NppStreamContext);

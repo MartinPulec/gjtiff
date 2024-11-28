@@ -29,9 +29,14 @@
 #define FG_RED "\033[31m"
 #define FG_YELLOW "\033[33m"
 #define TERM_RESET "\033[0m"
+#if __cplusplus > 201703L
 #define ERROR_MSG(fmt, ...)                                                    \
         fprintf(stderr, FG_RED fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
 #define WARN_MSG(fmt, ...)                                                    \
         fprintf(stderr, FG_YELLOW fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
+#else
+#define ERROR_MSG(...) fprintf(stderr, __VA_ARGS__)
+#define WARN_MSG(...) fprintf(stderr, __VA_ARGS__)
+#endif
 
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015
