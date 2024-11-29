@@ -17,12 +17,14 @@ Build:
 
 - CUDA toolkit + C++ compiler + make
 - [GPUJPEG](https://github.com/CESNET/GPUJPEG)
+- [nvJPEG2000](https://developer.nvidia.com/nvjpeg2000-downloads)
 - [nvTIFF](https://developer.nvidia.com/nvtiff-downloads)
 - [libTIFF](https://libtiff.gitlab.io/libtiff)
 
 Runtime:
 
 - NVIDIA proprietary drivers
+- the libraries of the build deps unless linked with static versions
 - [nvCOMP](https://developer.nvidia.com/nvcomp-download) library for DEFLATE
 
 ## Hardware
