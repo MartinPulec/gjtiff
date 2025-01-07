@@ -46,7 +46,7 @@
 int log_level = 0;
 
 struct state_gjtiff {
-        state_gjtiff(bool use_libtiff);
+        state_gjtiff(bool use_libtiff, int req_gj_quality);
         ~state_gjtiff();
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
@@ -54,11 +54,12 @@ struct state_gjtiff {
         struct nvtiff_state *state_nvtiff;
         struct libtiff_state *state_libtiff;
         // GPUJPEG
+        int req_gj_quality;
         struct gpujpeg_encoder *gj_enc{};
 };
 
-state_gjtiff::state_gjtiff(bool u)
-    : use_libtiff(u)
+state_gjtiff::state_gjtiff(bool u, int q)
+    : use_libtiff(u), req_gj_quality(q)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
         state_libtiff = libtiff_create(log_level, stream);
@@ -117,11 +118,13 @@ static dec_image decode(struct state_gjtiff *s, const char *fname)
 static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
                         const char *ofname)
 {
-        gpujpeg_parameters param;
-        gpujpeg_set_default_parameters(&param);
+        gpujpeg_parameters param = gpujpeg_default_parameters();
+        if (s->req_gj_quality != -1) {
+                param.quality = s->req_gj_quality;
+        }
 
-        gpujpeg_image_parameters param_image;
-        gpujpeg_image_set_default_parameters(&param_image);
+        gpujpeg_image_parameters param_image =
+            gpujpeg_default_image_parameters();
         param_image.width = uncomp.width;
         param_image.height = uncomp.height;
 #if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 25, 0)
@@ -131,8 +134,8 @@ static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
             uncomp.comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
         param_image.pixel_format =
             uncomp.comp_count == 1 ? GPUJPEG_U8 : GPUJPEG_444_U8_P012;
-        gpujpeg_encoder_input encoder_input;
-        gpujpeg_encoder_input_set_gpu_image(&encoder_input, uncomp.data);
+        gpujpeg_encoder_input encoder_input = gpujpeg_encoder_input_gpu_image(
+            uncomp.data);
         uint8_t *out = nullptr;
         size_t len = 0;
         if (gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input,
@@ -179,6 +182,7 @@ static void show_help(const char *progname)
         printf("\t-h       - show help\n");
         printf("\t-l       - use libtiff if nvCOMP not available\n");
         printf("\t-o <dir> - output JPEG directory\n");
+        printf("\t-q <q>   - JPEG quality\n");
         printf("\t-v[v]    - be verbose (2x for more messages)\n");
         printf("\n");
         printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
@@ -210,10 +214,11 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
 int main(int argc, char **argv)
 {
         bool use_libtiff = false;
+        int req_gpujpeg_quality = -1;
         char ofdir[1024] = "./";
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+dhlo:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+dhlo:q:v")) != -1) {
                 switch (opt) {
                 case 'd':
                         return !!gpujpeg_print_devices_info();
@@ -225,6 +230,9 @@ int main(int argc, char **argv)
                         break;
                 case 'o':
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);
+                        break;
+                case 'q':
+                        req_gpujpeg_quality = (int)strtol(optarg, nullptr, 10);
                         break;
                 case 'v':
                         log_level += 1;
@@ -240,7 +248,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        struct state_gjtiff state( use_libtiff);
+        struct state_gjtiff state(use_libtiff, req_gpujpeg_quality);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];

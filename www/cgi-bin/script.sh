@@ -44,7 +44,7 @@ if [ -s "$log" ]; then
   handle_error
 fi
 
-gjtiff -vvv "$input_filename" >"$log" 2>&1
+gjtiff -q 90 -vvv "$input_filename" >"$log" 2>&1
 GJ_RC=$?
 
 cat "$log" >&2
