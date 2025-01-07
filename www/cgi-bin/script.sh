@@ -53,9 +53,9 @@ if [ $GJ_RC -ne 0 ]; then
   handle_error
 fi
 
-output_filename=$(echo ${input_filename%.*}.jpg)
+output_filename=${input_filename%.*}.jpg
 printf "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\n"
-printf "Content-Disposition: inline; filename=\"$output_filename\"\r\n"
+printf "Content-Disposition: inline; filename=\"%s\"\r\n" "$output_filename"
 printf "\r\n"
 cat "$output_filename"
 echo "Sending output file: $output_filename" >&2
