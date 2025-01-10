@@ -276,15 +276,16 @@ void convert_remove_pitch_16(uint16_t *in, uint16_t *out, int width, int spitch,
 }
 
 __global__ void kernel_downscale(const uint8_t *in, uint8_t *out,
-                                            int dst_width)
+                                            int src_width, int factor)
 {
+        int dst_width = src_width / factor;
         int position_x = threadIdx.x + blockIdx.x * blockDim.x;
         if (position_x >= dst_width) {
                 return;
         }
         int position_y = threadIdx.y + blockIdx.y * blockDim.y;
-        out[position_y * dst_width + position_x] = 0x80;
-
+        out[position_y * dst_width + position_x] =
+            in[position_y * src_width * factor + position_x * factor];
 }
 
 void downscale_image_cuda(const uint8_t *in, uint8_t *out, int comp_count,
@@ -297,7 +298,7 @@ void downscale_image_cuda(const uint8_t *in, uint8_t *out, int comp_count,
         dim3 threads_per_block(256);
         dim3 blocks((dst_width + 255) / 256, dst_height);
         kernel_downscale<<<blocks, threads_per_block, 0,
-                           (cudaStream_t)stream>>>(in, out, dst_width);
+                           (cudaStream_t)stream>>>(in, out, src_width, factor);
         CHECK_CUDA(cudaGetLastError());
 }
 
