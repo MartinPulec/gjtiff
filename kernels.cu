@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "defs.h"
+#include "utils.h"
 
 #define GAMMA 2
 
@@ -275,6 +276,7 @@ void convert_remove_pitch_16(uint16_t *in, uint16_t *out, int width, int spitch,
         CHECK_CUDA(cudaGetLastError());
 }
 
+template<int comp_count>
 __global__ void kernel_downscale(const uint8_t *in, uint8_t *out,
                                             int src_width, int factor)
 {
@@ -284,8 +286,12 @@ __global__ void kernel_downscale(const uint8_t *in, uint8_t *out,
                 return;
         }
         int position_y = threadIdx.y + blockIdx.y * blockDim.y;
-        out[position_y * dst_width + position_x] =
-            in[position_y * src_width * factor + position_x * factor];
+        for (int i = 0; i < comp_count; ++i) {
+                out[comp_count * (position_y * dst_width + position_x) + i] =
+                    in[comp_count * factor *
+                           (position_y * src_width + position_x) +
+                       i];
+        }
 }
 
 void downscale_image_cuda(const uint8_t *in, uint8_t *out, int comp_count,
@@ -297,8 +303,22 @@ void downscale_image_cuda(const uint8_t *in, uint8_t *out, int comp_count,
 
         dim3 threads_per_block(256);
         dim3 blocks((dst_width + 255) / 256, dst_height);
-        kernel_downscale<<<blocks, threads_per_block, 0,
-                           (cudaStream_t)stream>>>(in, out, src_width, factor);
+        switch (comp_count) {
+                case 1:
+                        kernel_downscale<1><<<blocks, threads_per_block, 0,
+                                           (cudaStream_t)stream>>>(
+                            in, out, src_width, factor);
+                        break;
+                case 3:
+                        kernel_downscale<3><<<blocks, threads_per_block, 0,
+                                           (cudaStream_t)stream>>>(
+                            in, out, src_width, factor);
+                        break;
+                default:
+                        ERROR_MSG(
+                            "Downscaling for %d channels not supported!\n",
+                            comp_count);
+                }
         CHECK_CUDA(cudaGetLastError());
 }
 
