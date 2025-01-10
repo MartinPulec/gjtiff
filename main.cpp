@@ -33,7 +33,7 @@
 #include <unistd.h>
 
 #include "defs.h"
-#include "kernels.hpp"
+#include "kernels.h"
 #include "libnvj2k.h"
 #include "libnvtiff.h"
 #include "libtiff.hpp"

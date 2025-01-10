@@ -9,7 +9,7 @@ all: gjtiff
 %.o: %.cpp $(wildcard *.h *.hpp)
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
-%.o: %.cu %.hpp
+%.o: %.cu %.h
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 gjtiff: kernels.o libnvj2k.o libnvtiff.o libtiff.o libtiffinfo.o main.o

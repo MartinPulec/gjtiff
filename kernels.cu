@@ -1,4 +1,4 @@
-#include "kernels.hpp"
+#include "kernels.h"
 
 #include <cstdio>
 #include <nppcore.h>
