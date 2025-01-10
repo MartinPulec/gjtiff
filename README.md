@@ -51,11 +51,13 @@ than calling it for a single image to amortize the initialization cost.
 
 # TODO
 
-- configurable JPEG parameters (especially quality)
-- improved libtiff decoding performance (if needed)
+- improved nvjpeg2000 decoding performance if needed
+<https://developer.nvidia.com/blog/accelerating-jpeg-2000-decoding-for-digital-pathology-and-satellite-images-using-the-nvjpeg2000-library/>
 - option to select CUDA device
 - various performance optimizations - eg. when image sizes change
 often, which is slow due to GPUJPEG reconfiguration
+- cudaMalloc/Free Async version should be used when used within
+streams (as deployed now, it doesn't cause probbems right now)
 
 # Postprocess - output normalization/equalization
 
