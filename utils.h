@@ -9,6 +9,8 @@
 #include <stdio.h>
 #endif
 
+#include <cuda_runtime.h>
+
 #define TIMER_DECLARE(name, enabled)                                           \
         struct timespec t0_##name = {0, 0};                                    \
         struct timespec t1_##name = {0, 0};                                    \
@@ -37,6 +39,15 @@
 #else
 #define ERROR_MSG(...) fprintf(stderr, __VA_ARGS__)
 #define WARN_MSG(...) fprintf(stderr, __VA_ARGS__)
+#endif
+
+#if CUDART_VERSION <= 8000
+#define cudaFreeAsync(ptr, stream)                                             \
+        cudaStreamSynchronize(stream);                                         \
+        cudaFree(ptr)
+#define cudaMallocAsync(ptr, size, stream)                                     \
+        cudaStreamSynchronize(stream);                                         \
+        cudaMalloc(ptr, size)
 #endif
 
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015

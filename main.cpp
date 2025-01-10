@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include "defs.h"
+#include "downscaler.h"
 #include "kernels.h"
 #include "libnvj2k.h"
 #include "libnvtiff.h"
@@ -46,7 +47,8 @@
 int log_level = 0;
 
 struct state_gjtiff {
-        state_gjtiff(bool use_libtiff, int req_gj_quality);
+        state_gjtiff(bool use_libtiff, int req_gj_quality,
+                     int downscale_factor);
         ~state_gjtiff();
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
@@ -56,9 +58,11 @@ struct state_gjtiff {
         // GPUJPEG
         int req_gj_quality;
         struct gpujpeg_encoder *gj_enc{};
+        // downscaler
+        struct downscaler_state *downscaler = NULL;
 };
 
-state_gjtiff::state_gjtiff(bool u, int q)
+state_gjtiff::state_gjtiff(bool u, int q, int downscale_factor)
     : use_libtiff(u), req_gj_quality(q)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
@@ -68,6 +72,10 @@ state_gjtiff::state_gjtiff(bool u, int q)
         assert(state_nvtiff != nullptr);
         gj_enc = gpujpeg_encoder_create(stream);
         assert(gj_enc != nullptr);
+        if (downscale_factor > 1) {
+                downscaler = downscaler_init(downscale_factor, stream);
+                assert(downscaler != NULL);
+        }
 }
 
 state_gjtiff::~state_gjtiff()
@@ -75,8 +83,9 @@ state_gjtiff::~state_gjtiff()
         gpujpeg_encoder_destroy(gj_enc);
         nvj2k_destroy(state_nvj2k);
         nvtiff_destroy(state_nvtiff);
-        CHECK_CUDA(cudaStreamDestroy(stream));
         libtiff_destroy(state_libtiff);
+        downscaler_destroy(downscaler);
+        CHECK_CUDA(cudaStreamDestroy(stream));
 }
 
 /**
@@ -183,6 +192,7 @@ static void show_help(const char *progname)
         printf("\t-l       - use libtiff if nvCOMP not available\n");
         printf("\t-o <dir> - output JPEG directory\n");
         printf("\t-q <q>   - JPEG quality\n");
+        printf("\t-s <d>   - downscale factor\n");
         printf("\t-v[v]    - be verbose (2x for more messages)\n");
         printf("\n");
         printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
@@ -216,9 +226,10 @@ int main(int argc, char **argv)
         bool use_libtiff = false;
         int req_gpujpeg_quality = -1;
         char ofdir[1024] = "./";
+        int downscale_factor = 1;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+dhlo:q:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+dhlo:q:s:v")) != -1) {
                 switch (opt) {
                 case 'd':
                         return !!gpujpeg_print_devices_info();
@@ -234,6 +245,9 @@ int main(int argc, char **argv)
                 case 'q':
                         req_gpujpeg_quality = (int)strtol(optarg, nullptr, 10);
                         break;
+                case 's':
+                        downscale_factor = (int)strtol(optarg, nullptr, 10);
+                        break;
                 case 'v':
                         log_level += 1;
                         break;
@@ -248,7 +262,8 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        struct state_gjtiff state(use_libtiff, req_gpujpeg_quality);
+        struct state_gjtiff state(use_libtiff, req_gpujpeg_quality,
+                                  downscale_factor);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
@@ -265,6 +280,9 @@ int main(int argc, char **argv)
                 if (dec.data == nullptr) {
                         ret = ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
+                }
+                if (downscale_factor != 1) {
+                        dec = downscale(state.downscaler, &dec);
                 }
                 encode_jpeg(&state, dec, ofdir);
                 TIMER_STOP(transcode);
