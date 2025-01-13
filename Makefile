@@ -13,7 +13,7 @@ all: gjtiff
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 gjtiff: downscaler.o kernels.o libnvj2k.o libnvtiff.o libtiff.o libtiffinfo.o main.o
-	$(CXX) $(LDFLAGS) $^ -lcudart -lgpujpeg -lm -lnppc -lnpps -lnppist -lnvjpeg2k -lnvtiff -ltiff -o $@
+	$(CXX) $(LDFLAGS) $^ -lcudart -lgpujpeg -lm -lnppc -lnppig -lnpps -lnppist -lnvjpeg2k -lnvtiff -ltiff -o $@
 
 clean:
 	$(RM) *o gjtiff

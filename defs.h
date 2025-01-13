@@ -40,8 +40,19 @@ struct dec_image {
                         abort();                                               \
                 }                                                              \
         }
-#endif // ! defined DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
+#define CHECK_NPP(call)                                                        \
+        {                                                                      \
+                NppStatus rc = call;                                           \
+                if (NPP_NO_ERROR != rc) {                                      \
+                        ERROR_MSG("NPP error in file '%s' in line %i : %d.\n", \
+                                  __FILE__, __LINE__, (int)rc);                \
+                        abort();                                               \
+                }                                                              \
+        }
 
 #define ARR_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+#endif // ! defined DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
+

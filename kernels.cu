@@ -17,16 +17,6 @@
  *  | | | | (_) | |  | | | | | | (_| | | |/ /  __/
  *  |_| |_|\___/|_|  |_| |_| |_|\__,_|_|_/___\___|
  */
-#define CHECK_NPP(call)                                                        \
-        {                                                                      \
-                NppStatus rc = call;                                           \
-                if (NPP_NO_ERROR != rc) {                                      \
-                        ERROR_MSG("NPP error in file '%s' in line %i : %d.\n", \
-                                  __FILE__, __LINE__, (int)rc);                \
-                        abort();                                               \
-                }                                                              \
-        }
-
  template <typename t>
 __global__ void kernel_normalize(t *in, uint8_t *out, size_t count, float scale) {
   int position = threadIdx.x + (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;

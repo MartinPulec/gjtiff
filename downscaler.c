@@ -2,9 +2,11 @@
 
 #include <assert.h>
 #include <cuda_runtime.h>
+#include <npp.h>
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "defs.h"
 #include "kernels.h"
 #include "utils.h"
 
@@ -40,9 +42,33 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                 s->output_allocated = required_size;
         }
         downscaled.data = s->output;
+        TIMER_START(downscale, LL_DEBUG);
+#ifndef DOWNSCALE_NO_NPP
+        if (nppGetStream() != s->stream) {
+                nppSetStream(s->stream);
+        }
+        NppiSize srcSize = {in->width, in->height};
+        NppiRect srcROI = {0, 0, in->width, in->height};
+        NppiRect dstROI = {0, 0, downscaled.width, downscaled.height};
+        NppiSize dstSize = {downscaled.width, downscaled.height};
+
+        double factor = 1.0 / downscale_factor;
+
+#if NPP_VERSION_MAJOR <= 8
+        CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, in->width, srcROI,
+                                    downscaled.data, downscaled.width, dstSize,
+                                    factor, factor, NPPI_INTER_SUPER));
+#else
+        CHECK_NPP(nppiResize_8u_C1R(in->data, in->width, srcSize, srcROI,
+                                    downscaled.data, downscaled.width, dstSize,
+                                    dstROI, NPPI_INTER_SUPER));
+#endif
+#else
         downscale_image_cuda(in->data, downscaled.data, in->comp_count,
                              in->width, in->height, downscale_factor,
                              s->stream);
+#endif
+        TIMER_STOP(downscale);
         return downscaled;
 }
 
