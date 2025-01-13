@@ -47,8 +47,7 @@
 int log_level = 0;
 
 struct state_gjtiff {
-        state_gjtiff(bool use_libtiff, int req_gj_quality,
-                     int downscale_factor);
+        state_gjtiff(bool use_libtiff, int req_gj_quality);
         ~state_gjtiff();
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
@@ -62,7 +61,7 @@ struct state_gjtiff {
         struct downscaler_state *downscaler = NULL;
 };
 
-state_gjtiff::state_gjtiff(bool u, int q, int downscale_factor)
+state_gjtiff::state_gjtiff(bool u, int q)
     : use_libtiff(u), req_gj_quality(q)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
@@ -72,10 +71,8 @@ state_gjtiff::state_gjtiff(bool u, int q, int downscale_factor)
         assert(state_nvtiff != nullptr);
         gj_enc = gpujpeg_encoder_create(stream);
         assert(gj_enc != nullptr);
-        if (downscale_factor > 1) {
-                downscaler = downscaler_init(downscale_factor, stream);
-                assert(downscaler != NULL);
-        }
+        downscaler = downscaler_init(stream);
+        assert(downscaler != nullptr);
 }
 
 state_gjtiff::~state_gjtiff()
@@ -200,14 +197,42 @@ static void show_help(const char *progname)
         printf("If the '-' is given as an argument, newline-separated list of "
                "file "
                "names\nis read from stdin.\n");
+        printf("\n");
+        printf("Input filename (both cmdline argument or from pipe) can be attached opts,\n");
+        printf("syntax:\n");
+        printf("\tfname[:s=<downscale_factor>]\n");
+}
+
+struct options {
+        int downscale_factor;
+#define OPTIONS_INIT {1}
+};
+
+static char *parse_fname_opts(char *buf, struct options *opts)
+{
+        if (buf == nullptr) {
+                return nullptr;
+        }
+        char *save_ptr = nullptr;
+        char *fname = strtok_r(buf, ":", &save_ptr);
+        char *item = nullptr;
+        while ((item = strtok_r(nullptr, ":", &save_ptr)) != nullptr) {
+                if (strstr(item, "s=") == item) {
+                        opts->downscale_factor = (int)strtol(
+                            strchr(item, '=') + 1, nullptr, 10);
+                } else {
+                        ERROR_MSG("Wrong option: %s!\n", item);
+                }
+        }
+        return fname;
 }
 
 /// @returns filename to process either from argv or read from stdin
 static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
-                             size_t buflen)
+                             size_t buflen, struct options *opts)
 {
         if (!from_stdin) {
-                return *(*argv)++;
+                return parse_fname_opts(*(*argv)++, opts);
         }
         char *ret = fgets(buf, buflen, stdin);
         if (ret == nullptr) {
@@ -218,7 +243,7 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
         if (buf[line_len - 1] == '\n') {
                 buf[line_len - 1] = '\0';
         }
-        return buf;
+        return parse_fname_opts(buf, opts);
 }
 
 int main(int argc, char **argv)
@@ -226,7 +251,7 @@ int main(int argc, char **argv)
         bool use_libtiff = false;
         int req_gpujpeg_quality = -1;
         char ofdir[1024] = "./";
-        int downscale_factor = 1;
+        struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
         while ((opt = getopt(argc, argv, "+dhlo:q:s:v")) != -1) {
@@ -246,7 +271,8 @@ int main(int argc, char **argv)
                         req_gpujpeg_quality = (int)strtol(optarg, nullptr, 10);
                         break;
                 case 's':
-                        downscale_factor = (int)strtol(optarg, nullptr, 10);
+                        global_opts.downscale_factor = (int)strtol(optarg,
+                                                                   nullptr, 10);
                         break;
                 case 'v':
                         log_level += 1;
@@ -262,16 +288,16 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        struct state_gjtiff state(use_libtiff, req_gpujpeg_quality,
-                                  downscale_factor);
+        struct state_gjtiff state(use_libtiff, req_gpujpeg_quality);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
         argv += optind;
         const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
         const size_t d_pref_len = strlen(ofdir);
+        struct options opts = global_opts;
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
-                                              sizeof path_buf)) {
+                                              sizeof path_buf, &opts)) {
                 TIMER_START(transcode, LL_VERBOSE);
                 set_ofname(ifname, ofdir + d_pref_len,
                            sizeof ofdir - d_pref_len);
@@ -281,8 +307,9 @@ int main(int argc, char **argv)
                         ret = ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
                 }
-                if (downscale_factor != 1) {
-                        dec = downscale(state.downscaler, &dec);
+                if (opts.downscale_factor != 1) {
+                        dec = downscale(state.downscaler,
+                                        opts.downscale_factor, &dec);
                 }
                 encode_jpeg(&state, dec, ofdir);
                 TIMER_STOP(transcode);

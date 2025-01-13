@@ -11,9 +11,8 @@ extern "C" {
 
 struct downscaler_state;
 
-struct downscaler_state *downscaler_init(int downscale_factor,
-                                         cudaStream_t stream);
-struct dec_image downscale(struct downscaler_state *state,
+struct downscaler_state *downscaler_init(cudaStream_t stream);
+struct dec_image downscale(struct downscaler_state *state, int downscale_factor,
                            const struct dec_image *in);
 void downscaler_destroy(struct downscaler_state *s);
 
