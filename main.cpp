@@ -47,7 +47,7 @@
 int log_level = 0;
 
 struct state_gjtiff {
-        state_gjtiff(bool use_libtiff, int req_gj_quality);
+        state_gjtiff(bool use_libtiff);
         ~state_gjtiff();
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
@@ -55,14 +55,13 @@ struct state_gjtiff {
         struct nvtiff_state *state_nvtiff;
         struct libtiff_state *state_libtiff;
         // GPUJPEG
-        int req_gj_quality;
         struct gpujpeg_encoder *gj_enc{};
         // downscaler
         struct downscaler_state *downscaler = NULL;
 };
 
-state_gjtiff::state_gjtiff(bool u, int q)
-    : use_libtiff(u), req_gj_quality(q)
+state_gjtiff::state_gjtiff(bool u)
+    : use_libtiff(u)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
         state_libtiff = libtiff_create(log_level, stream);
@@ -121,12 +120,12 @@ static dec_image decode(struct state_gjtiff *s, const char *fname)
         return decode_tiff(s, fname);
 }
 
-static void encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
+static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
                         const char *ofname)
 {
         gpujpeg_parameters param = gpujpeg_default_parameters();
-        if (s->req_gj_quality != -1) {
-                param.quality = s->req_gj_quality;
+        if (req_quality != -1) {
+                param.quality = req_quality;
         }
 
         gpujpeg_image_parameters param_image =
@@ -198,14 +197,15 @@ static void show_help(const char *progname)
                "file "
                "names\nis read from stdin.\n");
         printf("\n");
-        printf("Input filename (both cmdline argument or from pipe) can be attached opts,\n");
+        printf("Input filename (both cmdline argument or from pipe) can be suffixed with opts,\n");
         printf("syntax:\n");
-        printf("\tfname[:s=<downscale_factor>]\n");
+        printf("\tfname[:q=<JPEG_q>][:s=<downscale_factor>]\n");
 }
 
 struct options {
+        int req_gpujpeg_quality;
         int downscale_factor;
-#define OPTIONS_INIT {1}
+#define OPTIONS_INIT {-1, 1}
 };
 
 static char *parse_fname_opts(char *buf, struct options *opts)
@@ -217,7 +217,10 @@ static char *parse_fname_opts(char *buf, struct options *opts)
         char *fname = strtok_r(buf, ":", &save_ptr);
         char *item = nullptr;
         while ((item = strtok_r(nullptr, ":", &save_ptr)) != nullptr) {
-                if (strstr(item, "s=") == item) {
+                if (strstr(item, "q=") == item) {
+                        opts->req_gpujpeg_quality = (int)strtol(
+                            strchr(item, '=') + 1, nullptr, 10);
+                } else if (strstr(item, "s=") == item) {
                         opts->downscale_factor = (int)strtol(
                             strchr(item, '=') + 1, nullptr, 10);
                 } else {
@@ -249,7 +252,6 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
 int main(int argc, char **argv)
 {
         bool use_libtiff = false;
-        int req_gpujpeg_quality = -1;
         char ofdir[1024] = "./";
         struct options global_opts = OPTIONS_INIT;
 
@@ -268,7 +270,8 @@ int main(int argc, char **argv)
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);
                         break;
                 case 'q':
-                        req_gpujpeg_quality = (int)strtol(optarg, nullptr, 10);
+                        global_opts.req_gpujpeg_quality = (int)strtol(
+                            optarg, nullptr, 10);
                         break;
                 case 's':
                         global_opts.downscale_factor = (int)strtol(optarg,
@@ -288,7 +291,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        struct state_gjtiff state(use_libtiff, req_gpujpeg_quality);
+        struct state_gjtiff state(use_libtiff);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
@@ -311,7 +314,7 @@ int main(int argc, char **argv)
                         dec = downscale(state.downscaler,
                                         opts.downscale_factor, &dec);
                 }
-                encode_jpeg(&state, dec, ofdir);
+                encode_jpeg(&state, opts.req_gpujpeg_quality, dec, ofdir);
                 TIMER_STOP(transcode);
         }
 
