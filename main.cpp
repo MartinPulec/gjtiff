@@ -127,6 +127,11 @@ static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_imag
         if (req_quality != -1) {
                 param.quality = req_quality;
         }
+        if (log_level >= LL_DEBUG) {
+                //  print out stats - only printed if verbose>=1 && perf_stats==1
+                param.verbose = GPUJPEG_LL_DEBUG;
+                param.perf_stats = 1;
+        }
 
         gpujpeg_image_parameters param_image =
             gpujpeg_default_image_parameters();
