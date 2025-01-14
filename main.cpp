@@ -310,6 +310,13 @@ int main(int argc, char **argv)
                         ret = ERR_SOME_FILES_NOT_TRANSCODED;
                         continue;
                 }
+                if (dec.comp_count != 1 && dec.comp_count != 3) {
+                        ERROR_MSG("Only 1 or 3 channel images are currently "
+                                  "supported! Skipping %s...\n",
+                                  ifname);
+                        ret = ERR_SOME_FILES_NOT_TRANSCODED;
+                        continue;
+                }
                 if (opts.downscale_factor != 1) {
                         dec = downscale(state.downscaler,
                                         opts.downscale_factor, &dec);
