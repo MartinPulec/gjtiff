@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cuda_runtime.h>
 #include <npp.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -49,20 +50,38 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         }
         NppiSize srcSize = {in->width, in->height};
         NppiRect srcROI = {0, 0, in->width, in->height};
-        NppiRect dstROI = {0, 0, downscaled.width, downscaled.height};
-        NppiSize dstSize = {downscaled.width, downscaled.height};
-
-        double factor = 1.0 / downscale_factor;
-
 #if NPP_VERSION_MAJOR <= 8
-        CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, in->width, srcROI,
-                                    downscaled.data, downscaled.width, dstSize,
-                                    factor, factor, NPPI_INTER_SUPER));
+        double factor = 1.0 / downscale_factor;
 #else
-        CHECK_NPP(nppiResize_8u_C1R(in->data, in->width, srcSize, srcROI,
-                                    downscaled.data, downscaled.width, dstSize,
-                                    dstROI, NPPI_INTER_SUPER));
+        NppiRect dstROI = {0, 0, downscaled.width, downscaled.height};
 #endif
+        NppiSize dstSize = {downscaled.width, downscaled.height};
+        size_t srcPitch = (size_t)in->width * in->comp_count;
+        size_t dstPitch = (size_t)downscaled.width * in->comp_count;
+
+        assert(in->comp_count == 1 || in->comp_count == 3);
+        const NppiInterpolationMode imode = NPPI_INTER_SUPER;
+        if (in->comp_count == 1) {
+#if NPP_VERSION_MAJOR <= 8
+                CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, srcPitch, srcROI,
+                                            downscaled.data, dstPitch, dstSize,
+                                            factor, factor, imode));
+#else
+                CHECK_NPP(nppiResize_8u_C1R(in->data, srcPitch, srcSize, srcROI,
+                                            downscaled.data, dstPitch, dstSize,
+                                            dstROI, imode));
+#endif
+        } else {
+#if NPP_VERSION_MAJOR <= 8
+                CHECK_NPP(nppiResize_8u_C3R(in->data, srcSize, srcPitch, srcROI,
+                                            downscaled.data, dstPitch, dstSize,
+                                            factor, factor, imode));
+#else
+                CHECK_NPP(nppiResize_8u_C3R(in->data, srcPitch, srcSize, srcROI,
+                                            downscaled.data, dstPitch, dstSize,
+                                            dstROI, imode));
+#endif
+        }
 #else
         downscale_image_cuda(in->data, downscaled.data, in->comp_count,
                              in->width, in->height, downscale_factor,
