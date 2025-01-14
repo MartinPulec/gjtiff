@@ -113,7 +113,11 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
 
 static dec_image decode(struct state_gjtiff *s, const char *fname)
 {
-        printf("Decoding from file %s... \n", fname);
+        printf("\n%s"
+               "==================================================================\n"
+               "Processing input file %s...\n"
+               "==================================================================%s\n",
+                fg_bold, fname, term_reset);
         if (strstr(fname, ".jp2") == fname + strlen(fname) - 4) {
                 return nvj2k_decode(s->state_nvj2k, fname);
         }
@@ -154,9 +158,7 @@ static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_imag
                 return;
         }
 
-        if (log_level >= 1) {
-                printf("%s encoded successfully\n", ofname);
-        }
+        printf("%s encoded successfully\n", ofname);
         FILE *outf = fopen(ofname, "wb");
         if (outf == nullptr) {
                 ERROR_MSG("fopen %s: %s\n", ofname, strerror(errno));
@@ -254,12 +256,14 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
         return parse_fname_opts(buf, opts);
 }
 
+const char *fg_bold = "";
 const char *fg_red = "";
 const char *fg_yellow = "";
 const char *term_reset = "";
 
 static void init_term_colors() {
         if (isatty(fileno(stdout)) && isatty(fileno(stderr))) {
+                fg_bold = "\033[1m";
                 fg_red = "\033[31m";
                 fg_yellow = "\033[33m";
                 term_reset = "\033[0m";
