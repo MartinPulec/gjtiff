@@ -254,8 +254,22 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
         return parse_fname_opts(buf, opts);
 }
 
+const char *fg_red = "";
+const char *fg_yellow = "";
+const char *term_reset = "";
+
+static void init_term_colors() {
+        if (isatty(fileno(stdout)) && isatty(fileno(stderr))) {
+                fg_red = "\033[31m";
+                fg_yellow = "\033[33m";
+                term_reset = "\033[0m";
+        }
+}
+
 int main(int argc, char **argv)
 {
+        init_term_colors();
+
         bool use_libtiff = false;
         char ofdir[1024] = "./";
         struct options global_opts = OPTIONS_INIT;

@@ -28,14 +28,16 @@
                                 1000000000.0);                                 \
         }
 
-#define FG_RED "\033[31m"
-#define FG_YELLOW "\033[33m"
-#define TERM_RESET "\033[0m"
+extern const char *fg_bold;
+extern const char *fg_red;
+extern const char *fg_yellow;
+extern const char *term_reset;
+
 #if __cplusplus > 201703L
 #define ERROR_MSG(fmt, ...)                                                    \
-        fprintf(stderr, FG_RED fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
+        fprintf(stderr, "%s" fmt "%s", fg_red __VA_OPT__(, ) __VA_ARGS__, fg_reset)
 #define WARN_MSG(fmt, ...)                                                    \
-        fprintf(stderr, FG_YELLOW fmt TERM_RESET __VA_OPT__(, ) __VA_ARGS__)
+        fprintf(stderr, "%s" fmt "%s, fg_yellow "__VA_OPT__(, ) __VA_ARGS__, fg_reset)
 #else
 #define ERROR_MSG(...) fprintf(stderr, __VA_ARGS__)
 #define WARN_MSG(...) fprintf(stderr, __VA_ARGS__)
