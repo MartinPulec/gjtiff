@@ -128,6 +128,7 @@ static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_imag
                         const char *ofname)
 {
         gpujpeg_parameters param = gpujpeg_default_parameters();
+        param.interleaved = 1;
         if (req_quality != -1) {
                 param.quality = req_quality;
         }
