@@ -44,8 +44,10 @@ struct dec_image {
         {                                                                      \
                 NppStatus rc = call;                                           \
                 if (NPP_NO_ERROR != rc) {                                      \
-                        ERROR_MSG("NPP error in file '%s' in line %i : %d.\n", \
-                                  __FILE__, __LINE__, (int)rc);                \
+                        ERROR_MSG(                                             \
+                            "NPP error in file '%s' in line %i : %s (%d).\n",  \
+                            __FILE__, __LINE__, npp_status_to_str(rc),         \
+                            (int)rc);                                          \
                         abort();                                               \
                 }                                                              \
         }
