@@ -1,5 +1,6 @@
 *.o
 .clang-tidy
+.envrc
 compile_flags.txt
 gjtiff
 local/
