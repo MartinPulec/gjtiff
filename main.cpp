@@ -38,6 +38,7 @@
 #include "libnvj2k.h"
 #include "libnvtiff.h"
 #include "libtiff.hpp"
+#include "rotate.h"
 #include "utils.h"
 
 #ifndef PATH_MAX
@@ -58,6 +59,8 @@ struct state_gjtiff {
         struct gpujpeg_encoder *gj_enc{};
         // downscaler
         struct downscaler_state *downscaler = NULL;
+        // rotate
+        struct rotate_state *rotate = NULL;
 };
 
 state_gjtiff::state_gjtiff(bool u)
@@ -72,6 +75,8 @@ state_gjtiff::state_gjtiff(bool u)
         assert(gj_enc != nullptr);
         downscaler = downscaler_init(stream);
         assert(downscaler != nullptr);
+        rotate = rotate_init(stream);
+        assert(rotate != nullptr);
 }
 
 state_gjtiff::~state_gjtiff()
@@ -345,6 +350,7 @@ int main(int argc, char **argv)
                         dec = downscale(state.downscaler,
                                         opts.downscale_factor, &dec);
                 }
+                dec = rotate(state.rotate, &dec);
                 encode_jpeg(&state, opts.req_gpujpeg_quality, dec, ofdir);
                 TIMER_STOP(transcode);
         }

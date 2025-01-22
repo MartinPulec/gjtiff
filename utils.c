@@ -85,3 +85,47 @@ const char *npp_status_to_str(NppStatus rc) {
         }
         return "(unknown)";
 }
+
+typedef enum {
+        NVTIFF_STATUS_SUCCESS = 0,
+        NVTIFF_STATUS_NOT_INITIALIZED = 1,
+        NVTIFF_STATUS_INVALID_PARAMETER = 2,
+        NVTIFF_STATUS_BAD_TIFF = 3,
+        NVTIFF_STATUS_TIFF_NOT_SUPPORTED = 4,
+        NVTIFF_STATUS_ALLOCATOR_FAILURE = 5,
+        NVTIFF_STATUS_EXECUTION_FAILED = 6,
+        NVTIFF_STATUS_ARCH_MISMATCH = 7,
+        NVTIFF_STATUS_INTERNAL_ERROR = 8,
+        NVTIFF_STATUS_NVCOMP_NOT_FOUND = 9,
+        NVTIFF_STATUS_NVJPEG_NOT_FOUND = 10,
+        NVTIFF_STATUS_TAG_NOT_FOUND = 11,
+        NVTIFF_STATUS_PARAMETER_OUT_OF_BOUNDS = 12,
+} nvtiffStatus_t;
+
+const char *nvtiff_status_to_str(int rc)
+{
+        static const struct npp_status_map_t {
+                int rc;
+                const char *name;
+        } nvtiff_status_mapping[] = {
+            STATUS_TO_NAME(NVTIFF_STATUS_SUCCESS),
+            STATUS_TO_NAME(NVTIFF_STATUS_NOT_INITIALIZED),
+            STATUS_TO_NAME(NVTIFF_STATUS_INVALID_PARAMETER),
+            STATUS_TO_NAME(NVTIFF_STATUS_BAD_TIFF),
+            STATUS_TO_NAME(NVTIFF_STATUS_TIFF_NOT_SUPPORTED),
+            STATUS_TO_NAME(NVTIFF_STATUS_ALLOCATOR_FAILURE),
+            STATUS_TO_NAME(NVTIFF_STATUS_EXECUTION_FAILED),
+            STATUS_TO_NAME(NVTIFF_STATUS_ARCH_MISMATCH),
+            STATUS_TO_NAME(NVTIFF_STATUS_INTERNAL_ERROR),
+            STATUS_TO_NAME(NVTIFF_STATUS_NVCOMP_NOT_FOUND),
+            STATUS_TO_NAME(NVTIFF_STATUS_NVJPEG_NOT_FOUND),
+            STATUS_TO_NAME(NVTIFF_STATUS_TAG_NOT_FOUND),
+            STATUS_TO_NAME(NVTIFF_STATUS_PARAMETER_OUT_OF_BOUNDS),
+        };
+        for (unsigned i = 0; i < ARR_SIZE(nvtiff_status_mapping); ++i) {
+                if (nvtiff_status_mapping[i].rc == rc) {
+                        return nvtiff_status_mapping[i].name;
+                }
+        }
+        return "(unknown)";
+}
