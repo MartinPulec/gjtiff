@@ -16,7 +16,7 @@ all: gjtiff
 %.o: %.cu %.h $(wildcard *.h *.hpp)
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
-gjtiff: downscaler.o kernels.o libnvj2k.o libnvtiff.o libtiff.o libtiffinfo.o main.o utils.o
+gjtiff: downscaler.o kernels.o libnvj2k.o libnvtiff.o libtiff.o libtiffinfo.o main.o rotate.o utils.o
 	$(CXX) $(LDFLAGS) $^ -lcudart -lgpujpeg -lm -lnppc -lnppig -lnpps -lnppist -lnvjpeg2k -lnvtiff -ltiff -o $@
 
 clean:

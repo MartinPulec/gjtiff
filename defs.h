@@ -6,6 +6,7 @@
 #ifdef __cplusplus
 #include <cstdlib>   // abort
 #else
+#include <stdbool.h>
 #include <stdlib.h>  // abort
 #endif
 
@@ -26,9 +27,15 @@ struct dec_image {
         int height;
         int comp_count;
         unsigned char *data;
+
+        struct coordinates {
+                double latitude;
+                double longitude;
+        } coords[4];
+        bool coords_set;
 };
 
-#define DEC_IMG_ERR(rc) {rc, 0, 0, 0, 0}
+#define DEC_IMG_ERR(rc) {rc, 0, 0, 0, 0, {0.0, 0.0}, false}
 
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \

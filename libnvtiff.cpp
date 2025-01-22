@@ -29,6 +29,7 @@
 
 #include "libnvtiff.h"
 
+#include <cstdint>
 #include <cuda_runtime.h>  // for cudaFree, cudaMalloc, cudaStreamDestroy
 #include <nvtiff.h>        // for NVTIFF_STATUS_SUCCESS, nvtiffStatus_t, nvt...
 #include <stdint.h>        // for uint8_t, uint16_t, uint32_t
@@ -46,10 +47,11 @@
         {                                                                      \
                 nvtiffStatus_t _e = (call);                                    \
                 if (_e != NVTIFF_STATUS_SUCCESS) {                             \
-                        fprintf(                                               \
-                            stderr,                                            \
-                            "nvtiff error code %d in file '%s' in line %i\n",  \
-                            _e, __FILE__, __LINE__);                           \
+                        fprintf(stderr,                                        \
+                                "nvtiff error code %d (%s) in file '%s' in "   \
+                                "line %i\n",                                   \
+                                _e, nvtiff_status_to_str(_e), __FILE__,        \
+                                __LINE__);                                     \
                         exit(EXIT_FAILURE);                                    \
                 }                                                              \
         }
@@ -66,6 +68,9 @@ struct nvtiff_state {
         // // converted
         uint8_t *converted{};
         size_t converted_allocated{};
+
+        void *tiff_info_buf{};
+        size_t tiff_info_buf_sz = 0;
 };
 
 nvtiff_state::nvtiff_state(cudaStream_t cs, int ll)
@@ -117,6 +122,81 @@ static bool is_empty(const char *fname)
         long off = ftell(f);
         fclose(f);
         return off == 0;
+}
+
+static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
+                                    struct dec_image *image)
+{
+        image->coords_set = false;
+
+        nvtiffTagDataType_t tag_type{};
+        uint32_t size{};
+        uint32_t count{};
+        if (NVTIFF_STATUS_SUCCESS !=
+            nvtiffStreamGetTagInfo(s->tiff_stream, image_id,
+                                   NVTIFF_TAG_MODEL_TIE_POINT, &tag_type, &size,
+                                   &count)) {
+                WARN_MSG("Image coordintates cannot be set - tag not found.\n");
+                return;
+        }
+        if (tag_type != NVTIFF_TAG_TYPE_DOUBLE) {
+                WARN_MSG("Image coordintates cannot be set - type %d is not "
+                         "double\n",
+                         (int)tag_type);
+                return;
+        }
+        if (count % 6 != 0) {
+                WARN_MSG(
+                    "Image coordintates points is not a 6-tuple (mod 6)!\n");
+                return;
+        }
+
+        const size_t required_sz = (size_t)size * count;
+
+        if (required_sz >= s->tiff_info_buf_sz) {
+                s->tiff_info_buf_sz = required_sz;
+                s->tiff_info_buf = realloc(s->tiff_info_buf,
+                                           s->tiff_info_buf_sz);
+                assert(s->tiff_info_buf != nullptr);
+        }
+        CHECK_NVTIFF(nvtiffStreamGetTagValue(s->tiff_stream, image_id,
+                                             NVTIFF_TAG_MODEL_TIE_POINT,
+                                             s->tiff_info_buf, count));
+        double *vals = (double *)s->tiff_info_buf;
+
+        unsigned points_set = 0;
+        for (unsigned i = 0; i < count; i += 6) {
+                double x = vals[i];
+                double y = vals[i + 1];
+
+                if (x == 0 || x == image->width - 1) {
+                        if (y == 0 || y == image->height - 1) {
+                                int idx = (y == 0 ? 0 : 2) + (x == 0 ? 0 : 1);
+
+                                points_set |= 1 << idx;
+                                image->coords[idx].latitude = vals[i + 4];
+                                image->coords[idx].longitude = vals[i + 3];
+
+                                if (points_set == 0xF) { // all points set
+                                        break;
+                                }
+                        }
+                }
+        }
+
+        if (points_set != 0xF) {
+                WARN_MSG("Not all coordinate points were set!\n");
+                return;
+        }
+        image->coords_set = true;
+
+        if (log_level >= LL_VERBOSE) {
+                printf("Got points:\n");
+                for (unsigned i = 0; i < 4; ++i) {
+                        printf("\t%f,%f\n", image->coords[i].latitude,
+                               image->coords[i].longitude);
+                }
+        }
 }
 
 /**
@@ -177,6 +257,7 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
         ret.height = image_info.image_height;
         ret.comp_count = image_info.samples_per_pixel;
         ret.data = s->decoded;
+        set_coords_from_geotiff(s, image_id, &ret);
         if (image_info.bits_per_sample[0] == 8) {
                 return ret;
         }

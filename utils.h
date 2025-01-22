@@ -52,6 +52,13 @@ extern const char *term_reset;
 #define WARN_MSG(...) fprintf(stderr, __VA_ARGS__)
 #endif
 
+#define VERBOSE_MSG(...)                                                       \
+        if (log_level >= LL_VERBOSE)                                           \
+        fprintf(stderr, __VA_ARGS__)
+#define DEBUG_MSG(...)                                                         \
+        if (log_level >= LL_DEBUG)                                             \
+        fprintf(stderr, __VA_ARGS__)
+
 #if CUDART_VERSION <= 8000
 #define cudaFreeAsync(ptr, stream)                                             \
         cudaStreamSynchronize(stream);                                         \
@@ -62,5 +69,6 @@ extern const char *term_reset;
 #endif
 
 EXTERN_C const char *npp_status_to_str(NppStatus rc);
+EXTERN_C const char *nvtiff_status_to_str(int rc);
 
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015

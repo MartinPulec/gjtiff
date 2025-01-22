@@ -30,7 +30,7 @@ struct downscaler_state *downscaler_init(cudaStream_t stream)
 struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                            const struct dec_image *in)
 {
-        struct dec_image downscaled = { 0 };
+        struct dec_image downscaled = *in;
         downscaled.comp_count = in->comp_count;
         downscaled.width = in->width / downscale_factor;
         downscaled.height = in->height / downscale_factor;
