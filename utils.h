@@ -40,11 +40,13 @@ extern const char *fg_red;
 extern const char *fg_yellow;
 extern const char *term_reset;
 
-#if __cplusplus > 201703L
+#if !defined __cplusplus || __cplusplus > 201703L
 #define ERROR_MSG(fmt, ...)                                                    \
-        fprintf(stderr, "%s" fmt "%s", fg_red __VA_OPT__(, ) __VA_ARGS__, fg_reset)
-#define WARN_MSG(fmt, ...)                                                    \
-        fprintf(stderr, "%s" fmt "%s, fg_yellow "__VA_OPT__(, ) __VA_ARGS__, fg_reset)
+        fprintf(stderr, "%s" fmt "%s", fg_red __VA_OPT__(, ) __VA_ARGS__,      \
+                term_reset)
+#define WARN_MSG(fmt, ...)                                                     \
+        fprintf(stderr, "%s" fmt "%s", fg_yellow __VA_OPT__(, ) __VA_ARGS__,   \
+                term_reset)
 #else
 #define ERROR_MSG(...) fprintf(stderr, __VA_ARGS__)
 #define WARN_MSG(...) fprintf(stderr, __VA_ARGS__)
