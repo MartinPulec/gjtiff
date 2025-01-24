@@ -129,3 +129,40 @@ const char *nvtiff_status_to_str(int rc)
         }
         return "(unknown)";
 }
+
+const char *nvj2k_status_to_str(int rc)
+{
+        enum {
+                NVJPEG2K_STATUS_SUCCESS = 0,
+                NVJPEG2K_STATUS_NOT_INITIALIZED = 1,
+                NVJPEG2K_STATUS_INVALID_PARAMETER = 2,
+                NVJPEG2K_STATUS_BAD_JPEG = 3,
+                NVJPEG2K_STATUS_JPEG_NOT_SUPPORTED = 4,
+                NVJPEG2K_STATUS_ALLOCATOR_FAILURE = 5,
+                NVJPEG2K_STATUS_EXECUTION_FAILED = 6,
+                NVJPEG2K_STATUS_ARCH_MISMATCH = 7,
+                NVJPEG2K_STATUS_INTERNAL_ERROR = 8,
+                NVJPEG2K_STATUS_IMPLEMENTATION_NOT_SUPPORTED = 9,
+        };
+        static const struct npp_status_map_t {
+                int rc;
+                const char *name;
+        } nvj2k_status_mapping[] = {
+            STATUS_TO_NAME(NVJPEG2K_STATUS_SUCCESS),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_NOT_INITIALIZED),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_INVALID_PARAMETER),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_BAD_JPEG),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_JPEG_NOT_SUPPORTED),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_ALLOCATOR_FAILURE),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_EXECUTION_FAILED),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_ARCH_MISMATCH),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_INTERNAL_ERROR),
+            STATUS_TO_NAME(NVJPEG2K_STATUS_IMPLEMENTATION_NOT_SUPPORTED),
+        };
+        for (unsigned i = 0; i < ARR_SIZE(nvj2k_status_mapping); ++i) {
+                if (nvj2k_status_mapping[i].rc == rc) {
+                        return nvj2k_status_mapping[i].name;
+                }
+        }
+        return "(unknown)";
+}
