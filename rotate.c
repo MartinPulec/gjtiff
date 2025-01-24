@@ -133,9 +133,18 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
              coords[3].latitude * ret.height}, // Bottom-left
         };
 
-        CHECK_NPP(nppiWarpPerspectiveQuad_8u_C1R(
-            in->data, oSrcSize, in->width, oSrcROI, aSrcQuad, ret.data,
-            ret.width, oDstROI, aDstQuad, NPPI_INTER_LINEAR));
+        const int interpolation = NPPI_INTER_LINEAR;
+        if (in->comp_count == 1) {
+                CHECK_NPP(nppiWarpPerspectiveQuad_8u_C1R(
+                    in->data, oSrcSize, in->width, oSrcROI, aSrcQuad, ret.data,
+                    ret.width, oDstROI, aDstQuad, interpolation));
+        } else {
+                assert(in->comp_count == 3);
+                CHECK_NPP(nppiWarpPerspectiveQuad_8u_C3R(
+                    in->data, oSrcSize, 3 * in->width, oSrcROI, aSrcQuad,
+                    ret.data, 3 * ret.width, oDstROI, aDstQuad,
+                    interpolation));
+        }
 
         return ret;
 }
