@@ -166,3 +166,6 @@ const char *nvj2k_status_to_str(int rc)
         }
         return "(unknown)";
 }
+
+const char *const coord_pos_name[4] = {"Upper Left", "Upper Right",
+                                       "Lower Right", "Lower Left"};

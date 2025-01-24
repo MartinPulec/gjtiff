@@ -3,11 +3,8 @@
 
 #include "utils.h"   // ERROR_MSG
 
-#ifdef __cplusplus
-#include <cstdlib>   // abort
-#else
+#ifndef __cplusplus
 #include <stdbool.h>
-#include <stdlib.h>  // abort
 #endif
 
 enum {
@@ -28,6 +25,8 @@ struct dec_image {
         int comp_count;
         unsigned char *data;
 
+        /// order: uppper left, upper right, lower right, lower left
+        /// (@sa coord_pos_name)
         struct coordinates {
                 double latitude;
                 double longitude;
