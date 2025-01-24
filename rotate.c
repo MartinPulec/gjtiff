@@ -127,10 +127,10 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
              coords[0].latitude * ret.height}, // Top-left
             {coords[1].longitude * ret.width,
              coords[1].latitude * ret.height}, // Top-right
-            {coords[3].longitude * ret.width,
-             coords[3].latitude * ret.height}, // Bottom-right
             {coords[2].longitude * ret.width,
-             coords[2].latitude * ret.height} // Bottom-left
+             coords[2].latitude * ret.height}, // Bottom-right
+            {coords[3].longitude * ret.width,
+             coords[3].latitude * ret.height}, // Bottom-left
         };
 
         CHECK_NPP(nppiWarpPerspectiveQuad_8u_C1R(

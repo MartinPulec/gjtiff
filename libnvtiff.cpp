@@ -171,7 +171,12 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
 
                 if (x == 0 || x == image->width - 1) {
                         if (y == 0 || y == image->height - 1) {
-                                int idx = (y == 0 ? 0 : 2) + (x == 0 ? 0 : 1);
+                                int idx = -1;
+                                if (y == 0) {
+                                        idx = x == 0 ? 0 : 1;
+                                } else {
+                                        idx = x == 0 ? 3 : 2;
+                                }
 
                                 points_set |= 1 << idx;
                                 image->coords[idx].latitude = vals[i + 4];
@@ -193,7 +198,8 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
         if (log_level >= LL_VERBOSE) {
                 printf("Got points:\n");
                 for (unsigned i = 0; i < 4; ++i) {
-                        printf("\t%f,%f\n", image->coords[i].latitude,
+                        printf("\t%-11s: %f, %f\n", coord_pos_name[i],
+                               image->coords[i].latitude,
                                image->coords[i].longitude);
                 }
         }
