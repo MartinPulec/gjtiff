@@ -70,5 +70,6 @@ extern const char *term_reset;
 
 EXTERN_C const char *npp_status_to_str(NppStatus rc);
 EXTERN_C const char *nvtiff_status_to_str(int rc);
+EXTERN_C const char *nvj2k_status_to_str(int rc);
 
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015

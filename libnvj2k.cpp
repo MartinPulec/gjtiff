@@ -45,6 +45,16 @@ static bool
 validate_equal_comps(const nvjpeg2kImageInfo_t *image_info,
                      const nvjpeg2kImageComponentInfo_t *image_comp_info);
 
+#define CHECK_NVJPEG2K(cmd, err_action)                                        \
+        do {                                                                   \
+                nvjpeg2kStatus_t status = (cmd);                               \
+                if (status != NVJPEG2K_STATUS_SUCCESS) {                       \
+                        ERROR_MSG(#cmd " failed: %d (%s)\n", (int)status,      \
+                                  nvj2k_status_to_str(status));                \
+                        err_action;                                            \
+                }                                                              \
+        } while (0)
+
 /**
  * @todo error handling
  */
@@ -52,7 +62,10 @@ struct nvj2k_state *nvj2k_init(cudaStream_t stream) {
         struct nvj2k_state *s = (struct nvj2k_state *) calloc(1, sizeof *s);
 
         nvjpeg2kCreateSimple(&s->nvjpeg2k_handle);
-        nvjpeg2kDecodeStateCreate(s->nvjpeg2k_handle, &s->decode_state);
+        CHECK_NVJPEG2K(
+            nvjpeg2kDecodeStateCreate(s->nvjpeg2k_handle, &s->decode_state),
+            nvj2k_destroy(s);
+            return nullptr);
         nvjpeg2kStreamCreate(&s->nvjpeg2k_stream);
         nvjpeg2kDecodeParamsCreate(&s->decode_params);
         nvjpeg2kDecodeParamsSetOutputFormat(s->decode_params, NVJPEG2K_FORMAT_INTERLEAVED);
@@ -158,8 +171,8 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                                      &output_image, s->cuda_stream);
         TIMER_STOP(nvjpeg2kDecode);
         if (status != NVJPEG2K_STATUS_SUCCESS) {
-                ERROR_MSG("Unable to decode J2K file %s: %d\n", fname,
-                          (int)status);
+                ERROR_MSG("Unable to decode J2K file %s: %d (%s)\n", fname,
+                          (int)status, nvj2k_status_to_str(status));
                 return {};
         }
 

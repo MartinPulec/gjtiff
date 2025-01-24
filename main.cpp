@@ -69,6 +69,7 @@ state_gjtiff::state_gjtiff(bool u)
         CHECK_CUDA(cudaStreamCreate(&stream));
         state_libtiff = libtiff_create(log_level, stream);
         state_nvj2k = nvj2k_init(stream);
+        assert(state_nvj2k != nullptr);
         state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
         gj_enc = gpujpeg_encoder_create(stream);
