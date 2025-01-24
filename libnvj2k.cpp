@@ -1,5 +1,6 @@
 #include "libnvj2k.h"
 
+#include <cassert>             // for assert
 #include <cerrno>              // for errno
 #include <cinttypes>           // for PRIu32, PRIu8
 #include <cstdint>             // for uint8_t
@@ -8,6 +9,7 @@
 #include <cstring>             // for size_t, strerror
 #include <ctime>               // for timespec
 #include <cuda_runtime_api.h>  // for cudaFree, cudaFreeHost, cudaMalloc
+#include <grok.h>              // for GEO data extraction
 #include <nvjpeg2k.h>
 
 #include "defs.h"              // for dec_image, log_level, rc
@@ -71,6 +73,64 @@ struct nvj2k_state *nvj2k_init(cudaStream_t stream) {
         nvjpeg2kDecodeParamsSetOutputFormat(s->decode_params, NVJPEG2K_FORMAT_INTERLEAVED);
         s->cuda_stream = stream;
         return s;
+}
+
+static void set_coords_from_j2k(const char *fname, struct dec_image *image)
+{
+        grk_stream_params stream_params = {.file = fname};
+#if GRK_VERSION_MAJOR >= 14
+        grk_decompress_parameters parameters{};
+        grk_object*c = grk_decompress_init(&stream_params, &parameters);
+#else
+        grk_decompress_core_params parameters{};
+        grk_decompress_set_default_params(&parameters);
+        grk_codec *c = grk_decompress_init(&stream_params, &parameters);
+#endif
+        grk_header_info info;
+        bool ret = grk_decompress_read_header(c, &info);
+        if (!ret) {
+                WARN_MSG("Reading header with grok failed!\n");
+                grk_object_unref(c);
+                return;
+        }
+
+        info.xml_data[info.xml_data_len-1] = '\0';
+
+        const char lan_tag[] = "<LATITUDE>";
+        const char lon_tag[] = "<LONGITUDE>";
+        char *ptr = (char *)info.xml_data;
+        for (int cidx = 0; cidx < 4; cidx++) {
+                char *latitude = strstr(ptr, lan_tag);
+                char *longitude = strstr(ptr, lon_tag);
+                if (latitude == nullptr || longitude == nullptr ) {
+                        WARN_MSG("Either lon or lat not preseent!\n");
+                        grk_object_unref(c);
+                        return;
+                }
+                latitude += strlen(lan_tag);
+                longitude += strlen(lon_tag);
+                image->coords[cidx].latitude = atof(latitude);
+                image->coords[cidx].longitude = atof(longitude);
+                assert(image->coords[cidx].latitude >= -90.1);
+                assert(image->coords[cidx].latitude <= 90.1);
+                assert(image->coords[cidx].longitude >= -180.1);
+                assert(image->coords[cidx].longitude <= 180.1);
+
+                ptr = MAX(latitude, longitude);
+        }
+
+        if (log_level >= LL_VERBOSE) {
+                printf("Got points:\n");
+                for (unsigned i = 0; i < 4; ++i) {
+                        printf("\t%-11s: %f, %f\n", coord_pos_name[i],
+                               image->coords[i].latitude,
+                               image->coords[i].longitude);
+                }
+        }
+
+        image->coords_set = true;
+
+        grk_object_unref(c);
 }
 
 struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
@@ -190,6 +250,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         ret.height = (int)image_comp_info[0].component_height;
         ret.comp_count = (int) image_info.num_components;
         ret.data = s->converted;
+        set_coords_from_j2k(fname, &ret);
 
         if (bps == 1) {
                 convert_remove_pitch(
