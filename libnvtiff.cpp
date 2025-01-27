@@ -189,7 +189,7 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
         // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
         nvtiffStatus_t e = nvtiffStreamParseFromFile(fname, s->tiff_stream);
         if (e == NVTIFF_STATUS_TIFF_NOT_SUPPORTED) {
-                ERROR_MSG("%s not supported by nvtiff\n", fname);
+                WARN_MSG("%s not supported by nvtiff\n", fname);
                 return {};
         }
         if (e != NVTIFF_STATUS_SUCCESS) {

@@ -40,7 +40,8 @@ extern const char *fg_red;
 extern const char *fg_yellow;
 extern const char *term_reset;
 
-#if !defined __cplusplus || __cplusplus > 201703L
+#if __STDC_VERSION__ >= 202311L || __cplusplus >= 202002L || __GNUC__ >= 12 || \
+    __clang_major__ >= 9
 #define ERROR_MSG(fmt, ...)                                                    \
         fprintf(stderr, "%s" fmt "%s", fg_red __VA_OPT__(, ) __VA_ARGS__,      \
                 term_reset)
