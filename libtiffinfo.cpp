@@ -1,4 +1,5 @@
 #include "libtiffinfo.hpp"
+#include "defs.h"
 
 #include <tiffio.h>
 
@@ -72,6 +73,50 @@ struct val_str_desc_map compressions[] = {
     {MACRO_TO_STR(COMPRESSION_JXL),
      "JPEGXL: WARNING not registered in Adobe-maintained registry"},
 };
+
+bool tiff_get_corners(double *points, size_t count, int img_width,
+                      int img_height, struct coordinate coords[4])
+{
+        unsigned points_set = 0;
+        for (unsigned i = 0; i < count; i += 6) {
+                double x = points[i];
+                double y = points[i + 1];
+
+                if (x == 0 || x == img_width - 1) {
+                        if (y == 0 || y == img_height - 1) {
+                                int idx = -1;
+                                if (y == 0) {
+                                        idx = x == 0 ? 0 : 1;
+                                } else {
+                                        idx = x == 0 ? 3 : 2;
+                                }
+
+                                points_set |= 1 << idx;
+                                coords[idx].latitude = points[i + 4];
+                                coords[idx].longitude = points[i + 3];
+
+                                if (points_set == 0xF) { // all points set
+                                        break;
+                                }
+                        }
+                }
+        }
+
+        if (points_set != 0xF) {
+                WARN_MSG("Not all coordinate points were set!\n");
+                return false;
+        }
+
+        if (log_level >= LL_VERBOSE) {
+                printf("Got points:\n");
+                for (unsigned i = 0; i < 4; ++i) {
+                        printf("\t%-11s: %f, %f\n", coord_pos_name[i],
+                               coords[i].latitude,
+                               coords[i].longitude);
+                }
+        }
+        return true;
+}
 
 struct tiff_info get_tiff_info(TIFF *tif)
 {
