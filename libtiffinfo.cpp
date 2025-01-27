@@ -148,6 +148,15 @@ struct tiff_info get_tiff_info(TIFF *tif)
         TIFFGetField(tif, TIFFTAG_MAXSAMPLEVALUE, &ret.maxval);
         TIFFGetField(tif, TIFFTAG_MINSAMPLEVALUE, &ret.minval);
 
+        double *tiepoints = nullptr;
+        uint32_t count = 0;
+        if (TIFFGetField(tif, TIFFTAG_MODELTIEPOINTTAG, &count, &tiepoints) == 1) {
+                if (tiff_get_corners(tiepoints, count, ret.common.width,
+                                     ret.common.height, ret.common.coords)) {
+                        ret.common.coords_set = true;
+                }
+        };
+
         return ret;
 }
 
