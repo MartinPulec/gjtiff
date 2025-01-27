@@ -46,7 +46,7 @@ void rotate_destroy(struct rotate_state *s)
  * normalize the coordinates to 0..1 and
  * @return asoect ratio
  */
-static double normalize_coords(struct coordinates coords[4])
+static double normalize_coords(struct coordinate coords[4])
 {
         double lat_min = 90.0;
         double lat_max = -90.0;
@@ -98,7 +98,7 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
             {0.0, in->height}        // Bottom-left
         };
 
-        struct coordinates coords[4];
+        struct coordinate coords[4];
         memcpy(coords, in->coords, sizeof coords);
         double dst_aspect = normalize_coords(coords);
 

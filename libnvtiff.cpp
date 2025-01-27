@@ -39,6 +39,7 @@
 
 #include "defs.h"          // for dec_image, CHECK_CUDA, rc
 #include "kernels.h"     // for convert_16_8_normalize_cuda
+#include "libtiffinfo.hpp" // for set_coords_from_geotiff
 #include "utils.h"         // for ERROR_MSG
 
 #define DIV_UP(a, b) (((a) + ((b) - 1)) / (b))
@@ -164,44 +165,9 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
                                              s->tiff_info_buf, count));
         double *vals = (double *)s->tiff_info_buf;
 
-        unsigned points_set = 0;
-        for (unsigned i = 0; i < count; i += 6) {
-                double x = vals[i];
-                double y = vals[i + 1];
-
-                if (x == 0 || x == image->width - 1) {
-                        if (y == 0 || y == image->height - 1) {
-                                int idx = -1;
-                                if (y == 0) {
-                                        idx = x == 0 ? 0 : 1;
-                                } else {
-                                        idx = x == 0 ? 3 : 2;
-                                }
-
-                                points_set |= 1 << idx;
-                                image->coords[idx].latitude = vals[i + 4];
-                                image->coords[idx].longitude = vals[i + 3];
-
-                                if (points_set == 0xF) { // all points set
-                                        break;
-                                }
-                        }
-                }
-        }
-
-        if (points_set != 0xF) {
-                WARN_MSG("Not all coordinate points were set!\n");
-                return;
-        }
-        image->coords_set = true;
-
-        if (log_level >= LL_VERBOSE) {
-                printf("Got points:\n");
-                for (unsigned i = 0; i < 4; ++i) {
-                        printf("\t%-11s: %f, %f\n", coord_pos_name[i],
-                               image->coords[i].latitude,
-                               image->coords[i].longitude);
-                }
+        if (tiff_get_corners(vals, count, image->width, image->height,
+                             image->coords)) {
+                image->coords_set = true;
         }
 }
 

@@ -18,6 +18,11 @@ enum rc {
         ERR_NVCOMP_NOT_FOUND = 3,
 };
 
+struct coordinate {
+        double latitude;
+        double longitude;
+};
+
 struct dec_image {
         enum rc rc; ///< defined only if data=nullptr
         int width;
@@ -27,10 +32,7 @@ struct dec_image {
 
         /// order: uppper left, upper right, lower right, lower left
         /// (@sa coord_pos_name)
-        struct coordinates {
-                double latitude;
-                double longitude;
-        } coords[4];
+        struct coordinate coords[4];
         bool coords_set;
 };
 
