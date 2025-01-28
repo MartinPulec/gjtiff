@@ -1,7 +1,9 @@
 #include "libtiffinfo.hpp"
-#include "defs.h"
 
+#include <cstring>
 #include <tiffio.h>
+
+#include "defs.h"
 
 struct val_str_desc_map {
         int val;
@@ -147,6 +149,14 @@ struct tiff_info get_tiff_info(TIFF *tif)
         ret.big_endian = TIFFIsBigEndian(tif) != 0;
         TIFFGetField(tif, TIFFTAG_MAXSAMPLEVALUE, &ret.maxval);
         TIFFGetField(tif, TIFFTAG_MINSAMPLEVALUE, &ret.minval);
+
+        const char *description = nullptr;
+        if (TIFFGetField(tif, TIFFTAG_IMAGEDESCRIPTION, &description) == 1 &&
+            strstr(description, " SLC ") != nullptr) {
+                WARN_MSG("SLC product detected, not setting GEO coordinates "
+                         "(to disable rotation).\n");
+                return ret;
+        }
 
         double *tiepoints = nullptr;
         uint32_t count = 0;
