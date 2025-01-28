@@ -84,6 +84,33 @@ static double normalize_coords(struct coordinate coords[4])
         return (lon_range / lat_range) * lon_lat_ratio;
 }
 
+/// fullfill GPUJPEG mem requirements
+static void adjust_size(int *width, int *height, int comp_count) {
+
+        enum {
+                GB1 = 1ULL * 1000 * 1000 * 1000,
+                THRESH_GB = 7ULL * GB1,
+                GJ_PER_BYTE_REQ = 20,
+        };
+        size_t gj_gram_needed = (size_t)(*width * *height * comp_count) *
+                                GJ_PER_BYTE_REQ;
+        if (gj_gram_needed < THRESH_GB) {
+                return;
+        }
+        WARN_MSG(
+            "[rotate] Encoding of %dx%d image would require %.2f GB GRAM (>=%g "
+            "GB), downsizing ",
+            *width, *height, (double)gj_gram_needed / GB1,
+            (double)THRESH_GB / GB1);
+        while (gj_gram_needed > THRESH_GB) {
+                *width /= 2;
+                *height /= 2;
+                gj_gram_needed /= 4;
+        }
+        WARN_MSG("rotated to %.2f GB (%dx%d).\n", (double)gj_gram_needed / GB1,
+                 *width, *height);
+}
+
 struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
 {
         if (!in->coords_set) {
@@ -111,6 +138,7 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
         } else {
                 ret.height = (int)(ret.width / dst_aspect);
         }
+        adjust_size(&ret.width, &ret.height, in->comp_count);
 
         const size_t req_size = (size_t)ret.width * ret.height * ret.comp_count;
         if (req_size >= s->output_allocated) {
