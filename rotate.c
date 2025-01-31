@@ -84,6 +84,11 @@ static double normalize_coords(struct coordinate coords[4])
                 }
                 return normalize_coords(coords);
         }
+        if (lat_max > 175 || lat_min < 5) {
+                WARN_MSG("Not normalizing areas near North/South Pole! (at "
+                         "least one point at most 5° degrees from the Pole)\n");
+                return -1;
+        }
 
         double lat_range = lat_max - lat_min;
         double lon_range = lon_max - lon_min;
@@ -147,7 +152,10 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
 
         struct coordinate coords[4];
         memcpy(coords, in->coords, sizeof coords);
-        double dst_aspect = normalize_coords(coords);
+        const double dst_aspect = normalize_coords(coords);
+        if (dst_aspect <= 0) {
+                return *in;
+        }
 
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};
