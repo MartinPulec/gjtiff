@@ -46,7 +46,7 @@ void rotate_destroy(struct rotate_state *s)
  * normalize the coordinates to 0..1 and
  * @return asoect ratio
  */
-static double normalize_coords(struct coordinate coords[4])
+static double normalize_coords_intrn(struct coordinate coords[4], bool second_run)
 {
         double lat_min = 1e6;
         double lat_max = -1e6;
@@ -54,17 +54,20 @@ static double normalize_coords(struct coordinate coords[4])
         double lon_max = -1e6;
 
         enum {
-                LAT_OFF = 360,
+                LAT_OFF = 360, // val that added is inert to cos()
                 LON_OFF = 180,
         };
 
-        for (unsigned i = 0; i < 4; ++i) {
-                // make both positive:
-                // - lat - 0-180
+        if (!second_run) {
+                // make the coordinates positive:
+                // - lat - 270-450
                 // - lon - 0-360
-                coords[i].latitude += LAT_OFF;
-                coords[i].longitude += LON_OFF;
-
+                for (unsigned i = 0; i < 4; ++i) {
+                        coords[i].latitude += LAT_OFF;
+                        coords[i].longitude += LON_OFF;
+                }
+        }
+        for (unsigned i = 0; i < 4; ++i) {
                 if (coords[i].latitude < lat_min) {
                         lat_min = coords[i].latitude;
                 }
@@ -87,7 +90,16 @@ static double normalize_coords(struct coordinate coords[4])
                                 coords[i].longitude += 360.0;
                         }
                 }
-                return normalize_coords(coords);
+                assert(!second_run);
+                return normalize_coords_intrn(coords, true);
+        }
+        if (lat_min < LAT_OFF - 85 || lat_max > LAT_OFF + 85) {
+                const double near_pole_pt_lat =
+                    (lat_max > LAT_OFF + 85 ? lat_max : lat_min) - LAT_OFF;
+                WARN_MSG("Not normalizing areas near North/South Pole! (at "
+                         "least one point at most 5° /%f°/ degrees from the "
+                         "Pole)\n", near_pole_pt_lat);
+                return -1;
         }
 
         double lat_range = lat_max - lat_min;
@@ -105,6 +117,10 @@ static double normalize_coords(struct coordinate coords[4])
         double lon_lat_ratio = cos(M_PI * lat_mean / 180.0);
 
         return (lon_range / lat_range) * lon_lat_ratio;
+}
+
+static double normalize_coords(struct coordinate coords[4]) {
+        return normalize_coords_intrn(coords, false);
 }
 
 /// fullfill GPUJPEG mem requirements
@@ -153,7 +169,12 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
 
         struct coordinate coords[4];
         memcpy(coords, in->coords, sizeof coords);
-        double dst_aspect = normalize_coords(coords);
+        const double dst_aspect = normalize_coords(coords);
+        if (dst_aspect == -1) {
+                DEBUG_MSG("Near North/South pole - not rotating\n");
+                return *in;
+        }
+        assert(dst_aspect > 0);
 
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};
