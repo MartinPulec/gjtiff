@@ -113,6 +113,9 @@ static void adjust_size(int *width, int *height, int comp_count) {
 
 struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
 {
+        if (s == NULL) {
+                return *in;
+        }
         if (!in->coords_set) {
                 WARN_MSG("Coordinates not set, not normalizing image...\n");
                 return *in;
