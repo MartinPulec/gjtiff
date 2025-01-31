@@ -48,7 +48,7 @@
 int log_level = 0;
 
 struct state_gjtiff {
-        state_gjtiff(bool use_libtiff);
+        state_gjtiff(bool use_libtiff, bool norotate);
         ~state_gjtiff();
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
@@ -63,7 +63,7 @@ struct state_gjtiff {
         struct rotate_state *rotate = NULL;
 };
 
-state_gjtiff::state_gjtiff(bool u)
+state_gjtiff::state_gjtiff(bool u, bool norotate)
     : use_libtiff(u)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
@@ -76,8 +76,10 @@ state_gjtiff::state_gjtiff(bool u)
         assert(gj_enc != nullptr);
         downscaler = downscaler_init(stream);
         assert(downscaler != nullptr);
-        rotate = rotate_init(stream);
-        assert(rotate != nullptr);
+        if (!norotate) {
+                rotate = rotate_init(stream);
+                assert(rotate != nullptr);
+        }
 }
 
 state_gjtiff::~state_gjtiff()
@@ -87,6 +89,9 @@ state_gjtiff::~state_gjtiff()
         nvtiff_destroy(state_nvtiff);
         libtiff_destroy(state_libtiff);
         downscaler_destroy(downscaler);
+        rotate_destroy(rotate);
+
+        // destroy last - components may hold the stream
         CHECK_CUDA(cudaStreamDestroy(stream));
 }
 
@@ -200,6 +205,7 @@ static void show_help(const char *progname)
         printf("\t-d       - list of CUDA devices\n");
         printf("\t-h       - show help\n");
         printf("\t-l       - use libtiff if nvCOMP not available\n");
+        printf("\t-n       - do not adjust to natural rotation/prooprotion\n");
         printf("\t-o <dir> - output JPEG directory\n");
         printf("\t-q <q>   - JPEG quality\n");
         printf("\t-s <d>   - downscale factor\n");
@@ -282,11 +288,12 @@ int main(int argc, char **argv)
         init_term_colors();
 
         bool use_libtiff = false;
+        bool norotate = false;
         char ofdir[1024] = "./";
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+dhlo:q:s:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+dhnno:q:s:v")) != -1) {
                 switch (opt) {
                 case 'd':
                         return !!gpujpeg_print_devices_info();
@@ -295,6 +302,9 @@ int main(int argc, char **argv)
                         return EXIT_SUCCESS;
                 case 'l':
                         use_libtiff = true;
+                        break;
+                case 'n':
+                        norotate = true;
                         break;
                 case 'o':
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);
@@ -321,7 +331,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        struct state_gjtiff state(use_libtiff);
+        struct state_gjtiff state(use_libtiff, norotate);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
