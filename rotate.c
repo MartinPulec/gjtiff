@@ -48,12 +48,23 @@ void rotate_destroy(struct rotate_state *s)
  */
 static double normalize_coords(struct coordinate coords[4])
 {
-        double lat_min = 90.0;
-        double lat_max = -90.0;
-        double lon_min = 180.0;
-        double lon_max = -180.0;
+        double lat_min = 1e6;
+        double lat_max = -1e6;
+        double lon_min = 1e6;
+        double lon_max = -1e6;
+
+        enum {
+                LAT_OFF = 360,
+                LON_OFF = 180,
+        };
 
         for (unsigned i = 0; i < 4; ++i) {
+                // make both positive:
+                // - lat - 0-180
+                // - lon - 0-360
+                coords[i].latitude += LAT_OFF;
+                coords[i].longitude += LON_OFF;
+
                 if (coords[i].latitude < lat_min) {
                         lat_min = coords[i].latitude;
                 }
@@ -68,6 +79,17 @@ static double normalize_coords(struct coordinate coords[4])
                 }
         }
 
+        // handle longitude 179->-179 transition (eastern to western
+        // hemishpere); zero is now shifted to 180
+        if (lon_min < LON_OFF && lon_max >= LON_OFF) {
+                for (unsigned i = 0; i < 4; ++i) {
+                        if (coords[i].longitude < LON_OFF) {
+                                coords[i].longitude += 360.0;
+                        }
+                }
+                return normalize_coords(coords);
+        }
+
         double lat_range = lat_max - lat_min;
         double lon_range = lon_max - lon_min;
 
@@ -79,6 +101,7 @@ static double normalize_coords(struct coordinate coords[4])
         }
 
         double lat_mean = lat_min + ((lat_max - lat_min) / 2);
+        static_assert(LAT_OFF % 360 == 0);
         double lon_lat_ratio = cos(M_PI * lat_mean / 180.0);
 
         return (lon_range / lat_range) * lon_lat_ratio;
