@@ -94,6 +94,11 @@ static void set_coords_from_j2k(const char *fname, struct dec_image *image)
                 return;
         }
 
+        if (info.xml_data_len == 0) {
+                WARN_MSG("No J2K XML data (geo coordinates)!\n");
+                return;
+        }
+
         info.xml_data[info.xml_data_len-1] = '\0';
 
         const char lan_tag[] = "<LATITUDE>";
