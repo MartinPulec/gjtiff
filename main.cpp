@@ -38,6 +38,7 @@
 #include "libnvj2k.h"
 #include "libnvtiff.h"
 #include "libtiff.hpp"
+#include "pam.h"
 #include "rotate.h"
 #include "utils.h"
 
@@ -48,7 +49,7 @@
 int log_level = 0;
 
 struct state_gjtiff {
-        state_gjtiff(bool use_libtiff, bool norotate);
+        state_gjtiff(bool use_libtiff, bool norotate, bool write_uncompressed);
         ~state_gjtiff();
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
@@ -63,7 +64,7 @@ struct state_gjtiff {
         struct rotate_state *rotate = NULL;
 };
 
-state_gjtiff::state_gjtiff(bool u, bool norotate)
+state_gjtiff::state_gjtiff(bool u, bool norotate, bool write_uncompressed)
     : use_libtiff(u)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
@@ -72,8 +73,10 @@ state_gjtiff::state_gjtiff(bool u, bool norotate)
         assert(state_nvj2k != nullptr);
         state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
-        gj_enc = gpujpeg_encoder_create(stream);
-        assert(gj_enc != nullptr);
+        if (!write_uncompressed) {
+                gj_enc = gpujpeg_encoder_create(stream);
+                assert(gj_enc != nullptr);
+        }
         downscaler = downscaler_init(stream);
         assert(downscaler != nullptr);
         if (!norotate) {
@@ -84,7 +87,9 @@ state_gjtiff::state_gjtiff(bool u, bool norotate)
 
 state_gjtiff::~state_gjtiff()
 {
-        gpujpeg_encoder_destroy(gj_enc);
+        if (gj_enc != NULL) {
+                gpujpeg_encoder_destroy(gj_enc);
+        }
         nvj2k_destroy(state_nvj2k);
         nvtiff_destroy(state_nvtiff);
         libtiff_destroy(state_libtiff);
@@ -170,7 +175,6 @@ static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_imag
                 return;
         }
 
-        printf("%s encoded successfully\n", ofname);
         FILE *outf = fopen(ofname, "wb");
         if (outf == nullptr) {
                 ERROR_MSG("fopen %s: %s\n", ofname, strerror(errno));
@@ -180,8 +184,27 @@ static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_imag
         fclose(outf);
 }
 
-static void set_ofname(const char *ifname, char *ofname, size_t buflen)
+static void encode(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
+                        const char *ofname)
 {
+        if (s->gj_enc != nullptr) {
+                encode_jpeg(s, req_quality, uncomp, ofname);
+        } else {
+                const size_t len = uncomp.width * uncomp.height *
+                                   uncomp.comp_count;
+                unsigned char *data = new unsigned char[len];
+                CHECK_CUDA(cudaMemcpy(data, uncomp.data, len, cudaMemcpyDefault));
+                    pam_write(ofname, uncomp.width, uncomp.height,
+                              uncomp.comp_count, 255, data, true);
+                delete[] data;
+        }
+        printf("%s encoded successfully\n", ofname);
+}
+
+static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpeg)
+{
+        const char *ext = jpeg ? "jpg" : "pnm";
+
         if (strrchr(ifname, '/') != nullptr) {
                 snprintf(ofname, buflen, "%s", strrchr(ifname, '/') + 1);
         } else {
@@ -190,10 +213,10 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen)
         if (strrchr(ofname, '.') != nullptr) {
                 char *ptr = strrchr(ofname, '.') + 1;
                 size_t avail_len = buflen - (ptr - ofname);
-                snprintf(ptr, avail_len, "jpg");
+                snprintf(ptr, avail_len, "%s", ext);
         } else {
                 snprintf(ofname + strlen(ofname), buflen - strlen(ofname),
-                         ".jpg");
+                         ".%s", ext);
         }
 }
 
@@ -206,6 +229,7 @@ static void show_help(const char *progname)
         printf("\t-h       - show help\n");
         printf("\t-l       - use libtiff if nvCOMP not available\n");
         printf("\t-n       - do not adjust to natural rotation/prooprotion\n");
+        printf("\t-r       - write raw PNM instead of JPEG\n");
         printf("\t-o <dir> - output JPEG directory\n");
         printf("\t-q <q>   - JPEG quality\n");
         printf("\t-s <d>   - downscale factor\n");
@@ -289,11 +313,12 @@ int main(int argc, char **argv)
 
         bool use_libtiff = false;
         bool norotate = false;
+        bool write_uncompressed = false;
         char ofdir[1024] = "./";
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+dhnno:q:s:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+dhnno:q:rs:v")) != -1) {
                 switch (opt) {
                 case 'd':
                         return !!gpujpeg_print_devices_info();
@@ -313,6 +338,9 @@ int main(int argc, char **argv)
                         global_opts.req_gpujpeg_quality = (int)strtol(
                             optarg, nullptr, 10);
                         break;
+                case 'r':
+                        write_uncompressed = true;
+                        break;
                 case 's':
                         global_opts.downscale_factor = (int)strtol(optarg,
                                                                    nullptr, 10);
@@ -331,7 +359,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        struct state_gjtiff state(use_libtiff, norotate);
+        struct state_gjtiff state(use_libtiff, norotate, write_uncompressed);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
@@ -343,7 +371,7 @@ int main(int argc, char **argv)
                                               sizeof path_buf, &opts)) {
                 TIMER_START(transcode, LL_VERBOSE);
                 set_ofname(ifname, ofdir + d_pref_len,
-                           sizeof ofdir - d_pref_len);
+                           sizeof ofdir - d_pref_len, state.gj_enc != nullptr);
 
                 struct dec_image dec = decode(&state, ifname);
                 if (dec.data == nullptr) {
@@ -362,7 +390,7 @@ int main(int argc, char **argv)
                                         opts.downscale_factor, &dec);
                 }
                 dec = rotate(state.rotate, &dec);
-                encode_jpeg(&state, opts.req_gpujpeg_quality, dec, ofdir);
+                encode(&state, opts.req_gpujpeg_quality, dec, ofdir);
                 TIMER_STOP(transcode);
         }
 
