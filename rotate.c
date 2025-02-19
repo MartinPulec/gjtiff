@@ -160,6 +160,10 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
                 return *in;
         }
 
+        if (nppGetStream() != s->stream) {
+                nppSetStream(s->stream);
+        }
+
         double aSrcQuad[4][2] = {
             {0.0, 0.0},              // Top-left
             {in->width, 0},          // Top-right
