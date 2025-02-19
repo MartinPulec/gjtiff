@@ -9,10 +9,11 @@
 #include <cstring>             // for size_t, strerror
 #include <ctime>               // for timespec
 #include <cuda_runtime_api.h>  // for cudaFree, cudaFreeHost, cudaMalloc
-#include <grok.h>              // for GEO data extraction
+// #include <grok.h>              // for GEO data extraction
 #include <nvjpeg2k.h>
 
 #include "defs.h"              // for dec_image, log_level, rc
+#include "gdal_coords.h"       // for set_coords_from_gdal
 #include "kernels.h"         // for convert_planar_rgb_to_packed
 #include "utils.h"             // for ERROR_MSG, TIMER_START, TIMER_STOP
 
@@ -75,6 +76,7 @@ struct nvj2k_state *nvj2k_init(cudaStream_t stream) {
         return s;
 }
 
+/*
 static void set_coords_from_j2k(const char *fname, struct dec_image *image)
 {
         grk_stream_params stream_params = {.file = fname};
@@ -137,6 +139,7 @@ static void set_coords_from_j2k(const char *fname, struct dec_image *image)
 
         grk_object_unref(c);
 }
+*/
 
 struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         FILE *f = fopen(fname, "rb");
@@ -255,7 +258,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         ret.height = (int)image_comp_info[0].component_height;
         ret.comp_count = (int) image_info.num_components;
         ret.data = s->converted;
-        set_coords_from_j2k(fname, &ret);
+        set_coords_from_gdal(fname, &ret);
 
         if (bps == 1) {
                 convert_remove_pitch(
