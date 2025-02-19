@@ -208,6 +208,7 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
              coords[3].latitude * ret.height}, // Bottom-left
         };
 
+        GPU_TIMER_START(rotate, LL_DEBUG, s->stream);
         const int interpolation = NPPI_INTER_LINEAR;
         if (in->comp_count == 1) {
                 CHECK_NPP(nppiWarpPerspectiveQuad_8u_C1R(
@@ -220,6 +221,7 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
                     ret.data, 3 * ret.width, oDstROI, aDstQuad,
                     interpolation));
         }
+        GPU_TIMER_STOP(rotate);
 
         return ret;
 }

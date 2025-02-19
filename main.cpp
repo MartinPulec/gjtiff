@@ -47,6 +47,8 @@
 #endif
 
 int log_level = 0;
+cudaEvent_t cuda_event_start;
+cudaEvent_t cuda_event_stop;
 
 struct state_gjtiff {
         state_gjtiff(bool use_libtiff, bool norotate, bool write_uncompressed);
@@ -68,6 +70,9 @@ state_gjtiff::state_gjtiff(bool u, bool norotate, bool write_uncompressed)
     : use_libtiff(u)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
+        CHECK_CUDA(cudaEventCreate(&cuda_event_start));
+        CHECK_CUDA(cudaEventCreate(&cuda_event_stop));
+
         state_libtiff = libtiff_create(log_level, stream);
         state_nvj2k = nvj2k_init(stream);
         assert(state_nvj2k != nullptr);
@@ -96,6 +101,8 @@ state_gjtiff::~state_gjtiff()
         downscaler_destroy(downscaler);
         rotate_destroy(rotate);
 
+        CHECK_CUDA(cudaEventDestroy(cuda_event_start));
+        CHECK_CUDA(cudaEventDestroy(cuda_event_stop));
         // destroy last - components may hold the stream
         CHECK_CUDA(cudaStreamDestroy(stream));
 }

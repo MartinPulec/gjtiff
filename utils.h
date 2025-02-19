@@ -37,10 +37,30 @@
                                 1000000000.0);                                 \
         }
 
+#define GPU_TIMER_START(name, req_ll, stream)                                  \
+        int gpu_timer_##name##_enabled = log_level >= req_ll;                  \
+        cudaStream_t gpu_timer_##name##_stream = stream;                       \
+        if (gpu_timer_##name##_enabled) {                                      \
+                cudaEventRecord(cuda_event_start, stream);                     \
+        }
+
+#define GPU_TIMER_STOP(name)                                                   \
+        if (gpu_timer_##name##_enabled) {                                      \
+                cudaEventRecord(cuda_event_stop, gpu_timer_##name##_stream);   \
+                float elapsedTimeMs = 0;                                       \
+                cudaEventSynchronize(cuda_event_stop);                         \
+                cudaEventElapsedTime(&elapsedTimeMs, cuda_event_start,         \
+                                     cuda_event_stop);                         \
+                fprintf(stderr, #name " duration %f s\n",                      \
+                        elapsedTimeMs / 1000.0);                               \
+        }
+
 extern const char *fg_bold;
 extern const char *fg_red;
 extern const char *fg_yellow;
 extern const char *term_reset;
+extern cudaEvent_t cuda_event_start;
+extern cudaEvent_t cuda_event_stop;
 
 #if __STDC_VERSION__ >= 202311L || __cplusplus >= 202002L || __GNUC__ >= 12 || \
     __clang_major__ >= 9
