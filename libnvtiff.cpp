@@ -30,8 +30,10 @@
 #include "libnvtiff.h"
 
 #include <cstdint>
+#include <cinttypes>       // for PRIu32
 #include <cuda_runtime.h>  // for cudaFree, cudaMalloc, cudaStreamDestroy
 #include <nvtiff.h>        // for NVTIFF_STATUS_SUCCESS, nvtiffStatus_t, nvt...
+#include <nvtiff_version.h> // for NVTIFF_VER_MAJOR, NVTIFF_VER_MINOR
 #include <stdint.h>        // for uint8_t, uint16_t, uint32_t
 #include <stdlib.h>        // for exit, EXIT_FAILURE
 #include <cassert>         // for assert
@@ -70,6 +72,10 @@ struct nvtiff_state {
         uint8_t *converted{};
         size_t converted_allocated{};
 
+#if NVTIFF_VER_MINOR > 0 || NVTIFF_VER_MINOR >= 4
+        nvtiffDecodeParams_t params;
+#endif
+
         void *tiff_info_buf{};
         size_t tiff_info_buf_sz = 0;
 };
@@ -79,12 +85,18 @@ nvtiff_state::nvtiff_state(cudaStream_t cs, int ll)
 {
         CHECK_NVTIFF(nvtiffStreamCreate(&tiff_stream));
         CHECK_NVTIFF(nvtiffDecoderCreateSimple(&decoder, stream));
+#if NVTIFF_VER_MINOR > 0 || NVTIFF_VER_MINOR >= 4
+        CHECK_NVTIFF(nvtiffDecodeParamsCreate(&params));
+#endif
 }
 
 nvtiff_state::~nvtiff_state()
 {
         CHECK_NVTIFF(nvtiffStreamDestroy(tiff_stream));
         CHECK_NVTIFF(nvtiffDecoderDestroy(decoder, stream));
+#if NVTIFF_VER_MINOR > 0 || NVTIFF_VER_MINOR >= 4
+        CHECK_NVTIFF(nvtiffDecodeParamsDestroy(params));
+#endif
         CHECK_CUDA(cudaFree(decoded));
         CHECK_CUDA(cudaFree(converted));
 }
@@ -171,6 +183,30 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
         }
 }
 
+#if NVTIFF_VER_MINOR > 0 || NVTIFF_VER_MINOR >= 4
+static void print_tiff_info(nvtiffStream_t tiff_stream, uint32_t image_id)
+{
+        if (log_level < LL_DEBUG) {
+                return;
+        }
+        nvtiffImageGeometry_t geometry;
+        if (nvtiffStreamGetImageGeometry(tiff_stream, image_id, &geometry) !=
+            NVTIFF_STATUS_SUCCESS) {
+                return;
+        }
+        printf("TIFF structure:\n");
+        printf("\ttype: %s\n",
+               geometry.type == NVTIFF_IMAGE_STRIPED ? "stripped" : "tiled");
+        printf("\tdepth: %" PRIu32 "\n", geometry.image_depth);
+        printf("\tstrile width: %" PRIu32 "\n", geometry.strile_width);
+        printf("\tstrile height: %" PRIu32 "\n", geometry.strile_height);
+        printf("\tstrile depth: %" PRIu32 "\n", geometry.strile_depth);
+        printf("\tnum striles per plane: %" PRIu32 "\n",
+               geometry.num_striles_per_plane);
+        printf("\tnum striles: %" PRIu32 "\n", geometry.num_striles);
+}
+#endif
+
 /**
  * Decodes TIFF using nvTIFF.
  *
@@ -181,7 +217,6 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
 struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
 {
         struct dec_image ret{};
-        const uint32_t num_images = 1;
         if (is_empty(fname)) {
                ERROR_MSG("%s is empty!\n", fname);
                return {};
@@ -214,8 +249,15 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
                 CHECK_CUDA(cudaMalloc(&s->decoded, nvtiff_out_size));
                 s->decoded_allocated = nvtiff_out_size;
         }
+#if NVTIFF_VER_MINOR > 0 || NVTIFF_VER_MINOR >= 4
+        print_tiff_info(s->tiff_stream, image_id);
+        e = nvtiffDecodeImage(s->tiff_stream, s->decoder, s->params, image_id,
+                              s->decoded, s->stream);
+#else
+        const uint32_t num_images = 1;
         e = nvtiffDecodeRange(s->tiff_stream, s->decoder, image_id, num_images,
                               &s->decoded, s->stream);
+#endif
         if (e == NVTIFF_STATUS_NVCOMP_NOT_FOUND) {
                 ERROR_MSG("nvCOMP needed for DEFLATE not found in path...\n");
                 return DEC_IMG_ERR(ERR_NVCOMP_NOT_FOUND);
