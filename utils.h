@@ -2,11 +2,13 @@
 #define UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015
 
 #ifdef __cplusplus
+#include <cstdint>        // for uint64_t
 #include <cstdio>
 #include <ctime>
 #else
-#include <time.h>
+#include <stdint.h>       // for uint64_t
 #include <stdio.h>
+#include <time.h>
 #endif
 
 #include <cuda_runtime.h>
@@ -72,6 +74,10 @@ extern const char *term_reset;
 EXTERN_C const char *npp_status_to_str(NppStatus rc);
 EXTERN_C const char *nvtiff_status_to_str(int rc);
 EXTERN_C const char *nvj2k_status_to_str(int rc);
+enum {
+        UINT64_ASCII_LEN = 20,
+};
+EXTERN_C char* format_number_with_delim(uint64_t num, char* buf, size_t buflen);
 
 extern const char *const coord_pos_name[4];
 
