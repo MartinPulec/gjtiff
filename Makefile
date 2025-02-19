@@ -1,11 +1,16 @@
 NVCC ?= nvcc
 NVCC_DIR := $(shell dirname $$(command -v $(NVCC)))
-COMMON = $(shell pkg-config --cflags libgrokj2k) -g -Wall -Wextra -fopenmp \
+COMMON = $(shell pkg-config --cflags gdal) -g -Wall -Wextra -fopenmp \
 	-I$(NVCC_DIR)/../include
 CFLAGS += $(COMMON)
 CXXFLAGS += $(COMMON)
 CUDAFLAGS ?= 
 LDFLAGS += -fopenmp -L$(NVCC_DIR)/../lib64
+LIBS += $(shell pkg-config --libs gdal)
+LIBS += -lcudart -lgpujpeg -lm \
+	-lnppc -lnppig -lnpps -lnppist \
+	-lnvjpeg2k -lnvtiff -ltiff
+	# -lgrok
 
 all: gjtiff
 
@@ -18,8 +23,19 @@ all: gjtiff
 %.o: %.cu %.h $(wildcard *.h *.hpp)
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
-gjtiff: downscaler.o kernels.o libnvj2k.o libnvtiff.o libtiff.o libtiffinfo.o main.o pam.o rotate.o utils.o
-	$(CXX) $(LDFLAGS) $^ -lcudart -lgpujpeg -lgrokj2k -lm -lnppc -lnppig -lnpps -lnppist -lnvjpeg2k -lnvtiff -ltiff -o $@
+gjtiff: \
+	downscaler.o \
+	gdal_coords.o \
+	kernels.o \
+	libnvj2k.o \
+	libnvtiff.o \
+	libtiff.o \
+	libtiffinfo.o \
+	main.o \
+	pam.o \
+	rotate.o \
+	utils.o
+	$(CXX) $(LDFLAGS) $^ $(LIBS) -o $@
 
 clean:
 	$(RM) *o gjtiff

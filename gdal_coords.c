@@ -1,44 +1,41 @@
 #include <gdal.h>
 #include <ogr_srs_api.h>
-#include <stdio.h>
+#include <pthread.h>
 #include <stdlib.h>
 
-void transform_and_print(double x, double y,
-                         OGRCoordinateTransformationH transform,
-                         const char *label)
+#include "defs.h"
+#include "utils.h"
+
+static bool transform_and_print(double x, double y,
+                                OGRCoordinateTransformationH transform,
+                                struct coordinate *coord, const char *label)
 {
-        double x_copy = x;
-        double y_copy = y;
-        if (OCTTransform(transform, 1, &x_copy, &y_copy, NULL)) {
-                printf("%-12s (%.3f, %.3f) -> (%.6f°, %.6f°)\n", label, x, y,
-                       x_copy, y_copy);
-        } else {
-                fprintf(stderr, "Failed to transform coordinates for %s.\n",
-                        label);
+        if (!OCTTransform(transform, 1, &x, &y, NULL)) {
+                WARN_MSG("Failed to transform coordinates for %s.\n", label);
+                return false;
         }
+        coord->latitude = x;
+        coord->longitude = y;
+        printf("\t%-11s: %f, %f\n", label, coord->latitude, coord->longitude);
+        return true;
 }
 
-int main(int argc, char *argv[])
+void set_coords_from_gdal(const char *fname, struct dec_image *image)
 {
-        if (argc != 2) {
-                printf("Usage: %s <input.jp2>\n", argv[0]);
-                return 1;
-        }
+        static pthread_once_t gdal_init = PTHREAD_ONCE_INIT;
+        pthread_once(&gdal_init, GDALAllRegister);
 
-        const char *filename = argv[1];
-        GDALAllRegister();
-
-        GDALDatasetH dataset = GDALOpen(filename, GA_ReadOnly);
+        GDALDatasetH dataset = GDALOpen(fname, GA_ReadOnly);
         if (dataset == NULL) {
-                fprintf(stderr, "Failed to open file: %s\n", filename);
-                return 1;
+                WARN_MSG("[gdal] Failed to open file: %s\n", fname);
+                return;
         }
 
         double geoTransform[6];
         if (GDALGetGeoTransform(dataset, geoTransform) != CE_None) {
-                fprintf(stderr, "Failed to get geotransform.\n");
+                WARN_MSG("[gdal] Failed to get geotransform (%s).\n", fname);
                 GDALClose(dataset);
-                return 1;
+                return;
         }
 
         // Calculate corner coordinates
@@ -46,15 +43,13 @@ int main(int argc, char *argv[])
         double y_max = geoTransform[3];
         double x_max = x_min + geoTransform[1] * GDALGetRasterXSize(dataset);
         double y_min = y_max + geoTransform[5] * GDALGetRasterYSize(dataset);
-        double x_center = (x_min + x_max) / 2.0;
-        double y_center = (y_min + y_max) / 2.0;
 
         // Get projection
         const char *proj_wkt = GDALGetProjectionRef(dataset);
         if (!proj_wkt || !proj_wkt[0]) {
-                fprintf(stderr, "Dataset has no projection.\n");
+                WARN_MSG("Dataset has no projection (%s).\n", fname);
                 GDALClose(dataset);
-                return 1;
+                return;
         }
 
         OGRSpatialReferenceH src_srs = OSRNewSpatialReference(proj_wkt);
@@ -64,26 +59,34 @@ int main(int argc, char *argv[])
         OGRCoordinateTransformationH transform = OCTNewCoordinateTransformation(
             src_srs, dst_srs);
         if (!transform) {
-                fprintf(stderr,
-                        "Failed to create coordinate transformation.\n");
+                WARN_MSG("Failed to create coordinate transformation (%s).\n",
+                         fname);
                 OSRDestroySpatialReference(src_srs);
                 OSRDestroySpatialReference(dst_srs);
                 GDALClose(dataset);
-                return 1;
+                return;
         }
 
         // Print coordinates with transformations
-        printf("Corner Coordinates (Projected -> Geographic):\n");
-        transform_and_print(x_min, y_max, transform, "Upper Left");
-        transform_and_print(x_min, y_min, transform, "Lower Left");
-        transform_and_print(x_max, y_max, transform, "Upper Right");
-        transform_and_print(x_max, y_min, transform, "Lower Right");
-        transform_and_print(x_center, y_center, transform, "Center");
+        printf("Got points:\n");
+        bool success = true;
+        success = success && // Upper Left
+                  transform_and_print(x_min, y_max, transform,
+                                      &image->coords[0], coord_pos_name[0]);
+        success = success && // Upper Right
+                  transform_and_print(x_max, y_max, transform,
+                                      &image->coords[1], coord_pos_name[1]);
+        success = success && // Lower Right
+                  transform_and_print(x_max, y_min, transform,
+                                      &image->coords[2], coord_pos_name[2]);
+        success = success && // Lower Left
+                  transform_and_print(x_min, y_min, transform,
+                                      &image->coords[3], coord_pos_name[3]);
+        image->coords_set = success;
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);
         OSRDestroySpatialReference(src_srs);
         OSRDestroySpatialReference(dst_srs);
         GDALClose(dataset);
-        return 0;
 }
