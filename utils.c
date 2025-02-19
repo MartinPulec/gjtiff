@@ -1,5 +1,6 @@
 #include "utils.h"
 
+#include <assert.h>
 #include <stddef.h>
 
 #include "defs.h" // for ARR_SIZE
@@ -169,3 +170,26 @@ const char *nvj2k_status_to_str(int rc)
 
 const char *const coord_pos_name[4] = {"Upper Left", "Upper Right",
                                        "Lower Right", "Lower Left"};
+
+/// format number with thousands delimited by ','
+char *format_number_with_delim(uint64_t num, char *buf, size_t buflen)
+{
+        assert(buflen >= 1);
+        buf[buflen - 1] = '\0';
+        char *ptr = buf + buflen - 1;
+        int grp_count = 0;
+        do {
+                if (ptr == buf || (grp_count == 3 && ptr == buf + 1)) {
+                        snprintf(buf, buflen, "%s", "ERR");
+                        return buf;
+                }
+                if (grp_count++ == 3) {
+                        grp_count = 1;
+                        *--ptr = ',';
+                }
+                *--ptr = (char)('0' + (num % 10));
+                num /= 10;
+        } while (num != 0);
+
+        return ptr;
+}

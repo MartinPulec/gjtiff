@@ -140,7 +140,7 @@ static dec_image decode(struct state_gjtiff *s, const char *fname)
         return decode_tiff(s, fname);
 }
 
-static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
+static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
                         const char *ofname)
 {
         gpujpeg_parameters param = gpujpeg_default_parameters();
@@ -172,33 +172,38 @@ static void encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_imag
         if (gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input,
                                &out, &len) != 0) {
                 ERROR_MSG("Failed to encode %s!\n", ofname);
-                return;
+                return 0;
         }
 
         FILE *outf = fopen(ofname, "wb");
         if (outf == nullptr) {
                 ERROR_MSG("fopen %s: %s\n", ofname, strerror(errno));
-                return;
+                return 0;
         }
         fwrite(out, len, 1, outf);
         fclose(outf);
+        return len;
 }
 
 static void encode(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
                         const char *ofname)
 {
+        size_t len = 0;
         if (s->gj_enc != nullptr) {
-                encode_jpeg(s, req_quality, uncomp, ofname);
+                len = encode_jpeg(s, req_quality, uncomp, ofname);
         } else {
-                const size_t len = uncomp.width * uncomp.height *
-                                   uncomp.comp_count;
+                len = uncomp.width * uncomp.height * uncomp.comp_count;
                 unsigned char *data = new unsigned char[len];
                 CHECK_CUDA(cudaMemcpy(data, uncomp.data, len, cudaMemcpyDefault));
                     pam_write(ofname, uncomp.width, uncomp.height,
                               uncomp.comp_count, 255, data, true);
                 delete[] data;
         }
-        printf("%s encoded successfully\n", ofname);
+        char buf[UINT64_ASCII_LEN + 1];
+        printf("%s (%dx%d; %s B) encoded %ssuccessfully\n", ofname,
+               uncomp.width, uncomp.height,
+               format_number_with_delim(len, buf, sizeof buf),
+               (len == 0 ? "un" : ""));
 }
 
 static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpeg)
