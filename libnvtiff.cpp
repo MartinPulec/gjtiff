@@ -221,6 +221,7 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
                ERROR_MSG("%s is empty!\n", fname);
                return {};
         }
+        GPU_TIMER_START(nvtiff_decode, LL_DEBUG, s->stream);
         // CHECK_NVTIFF(nvtiffStreamGetNumImages(tiff_stream, &num_images));
         nvtiffStatus_t e = nvtiffStreamParseFromFile(fname, s->tiff_stream);
         if (e == NVTIFF_STATUS_TIFF_NOT_SUPPORTED) {
@@ -277,5 +278,6 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
         }
         assert(image_info.bits_per_sample[0] == 16);
         ret.data = convert_16_8(s, &ret);
+        GPU_TIMER_STOP(nvtiff_decode);
         return ret;
 }

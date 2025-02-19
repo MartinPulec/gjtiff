@@ -233,11 +233,11 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         output_image.pixel_data = (void **) &s->decode_output;
         output_image.pitch_in_bytes = &s->pitch_in_bytes;
 
-        TIMER_START(nvjpeg2kDecode, LL_DEBUG);
+        GPU_TIMER_START(nvjpeg2kDecode, LL_DEBUG, s->cuda_stream);
         status = nvjpeg2kDecodeImage(s->nvjpeg2k_handle, s->decode_state,
                                      s->nvjpeg2k_stream, s->decode_params,
                                      &output_image, s->cuda_stream);
-        TIMER_STOP(nvjpeg2kDecode);
+        GPU_TIMER_STOP(nvjpeg2kDecode);
         if (status != NVJPEG2K_STATUS_SUCCESS) {
                 ERROR_MSG("Unable to decode J2K file %s: %d (%s)\n", fname,
                           (int)status, nvj2k_status_to_str(status));

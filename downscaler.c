@@ -43,7 +43,7 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                 s->output_allocated = required_size;
         }
         downscaled.data = s->output;
-        TIMER_START(downscale, LL_DEBUG);
+        GPU_TIMER_START(downscale, LL_DEBUG, s->stream);
 #ifndef DOWNSCALE_NO_NPP
         if (nppGetStream() != s->stream) {
                 nppSetStream(s->stream);
@@ -87,7 +87,7 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                              in->width, in->height, downscale_factor,
                              s->stream);
 #endif
-        TIMER_STOP(downscale);
+        GPU_TIMER_STOP(downscale);
         return downscaled;
 }
 
