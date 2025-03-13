@@ -301,14 +301,14 @@ void nvj2k_destroy(struct nvj2k_state *s) {
 static void print_j2k_info(const nvjpeg2kImageInfo_t *image_info,
                            const nvjpeg2kImageComponentInfo_t *image_comp_info)
 {
-        printf("Image size: %" PRIu32 "x%" PRIu32 ", tile size: %" PRIu32 "x%" PRIu32
+        INFO_MSG("Image size: %" PRIu32 "x%" PRIu32 ", tile size: %" PRIu32 "x%" PRIu32
                ", num tiles: %" PRIu32 "x%" PRIu32 ", components: %" PRIu32 "\n",
                image_info->image_width, image_info->image_height,
                image_info->tile_width, image_info->tile_height,
                image_info->num_tiles_x, image_info->num_tiles_y,
                image_info->num_components);
         for (unsigned i = 0; i < image_info->num_components; ++i) {
-                printf("\tcomponent #%u size %" PRIu32 "x%" PRIu32
+                INFO_MSG("\tcomponent #%u size %" PRIu32 "x%" PRIu32
                        ", precision: %" PRIu8 ", sgn: %" PRIu8 "\n",
                        i, image_comp_info[i].component_width,
                        image_comp_info[i].component_height,

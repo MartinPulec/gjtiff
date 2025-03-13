@@ -136,7 +136,7 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
 
 static dec_image decode(struct state_gjtiff *s, const char *fname)
 {
-        printf("\n%s"
+        INFO_MSG("\n%s"
                "==================================================================\n"
                "Processing input file %s...\n"
                "==================================================================%s\n",
@@ -207,7 +207,7 @@ static void encode(struct state_gjtiff *s, int req_quality, struct dec_image unc
                 delete[] data;
         }
         char buf[UINT64_ASCII_LEN + 1];
-        printf("%s (%dx%d; %s B) encoded %ssuccessfully\n", ofname,
+        INFO_MSG("%s (%dx%d; %s B) encoded %ssuccessfully\n", ofname,
                uncomp.width, uncomp.height,
                format_number_with_delim(len, buf, sizeof buf),
                (len == 0 ? "un" : ""));
@@ -234,28 +234,28 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpe
 
 static void show_help(const char *progname)
 {
-        printf("%s [options] img1.tif [img2.tif...]\n", progname);
-        printf("%s [options] -\n\n", progname);
-        printf("Options:\n");
-        printf("\t-d       - list of CUDA devices\n");
-        printf("\t-h       - show help\n");
-        printf("\t-l       - use libtiff if nvCOMP not available\n");
-        printf("\t-n       - do not adjust to natural rotation/prooprotion\n");
-        printf("\t-r       - write raw PNM instead of JPEG\n");
-        printf("\t-o <dir> - output JPEG directory\n");
-        printf("\t-q <q>   - JPEG quality\n");
-        printf("\t-s <d>   - downscale factor\n");
-        printf("\t-v[v]    - be verbose (2x for more messages)\n");
-        printf("\n");
-        printf("Output filename will be \"basename ${name%%.*}.jpg\"\n");
-        printf("Output directory must exist, implicitly \".\"\n\n");
-        printf("If the '-' is given as an argument, newline-separated list of "
+        INFO_MSG("%s [options] img1.tif [img2.tif...]\n", progname);
+        INFO_MSG("%s [options] -\n\n", progname);
+        INFO_MSG("Options:\n");
+        INFO_MSG("\t-d       - list of CUDA devices\n");
+        INFO_MSG("\t-h       - show help\n");
+        INFO_MSG("\t-l       - use libtiff if nvCOMP not available\n");
+        INFO_MSG("\t-n       - do not adjust to natural rotation/prooprotion\n");
+        INFO_MSG("\t-r       - write raw PNM instead of JPEG\n");
+        INFO_MSG("\t-o <dir> - output JPEG directory\n");
+        INFO_MSG("\t-q <q>   - JPEG quality\n");
+        INFO_MSG("\t-s <d>   - downscale factor\n");
+        INFO_MSG("\t-v[v]    - be verbose (2x for more messages)\n");
+        INFO_MSG("\n");
+        INFO_MSG("Output filename will be \"basename ${name%%.*}.jpg\"\n");
+        INFO_MSG("Output directory must exist, implicitly \".\"\n\n");
+        INFO_MSG("If the '-' is given as an argument, newline-separated list of "
                "file "
                "names\nis read from stdin.\n");
-        printf("\n");
-        printf("Input filename (both cmdline argument or from pipe) can be suffixed with opts,\n");
-        printf("syntax:\n");
-        printf("\tfname[:q=<JPEG_q>][:s=<downscale_factor>]\n");
+        INFO_MSG("\n");
+        INFO_MSG("Input filename (both cmdline argument or from pipe) can be suffixed with opts,\n");
+        INFO_MSG("syntax:\n");
+        INFO_MSG("\tfname[:q=<JPEG_q>][:s=<downscale_factor>]\n");
 }
 
 struct options {

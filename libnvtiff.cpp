@@ -194,16 +194,16 @@ static void print_tiff_info(nvtiffStream_t tiff_stream, uint32_t image_id)
             NVTIFF_STATUS_SUCCESS) {
                 return;
         }
-        printf("TIFF structure:\n");
-        printf("\ttype: %s\n",
+        DEBUG_MSG("TIFF structure:\n");
+        DEBUG_MSG("\ttype: %s\n",
                geometry.type == NVTIFF_IMAGE_STRIPED ? "stripped" : "tiled");
-        printf("\tdepth: %" PRIu32 "\n", geometry.image_depth);
-        printf("\tstrile width: %" PRIu32 "\n", geometry.strile_width);
-        printf("\tstrile height: %" PRIu32 "\n", geometry.strile_height);
-        printf("\tstrile depth: %" PRIu32 "\n", geometry.strile_depth);
-        printf("\tnum striles per plane: %" PRIu32 "\n",
+        DEBUG_MSG("\tdepth: %" PRIu32 "\n", geometry.image_depth);
+        DEBUG_MSG("\tstrile width: %" PRIu32 "\n", geometry.strile_width);
+        DEBUG_MSG("\tstrile height: %" PRIu32 "\n", geometry.strile_height);
+        DEBUG_MSG("\tstrile depth: %" PRIu32 "\n", geometry.strile_depth);
+        DEBUG_MSG("\tnum striles per plane: %" PRIu32 "\n",
                geometry.num_striles_per_plane);
-        printf("\tnum striles: %" PRIu32 "\n", geometry.num_striles);
+        DEBUG_MSG("\tnum striles: %" PRIu32 "\n", geometry.num_striles);
 }
 #endif
 

@@ -110,9 +110,9 @@ bool tiff_get_corners(double *points, size_t count, int img_width,
         }
 
         if (log_level >= LL_VERBOSE) {
-                printf("Got points:\n");
+                VERBOSE_MSG("Got points:\n");
                 for (unsigned i = 0; i < 4; ++i) {
-                        printf("\t%-11s: %f, %f\n", coord_pos_name[i],
+                        VERBOSE_MSG("\t%-11s: %f, %f\n", coord_pos_name[i],
                                coords[i].latitude,
                                coords[i].longitude);
                 }
@@ -172,41 +172,41 @@ struct tiff_info get_tiff_info(TIFF *tif)
 
 void print_tiff_info(struct tiff_info info)
 {
-        printf("width: %u\n", info.common.width);
-        printf("height: %u\n", info.common.height);
-        printf("components: %u\n", info.common.comp_count);
-        printf("bits_per_sample: %hu\n", info.bits_per_sample);
+        INFO_MSG("width: %u\n", info.common.width);
+        INFO_MSG("height: %u\n", info.common.height);
+        INFO_MSG("components: %u\n", info.common.comp_count);
+        INFO_MSG("bits_per_sample: %hu\n", info.bits_per_sample);
         for (unsigned i = 0; i < ARR_SIZE(sample_fmts); ++i) {
                 if (sample_fmts[i].val == info.sample_format) {
-                        printf("sample format: %s (%s)\n", sample_fmts[i].str,
+                        INFO_MSG("sample format: %s (%s)\n", sample_fmts[i].str,
                                sample_fmts[i].desc);
                         break;
                 }
         }
         for (unsigned i = 0; i < ARR_SIZE(compressions); ++i) {
                 if (compressions[i].val == info.compression) {
-                        printf("compression: %s (%s)\n", compressions[i].str,
+                        INFO_MSG("compression: %s (%s)\n", compressions[i].str,
                                compressions[i].desc);
                         break;
                 }
         }
-        printf("range: %hu-%hu\n", info.minval, info.maxval);
-        printf("tiled: %d\n", (int) info.tiled);
+        INFO_MSG("range: %hu-%hu\n", info.minval, info.maxval);
+        INFO_MSG("tiled: %d\n", (int) info.tiled);
         if (info.tiled) {
-                printf("tile width/height: %ux%u\n", info.tile_width,
+                INFO_MSG("tile width/height: %ux%u\n", info.tile_width,
                        info.tile_height);
         } else {
-                printf("rows per strip: %u\n", info.rows_per_strip);
+                INFO_MSG("rows per strip: %u\n", info.rows_per_strip);
         }
-        printf("strip or tile size: %ld B\n", info.strip_tile_size);
+        INFO_MSG("strip or tile size: %ld B\n", info.strip_tile_size);
         for (unsigned i = 0; i < ARR_SIZE(photometric); ++i) {
                 if (photometric[i].val == info.photometric) {
-                        printf("photometric: %s (%s)\n", photometric[i].str,
+                        INFO_MSG("photometric: %s (%s)\n", photometric[i].str,
                                photometric[i].desc);
                         break;
                 }
         }
-        printf("single plane: %d\n", (int) info.single_plane);
-        printf("big endian: %d\n", (int) info.big_endian);
+        INFO_MSG("single plane: %d\n", (int) info.single_plane);
+        INFO_MSG("big endian: %d\n", (int) info.big_endian);
 }
 

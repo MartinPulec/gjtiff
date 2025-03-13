@@ -75,6 +75,8 @@ extern cudaEvent_t cuda_event_stop;
 #define WARN_MSG(...) fprintf(stderr, __VA_ARGS__)
 #endif
 
+#define INFO_MSG(...)                                                          \
+        fprintf(stderr, __VA_ARGS__)
 #define VERBOSE_MSG(...)                                                       \
         if (log_level >= LL_VERBOSE)                                           \
         fprintf(stderr, __VA_ARGS__)

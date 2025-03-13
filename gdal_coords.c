@@ -16,7 +16,7 @@ static bool transform_and_print(double x, double y,
         }
         coord->latitude = x;
         coord->longitude = y;
-        printf("\t%-11s: %f, %f\n", label, coord->latitude, coord->longitude);
+        INFO_MSG("\t%-11s: %f, %f\n", label, coord->latitude, coord->longitude);
         return true;
 }
 
@@ -68,7 +68,7 @@ void set_coords_from_gdal(const char *fname, struct dec_image *image)
         }
 
         // Print coordinates with transformations
-        printf("Got points:\n");
+        INFO_MSG("Got points:\n");
         bool success = true;
         success = success && // Upper Left
                   transform_and_print(x_min, y_max, transform,

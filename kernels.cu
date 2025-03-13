@@ -136,10 +136,8 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
         typename t::nv_type max_res = 0;
         cudaMemcpyAsync(&max_res, state.stat[MAX].d_res, sizeof max_res, cudaMemcpyDeviceToHost, stream);
 
-        if (log_level >= LL_VERBOSE) {
-                printf("MEAN: %f STDDEV: %f MAX: %hu\n", stddev_mean_res[MEAN],
-                       stddev_mean_res[STDDEV], max_res);
-        }
+        VERBOSE_MSG("MEAN: %f STDDEV: %f MAX: %hu\n", stddev_mean_res[MEAN],
+                    stddev_mean_res[STDDEV], max_res);
 
         const size_t count = (size_t)in->width * in->height * in->comp_count;
         // scale to 0..\mu+2*\sigma
