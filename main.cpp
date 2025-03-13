@@ -64,6 +64,8 @@ struct state_gjtiff {
         struct downscaler_state *downscaler = NULL;
         // rotate
         struct rotate_state *rotate = NULL;
+
+        bool first = true;
 };
 
 state_gjtiff::state_gjtiff(bool u, bool norotate, bool write_uncompressed)
@@ -155,6 +157,9 @@ static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_im
         if (req_quality != -1) {
                 param.quality = req_quality;
         }
+        if (log_level == LL_QUIET) {
+                param.verbose = GPUJPEG_LL_QUIET;
+        }
         if (log_level >= LL_DEBUG) {
                 //  print out stats - only printed if verbose>=1 && perf_stats==1
                 param.verbose = GPUJPEG_LL_DEBUG;
@@ -207,6 +212,15 @@ static void encode(struct state_gjtiff *s, int req_quality, struct dec_image unc
                 delete[] data;
         }
         char buf[UINT64_ASCII_LEN + 1];
+        char fullpath[PATH_MAX + 1];
+        realpath(ofname, fullpath);
+        if (len != 0) {
+                if (!s->first) {
+                        printf(",\n");
+                }
+                s->first = false;
+                printf("\"%s\"", fullpath);
+        }
         INFO_MSG("%s (%dx%d; %s B) encoded %ssuccessfully\n", ofname,
                uncomp.width, uncomp.height,
                format_number_with_delim(len, buf, sizeof buf),
@@ -246,6 +260,7 @@ static void show_help(const char *progname)
         INFO_MSG("\t-q <q>   - JPEG quality\n");
         INFO_MSG("\t-s <d>   - downscale factor\n");
         INFO_MSG("\t-v[v]    - be verbose (2x for more messages)\n");
+        INFO_MSG("\t-Q[Q]    - be quiet (do not print anything except produced files), double to suppress also warnings\n");
         INFO_MSG("\n");
         INFO_MSG("Input must be in TIFF or JP2.\"\n");
         INFO_MSG("Output filename will be \"basename ${name%%.*}.jpg\"\n");
@@ -331,8 +346,11 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+dhnno:q:rs:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+Qdhnno:q:rs:v")) != -1) {
                 switch (opt) {
+                case 'Q':
+                        log_level -= 1;
+                        break;
                 case 'd':
                         return !!gpujpeg_print_devices_info();
                 case 'h':
@@ -380,6 +398,9 @@ int main(int argc, char **argv)
         const bool fname_from_stdin = strcmp(argv[0], "-") == 0;
         const size_t d_pref_len = strlen(ofdir);
         struct options opts = global_opts;
+
+        printf("[\n");
+
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf, &opts)) {
                 TIMER_START(transcode, LL_VERBOSE);
@@ -408,6 +429,8 @@ int main(int argc, char **argv)
         }
 
         cleanup_cuda_kernels();
+
+        printf("\n]\n");
 
         return ret;
 }

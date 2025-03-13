@@ -68,14 +68,18 @@ extern cudaEvent_t cuda_event_stop;
         fprintf(stderr, "%s" fmt "%s", fg_red __VA_OPT__(, ) __VA_ARGS__,      \
                 term_reset)
 #define WARN_MSG(fmt, ...)                                                     \
+        if (log_level != LL_REALLY_QUIET)                                      \
         fprintf(stderr, "%s" fmt "%s", fg_yellow __VA_OPT__(, ) __VA_ARGS__,   \
                 term_reset)
 #else
 #define ERROR_MSG(...) fprintf(stderr, __VA_ARGS__)
-#define WARN_MSG(...) fprintf(stderr, __VA_ARGS__)
+#define WARN_MSG(...)                                                          \
+        if (log_level != LL_REALLY_QUIET)                                      \
+        fprintf(stderr, __VA_ARGS__)
 #endif
 
 #define INFO_MSG(...)                                                          \
+        if (log_level >= LL_INFO)                                              \
         fprintf(stderr, __VA_ARGS__)
 #define VERBOSE_MSG(...)                                                       \
         if (log_level >= LL_VERBOSE)                                           \

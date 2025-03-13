@@ -8,6 +8,9 @@
 #endif
 
 enum {
+        LL_REALLY_QUIET = -2,
+        LL_QUIET = -1,
+        LL_INFO = 0,
         LL_VERBOSE = 1,
         LL_DEBUG = 2,
 };
