@@ -234,7 +234,7 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpe
 
 static void show_help(const char *progname)
 {
-        INFO_MSG("%s [options] img1.tif [img2.tif...]\n", progname);
+        INFO_MSG("%s [options] img [img2...]\n", progname);
         INFO_MSG("%s [options] -\n\n", progname);
         INFO_MSG("Options:\n");
         INFO_MSG("\t-d       - list of CUDA devices\n");
@@ -247,6 +247,7 @@ static void show_help(const char *progname)
         INFO_MSG("\t-s <d>   - downscale factor\n");
         INFO_MSG("\t-v[v]    - be verbose (2x for more messages)\n");
         INFO_MSG("\n");
+        INFO_MSG("Input must be in TIFF or JP2.\"\n");
         INFO_MSG("Output filename will be \"basename ${name%%.*}.jpg\"\n");
         INFO_MSG("Output directory must exist, implicitly \".\"\n\n");
         INFO_MSG("If the '-' is given as an argument, newline-separated list of "
