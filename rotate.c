@@ -213,6 +213,9 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
         };
 
         GPU_TIMER_START(rotate, LL_DEBUG, s->stream);
+        cudaMemsetAsync(ret.data, 0,
+                        (size_t)ret.width * ret.height * ret.comp_count,
+                        s->stream);
         const int interpolation = NPPI_INTER_LINEAR;
         if (in->comp_count == 1) {
                 CHECK_NPP(nppiWarpPerspectiveQuad_8u_C1R(
