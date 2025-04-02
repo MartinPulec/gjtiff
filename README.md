@@ -32,6 +32,21 @@ Runtime:
 - CUDA-capable device - GPUJPEG requires approximately 60 B of memory for a
 pixel, so 16K x 16K requires approximately 16 GB RAM.
 
+# Build and running
+
+Build using Docker:
+```
+docker build -f Dockerfile -t gjtiff_image .
+```
+
+Run:
+```
+docker run --gpus all --rm -v ~/data:/data gjtiff_image gjtiff -o /data /data/image.jp2
+```
+
+**Note:** _nvidia-container-toolkit_ should be installed (Debian) to
+pass-through the NVIDIA GPU.
+
 # Supported input formats
 
 - TIFF (decodable either by nvtiff or libtiff as a fallback)
