@@ -127,21 +127,23 @@ static double normalize_coords(struct coordinate coords[4]) {
 static void adjust_size(int *width, int *height, int comp_count) {
 
         enum {
-                GB1 = 1ULL * 1000 * 1000 * 1000,
-                THRESH_GB = 7ULL * GB1,
+                GB1 = 1LL * 1000 * 1000 * 1000,
                 GJ_PER_BYTE_REQ = 20,
         };
-        size_t gj_gram_needed = (size_t)(*width * *height * comp_count) *
-                                GJ_PER_BYTE_REQ;
-        if (gj_gram_needed < THRESH_GB) {
+        const ssize_t threshold = MIN((ssize_t)gpu_memory / 2,
+                                      (ssize_t)gpu_memory - 2 * GB1);
+        assert(threshold >= (ssize_t) 2 * GB1);
+        ssize_t gj_gram_needed = (ssize_t)*width * *height * comp_count *
+                                 GJ_PER_BYTE_REQ;
+        if (gj_gram_needed < threshold) {
                 return;
         }
         WARN_MSG(
             "[rotate] Encoding of %dx%d image would require %.2f GB GRAM (>=%g "
             "GB), downsizing ",
             *width, *height, (double)gj_gram_needed / GB1,
-            (double)THRESH_GB / GB1);
-        while (gj_gram_needed > THRESH_GB) {
+            (double)threshold / GB1);
+        while (gj_gram_needed > threshold) {
                 *width /= 2;
                 *height /= 2;
                 gj_gram_needed /= 4;

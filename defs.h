@@ -15,6 +15,7 @@ enum {
         LL_DEBUG = 2,
 };
 extern int log_level;
+extern size_t gpu_memory;
 
 enum rc {
         ERR_SOME_FILES_NOT_TRANSCODED = 2,

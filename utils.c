@@ -1,6 +1,7 @@
 #include "utils.h"
 
 #include <assert.h>
+#include <cuda_runtime.h>
 #include <stddef.h>
 
 #include "defs.h" // for ARR_SIZE
@@ -192,4 +193,18 @@ char *format_number_with_delim(uint64_t num, char *buf, size_t buflen)
         } while (num != 0);
 
         return ptr;
+}
+
+size_t get_cuda_dev_global_memory()
+{
+
+        int cur_device = 0;
+        cudaGetDevice(&cur_device);
+        struct cudaDeviceProp device_properties;
+        cudaGetDeviceProperties(&device_properties, cur_device);
+        CHECK_CUDA(cudaGetLastError());
+
+        VERBOSE_MSG("CUDA device %d total memory %zd GB\n", cur_device,
+                    device_properties.totalGlobalMem);
+        return device_properties.totalGlobalMem;
 }

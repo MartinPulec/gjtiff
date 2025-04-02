@@ -47,6 +47,7 @@
 #endif
 
 int log_level = 0;
+size_t gpu_memory = 0;
 cudaEvent_t cuda_event_start;
 cudaEvent_t cuda_event_stop;
 
@@ -390,6 +391,7 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
+        gpu_memory = get_cuda_dev_global_memory();
         struct state_gjtiff state(use_libtiff, norotate, write_uncompressed);
         int ret = EXIT_SUCCESS;
 

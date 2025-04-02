@@ -104,7 +104,9 @@ enum {
         UINT64_ASCII_LEN = 20,
 };
 EXTERN_C char* format_number_with_delim(uint64_t num, char* buf, size_t buflen);
+EXTERN_C size_t get_cuda_dev_global_memory();
 
 extern const char *const coord_pos_name[4];
+
 
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015
