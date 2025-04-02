@@ -5,6 +5,7 @@ COMMON = $(shell pkg-config --cflags gdal) -g -Wall -Wextra -fopenmp \
 CFLAGS += $(COMMON)
 CXXFLAGS += $(COMMON)
 CUDAFLAGS ?= 
+INSTALL = install
 LDFLAGS += -fopenmp -L$(NVCC_DIR)/../lib64
 LIBS += $(shell pkg-config --libs gdal)
 LIBS += -lcudart -lgpujpeg -lm \
@@ -39,3 +40,10 @@ gjtiff: \
 
 clean:
 	$(RM) *o gjtiff
+
+install: gjtiff
+	$(INSTALL) -m 755 gjtiff $(DESTDIR)/bin
+
+uninstall:
+	$(RM) $(DESTDIR)/bin/gjtiff
+
