@@ -186,7 +186,10 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
         NppiSize oSrcSize = {in->width, in->height};
 
         struct dec_image ret = *in;
-        if (dst_aspect >= 1) {
+        // keep one side as in original and upscale the other to meet dst
+        // projection dimension
+        const double src_aspect = (double)in->width / in->height;
+        if (dst_aspect >= src_aspect) {
                 ret.width = (int)(ret.height * dst_aspect);
         } else {
                 ret.height = (int)(ret.width / dst_aspect);
