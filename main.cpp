@@ -51,6 +51,8 @@ size_t gpu_memory = 0;
 cudaEvent_t cuda_event_start;
 cudaEvent_t cuda_event_stop;
 
+int interpolation = 0;
+
 struct state_gjtiff {
         state_gjtiff(bool use_libtiff, bool norotate, bool write_uncompressed);
         ~state_gjtiff();
@@ -262,6 +264,7 @@ static void show_help(const char *progname)
         INFO_MSG("\t-s <d>   - downscale factor\n");
         INFO_MSG("\t-v[v]    - be verbose (2x for more messages)\n");
         INFO_MSG("\t-Q[Q]    - be quiet (do not print anything except produced files), double to suppress also warnings\n");
+        INFO_MSG("\t-I <num> - downsampling interpolation idx (NppiInterpolationMode; default 8 /SUPER/)\n");
         INFO_MSG("\n");
         INFO_MSG("Input must be in TIFF or JP2.\"\n");
         INFO_MSG("Output filename will be \"basename ${name%%.*}.jpg\"\n");
@@ -347,8 +350,11 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+Qdhnno:q:rs:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+I:Qdhnno:q:rs:v")) != -1) {
                 switch (opt) {
+                case 'I':
+                        interpolation = (int)strtol(optarg, nullptr, 0);
+                        break;
                 case 'Q':
                         log_level -= 1;
                         break;

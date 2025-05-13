@@ -11,6 +11,8 @@
 #include "kernels.h"
 #include "utils.h"
 
+extern int interpolation; // defined in main.c
+
 struct downscaler_state {
         cudaStream_t stream;
 
@@ -60,7 +62,9 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         size_t dstPitch = (size_t)downscaled.width * in->comp_count;
 
         assert(in->comp_count == 1 || in->comp_count == 3);
-        const NppiInterpolationMode imode = NPPI_INTER_SUPER;
+        const NppiInterpolationMode imode = interpolation > 0
+                                                ? interpolation
+                                                : NPPI_INTER_SUPER;
         if (in->comp_count == 1) {
 #if NPP_VERSION_MAJOR <= 8
                 CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, srcPitch, srcROI,
