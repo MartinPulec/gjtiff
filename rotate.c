@@ -17,6 +17,8 @@
 #include "nppi_geometry_transforms.h"
 #include "utils.h"
 
+extern long long mem_limit; // defined in main.c
+
 struct rotate_state {
         cudaStream_t stream;
 
@@ -130,9 +132,12 @@ static void adjust_size(int *width, int *height, int comp_count) {
                 GB1 = 1LL * 1000 * 1000 * 1000,
                 GJ_PER_BYTE_REQ = 20,
         };
-        const ssize_t threshold = MIN((ssize_t)gpu_memory / 2,
-                                      (ssize_t)gpu_memory - 2 * GB1);
-        assert(threshold >= (ssize_t) 2 * GB1);
+        ssize_t threshold = mem_limit;
+        if (threshold == 0) {
+                threshold = MIN((ssize_t)gpu_memory / 2,
+                                (ssize_t)gpu_memory - 2 * GB1);
+                assert(threshold >= (ssize_t)2 * GB1);
+        }
         ssize_t gj_gram_needed = (ssize_t)*width * *height * comp_count *
                                  GJ_PER_BYTE_REQ;
         if (gj_gram_needed < threshold) {
