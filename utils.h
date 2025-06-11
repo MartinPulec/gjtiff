@@ -13,6 +13,11 @@
 
 #include <cuda_runtime.h>
 #include <nppdefs.h>      // for NppStatus
+#include <npp.h> // NPP_VERSION_MINOR
+
+#if NPP_VERSION_MAJOR >= 12 && NPP_VERSION_MINOR >= 4
+#define NPP_NEW_API 1
+#endif
 
 #ifdef __cplusplus
 #define EXTERN_C extern "C"
