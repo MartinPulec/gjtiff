@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <cuda_runtime.h>
 #include <stddef.h>
+#include <stdlib.h>        // for abort
+#include <string.h>        // for memset
 
 #include "defs.h" // for ARR_SIZE
 
@@ -213,4 +215,34 @@ size_t get_cuda_dev_global_memory()
         VERBOSE_MSG("CUDA device %d total memory %zd GB\n", cur_device,
                     device_properties.totalGlobalMem);
         return device_properties.totalGlobalMem;
+}
+
+EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
+                               cudaStream_t stream)
+{
+#if NPP_NEW_API
+        memset(nppStreamCtx, 0, sizeof *nppStreamCtx);
+
+        nppStreamCtx->hStream = stream;
+        CHECK_CUDA(cudaGetDevice(&nppStreamCtx->nCudaDeviceId));
+        CHECK_CUDA(cudaDeviceGetAttribute(
+            &nppStreamCtx->nCudaDevAttrComputeCapabilityMajor,
+            cudaDevAttrComputeCapabilityMajor, nppStreamCtx->nCudaDeviceId));
+        CHECK_CUDA(cudaStreamGetFlags(nppStreamCtx->hStream,
+                                      &nppStreamCtx->nStreamFlags));
+
+        struct cudaDeviceProp oDeviceProperties;
+        cudaGetDeviceProperties(&oDeviceProperties,
+                                nppStreamCtx->nCudaDeviceId);
+        nppStreamCtx->nMultiProcessorCount =
+            oDeviceProperties.multiProcessorCount;
+        nppStreamCtx->nMaxThreadsPerMultiProcessor =
+            oDeviceProperties.maxThreadsPerMultiProcessor;
+        nppStreamCtx->nMaxThreadsPerBlock =
+            oDeviceProperties.maxThreadsPerBlock;
+        nppStreamCtx->nSharedMemPerBlock = oDeviceProperties.sharedMemPerBlock;
+#else
+        (void) nppStreamCtx, (void) stream;
+        abort();
+#endif
 }

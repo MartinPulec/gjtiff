@@ -17,10 +17,19 @@
 #include "nppi_geometry_transforms.h"
 #include "utils.h"
 
+#ifdef NPP_NEW_API
+#define CONTEXT , s->nppStreamCtx
+#else
+#define CONTEXT
+#endif
+
 extern long long mem_limit; // defined in main.c
 
 struct rotate_state {
         cudaStream_t stream;
+#ifdef NPP_NEW_API
+        NppStreamContext nppStreamCtx;
+#endif
 
         uint8_t *output;
         size_t output_allocated;
@@ -31,6 +40,10 @@ struct rotate_state *rotate_init(cudaStream_t stream)
         struct rotate_state *s = calloc(1, sizeof *s);
         assert(s != NULL);
         s->stream = stream;
+
+#ifdef NPP_NEW_API
+        init_npp_context(&s->nppStreamCtx, stream);
+#endif
 
         return s;
 }
@@ -167,9 +180,11 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
                 return *in;
         }
 
+#ifndef NPP_NEW_API
         if (nppGetStream() != s->stream) {
                 nppSetStream(s->stream);
         }
+#endif
 
         double aSrcQuad[4][2] = {
             {0.0, 0.0},              // Top-left
@@ -228,15 +243,15 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
                         s->stream);
         const int interpolation = NPPI_INTER_LINEAR;
         if (in->comp_count == 1) {
-                CHECK_NPP(nppiWarpPerspectiveQuad_8u_C1R(
+                CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C1R)(
                     in->data, oSrcSize, in->width, oSrcROI, aSrcQuad, ret.data,
-                    ret.width, oDstROI, aDstQuad, interpolation));
+                    ret.width, oDstROI, aDstQuad, interpolation CONTEXT));
         } else {
                 assert(in->comp_count == 3);
-                CHECK_NPP(nppiWarpPerspectiveQuad_8u_C3R(
+                CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C3R)(
                     in->data, oSrcSize, 3 * in->width, oSrcROI, aSrcQuad,
                     ret.data, 3 * ret.width, oDstROI, aDstQuad,
-                    interpolation));
+                    interpolation CONTEXT));
         }
         GPU_TIMER_STOP(rotate);
 

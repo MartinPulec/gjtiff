@@ -47,9 +47,11 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         downscaled.data = s->output;
         GPU_TIMER_START(downscale, LL_DEBUG, s->stream);
 #ifndef DOWNSCALE_NO_NPP
+#ifndef NPP_NEW_API
         if (nppGetStream() != s->stream) {
                 nppSetStream(s->stream);
         }
+#endif
         NppiSize srcSize = {in->width, in->height};
         NppiRect srcROI = {0, 0, in->width, in->height};
 #if NPP_VERSION_MAJOR <= 8

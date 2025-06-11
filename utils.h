@@ -17,6 +17,9 @@
 
 #if NPP_VERSION_MAJOR >= 12 && NPP_VERSION_MINOR >= 4
 #define NPP_NEW_API 1
+#define NPP_CONTEXTIZE(fn_name) fn_name##_Ctx
+#else
+#define NPP_CONTEXTIZE(...) __VA_ARGS__
 #endif
 
 #ifdef __cplusplus
@@ -113,5 +116,7 @@ EXTERN_C size_t get_cuda_dev_global_memory();
 
 extern const char *const coord_pos_name[4];
 
+EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
+                               cudaStream_t stream);
 
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015

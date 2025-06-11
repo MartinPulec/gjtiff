@@ -79,12 +79,13 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
                 SIGMA_COUNT = 2, // nultiple of sigma to be added to the mean to
                                  // obtain scale
         };
+#ifdef NPP_NEW_API
+        NppStreamContext nppStreamCtx{};
+#else
         if (nppGetStream() != stream) {
                 nppSetStream(stream);
         }
-        // NppStreamContext NppStreamContext;
-        // rc = nppGetStreamContext(&NppStreamContext);
-        // assert(rc == 0);
+#endif
         const int bps = sizeof(typename t::nv_type);
         NppiSize ROI;
         ROI.width = in->width;
