@@ -15,7 +15,7 @@
 #include <nppdefs.h>      // for NppStatus
 #include <npp.h> // NPP_VERSION_MINOR
 
-#if NPP_VERSION_MAJOR >= 12 && NPP_VERSION_MINOR >= 4
+#if NPP_VERSION_MAJOR >= 12
 #define NPP_NEW_API 1
 #define NPP_CONTEXTIZE(fn_name) fn_name##_Ctx
 #else
