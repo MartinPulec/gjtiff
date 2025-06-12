@@ -11,10 +11,19 @@
 #include "kernels.h"
 #include "utils.h"
 
+#ifdef NPP_NEW_API
+#define CONTEXT , s->nppStreamCtx
+#else
+#define CONTEXT
+#endif
+
 extern int interpolation; // defined in main.c
 
 struct downscaler_state {
         cudaStream_t stream;
+#ifdef NPP_NEW_API
+        NppStreamContext nppStreamCtx;
+#endif
 
         uint8_t *output;
         size_t output_allocated;
@@ -25,6 +34,9 @@ struct downscaler_state *downscaler_init(cudaStream_t stream)
         struct downscaler_state *s = calloc(1, sizeof *s);
         assert(s != NULL);
         s->stream = stream;
+#ifdef NPP_NEW_API
+        init_npp_context(&s->nppStreamCtx, stream);
+#endif
 
         return s;
 }
@@ -73,9 +85,9 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                                             downscaled.data, dstPitch, dstSize,
                                             factor, factor, imode));
 #else
-                CHECK_NPP(nppiResize_8u_C1R(in->data, srcPitch, srcSize, srcROI,
+                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C1R)(in->data, srcPitch, srcSize, srcROI,
                                             downscaled.data, dstPitch, dstSize,
-                                            dstROI, imode));
+                                            dstROI, imode CONTEXT));
 #endif
         } else {
 #if NPP_VERSION_MAJOR <= 8
@@ -83,9 +95,9 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                                             downscaled.data, dstPitch, dstSize,
                                             factor, factor, imode));
 #else
-                CHECK_NPP(nppiResize_8u_C3R(in->data, srcPitch, srcSize, srcROI,
+                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C3R)(in->data, srcPitch, srcSize, srcROI,
                                             downscaled.data, dstPitch, dstSize,
-                                            dstROI, imode));
+                                            dstROI, imode  CONTEXT));
 #endif
         }
 #else
