@@ -201,8 +201,24 @@ static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_im
         return len;
 }
 
-static void encode(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
-                        const char *ofname)
+static void print_bbox(struct coordinate coords[4]) {
+        double lon_min = 0;
+        double lon_max = 0;
+        double lat_min = 0;
+        double lat_max = 0;
+        get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
+        if (lon_min < 0 && lon_max >= 0) { // handle antimeridian
+                double tmp = lon_min;
+                lon_min = lon_max;
+                lon_max = tmp;
+        }
+        printf("\t\t\"bbox\": [%f, %f, %f, %f]\n", lon_min, lat_min, lon_max,
+               lat_max);
+}
+
+static void encode(struct state_gjtiff *s, int req_quality,
+                   struct dec_image uncomp, const char *ifname,
+                   const char *ofname)
 {
         size_t len = 0;
         if (s->gj_enc != nullptr) {
@@ -222,8 +238,12 @@ static void encode(struct state_gjtiff *s, int req_quality, struct dec_image unc
                 if (!s->first) {
                         printf(",\n");
                 }
+                printf("\t{\n");
                 s->first = false;
-                printf("\"%s\"", fullpath);
+                printf("\t\t\"infile\": \"%s\",\n", ifname);
+                printf("\t\t\"outfile\": \"%s\",\n", fullpath);
+                print_bbox(uncomp.coords);
+                printf("\t}");
         }
         INFO_MSG("%s (%dx%d; %s B) encoded %ssuccessfully\n", ofname,
                uncomp.width, uncomp.height,
@@ -437,7 +457,7 @@ int main(int argc, char **argv)
                                         opts.downscale_factor, &dec);
                 }
                 dec = rotate(state.rotate, &dec);
-                encode(&state, opts.req_gpujpeg_quality, dec, ofdir);
+                encode(&state, opts.req_gpujpeg_quality, dec, ifname, ofdir);
                 TIMER_STOP(transcode);
         }
 

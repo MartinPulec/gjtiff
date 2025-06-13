@@ -57,16 +57,40 @@ void rotate_destroy(struct rotate_state *s)
         free(s);
 }
 
+void get_lat_lon_min_max(struct coordinate coords[4], double *lat_min,
+                         double *lat_max, double *lon_min, double *lon_max)
+{
+        *lat_min = 1e6;
+        *lat_max = -1e6;
+        *lon_min = 1e6;
+        *lon_max = -1e6;
+
+        for (unsigned i = 0; i < 4; ++i) {
+                if (coords[i].latitude < *lat_min) {
+                        *lat_min = coords[i].latitude;
+                }
+                if (coords[i].latitude > *lat_max) {
+                        *lat_max = coords[i].latitude;
+                }
+                if (coords[i].longitude < *lon_min) {
+                        *lon_min = coords[i].longitude;
+                }
+                if (coords[i].longitude > *lon_max) {
+                        *lon_max = coords[i].longitude;
+                }
+        }
+}
+
 /**
  * normalize the coordinates to 0..1 and
  * @return asoect ratio
  */
 static double normalize_coords_intrn(struct coordinate coords[4], bool second_run)
 {
-        double lat_min = 1e6;
-        double lat_max = -1e6;
-        double lon_min = 1e6;
-        double lon_max = -1e6;
+        double lat_min = 0;
+        double lat_max = 0;
+        double lon_min = 0;
+        double lon_max = 0;
 
         enum {
                 LAT_OFF = 360, // val that added is inert to cos()
@@ -82,20 +106,7 @@ static double normalize_coords_intrn(struct coordinate coords[4], bool second_ru
                         coords[i].longitude += LON_OFF;
                 }
         }
-        for (unsigned i = 0; i < 4; ++i) {
-                if (coords[i].latitude < lat_min) {
-                        lat_min = coords[i].latitude;
-                }
-                if (coords[i].latitude > lat_max) {
-                        lat_max = coords[i].latitude;
-                }
-                if (coords[i].longitude < lon_min) {
-                        lon_min = coords[i].longitude;
-                }
-                if (coords[i].longitude > lon_max) {
-                        lon_max = coords[i].longitude;
-                }
-        }
+        get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
 
         // handle longitude 179->-179 transition (eastern to western
         // hemishpere); zero is now shifted to 180

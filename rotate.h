@@ -15,6 +15,11 @@ struct rotate_state *rotate_init(cudaStream_t stream);
 struct dec_image rotate(struct rotate_state *state, const struct dec_image *in);
 void rotate_destroy(struct rotate_state *s);
 
+
+// util for print_bbox
+void get_lat_lon_min_max(struct coordinate coords[4], double *lat_min,
+                         double *lat_max, double *lon_min, double *lon_max);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
