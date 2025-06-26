@@ -215,10 +215,10 @@ size_t get_cuda_dev_global_memory()
         return device_properties.totalGlobalMem;
 }
 
+#if NPP_NEW_API
 EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
                                cudaStream_t stream)
 {
-#if NPP_NEW_API
         memset(nppStreamCtx, 0, sizeof *nppStreamCtx);
 
         nppStreamCtx->hStream = stream;
@@ -239,8 +239,5 @@ EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
         nppStreamCtx->nMaxThreadsPerBlock =
             oDeviceProperties.maxThreadsPerBlock;
         nppStreamCtx->nSharedMemPerBlock = oDeviceProperties.sharedMemPerBlock;
-#else
-        (void) nppStreamCtx, (void) stream;
-        abort();
-#endif
 }
+#endif
