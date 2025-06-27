@@ -12,37 +12,38 @@ LIBS += -lcudart -lgpujpeg -lm \
 	-lnppc -lnppig -lnpps -lnppist \
 	-lnvjpeg2k -lnvtiff -ltiff
 	# -lgrok
+BUILD_DIR ?= .
 
-all: gjtiff
+all: $(BUILD_DIR)/gjtiff
 
-%.o: %.cpp $(wildcard *.h *.hpp)
+$(BUILD_DIR)/%.o: %.cpp $(wildcard *.h *.hpp)
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
-%.o: %.c $(wildcard *.h)
+$(BUILD_DIR)/%.o: %.c $(wildcard *.h)
 	$(CC) $(CFLAGS) $< -c -o $@
 
-%.o: %.cu %.h $(wildcard *.h *.hpp)
+$(BUILD_DIR)/%.o: %.cu %.h $(wildcard *.h *.hpp)
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
-gjtiff: \
-	downscaler.o \
-	gdal_coords.o \
-	kernels.o \
-	libnvj2k.o \
-	libnvtiff.o \
-	libtiff.o \
-	libtiffinfo.o \
-	main.o \
-	pam.o \
-	rotate.o \
-	utils.o
+$(BUILD_DIR)/gjtiff: \
+	$(BUILD_DIR)/downscaler.o \
+	$(BUILD_DIR)/gdal_coords.o \
+	$(BUILD_DIR)/kernels.o \
+	$(BUILD_DIR)/libnvj2k.o \
+	$(BUILD_DIR)/libnvtiff.o \
+	$(BUILD_DIR)/libtiff.o \
+	$(BUILD_DIR)/libtiffinfo.o \
+	$(BUILD_DIR)/main.o \
+	$(BUILD_DIR)/pam.o \
+	$(BUILD_DIR)/rotate.o \
+	$(BUILD_DIR)/utils.o
 	$(CXX) $(LDFLAGS) $^ $(LIBS) -o $@
 
 clean:
-	$(RM) *o gjtiff
+	$(RM) $(BUILD_DIR)/*o $(BUILD_DIR)/gjtiff
 
-install: gjtiff
-	$(INSTALL) -m 755 gjtiff $(DESTDIR)/bin
+install: $(BUILD_DIR)/gjtiff
+	$(INSTALL) -m 755 $(BUILD_DIR)/gjtiff $(DESTDIR)/bin
 
 uninstall:
 	$(RM) $(DESTDIR)/bin/gjtiff
