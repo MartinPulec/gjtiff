@@ -13,6 +13,10 @@ LIBS += -lcudart -lgpujpeg -lm \
 	-lnvjpeg2k -lnvtiff -ltiff
 	# -lgrok
 BUILD_DIR ?= .
+# build for all supported CUDA architectures
+CUDAARCHS != for n in $$(nvcc --list-gpu-arch); \
+	do echo "$$n" | sed -e 's/.*_\([0-9]*\).*/\1/' \
+	-e 's/.*/-gencode arch=compute_&,code=sm_&/'; done | tr '\n' ' '
 
 all: $(BUILD_DIR)/gjtiff
 
@@ -23,7 +27,7 @@ $(BUILD_DIR)/%.o: %.c $(wildcard *.h)
 	$(CC) $(CFLAGS) $< -c -o $@
 
 $(BUILD_DIR)/%.o: %.cu %.h $(wildcard *.h *.hpp)
-	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
+	$(NVCC) $(CUDAFLAGS) $(CUDAARCHS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 $(BUILD_DIR)/gjtiff: \
 	$(BUILD_DIR)/downscaler.o \
