@@ -40,6 +40,11 @@ struct dec_image {
         bool coords_set;
 };
 
+struct owned_image {
+        struct dec_image img;
+        void (*free)(struct owned_image *img);
+};
+
 #define DEC_IMG_ERR(rc) {rc, 0, 0, 0, 0, {0.0, 0.0}, false}
 
 #define CHECK_CUDA(call)                                                       \

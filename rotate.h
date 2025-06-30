@@ -12,7 +12,7 @@ extern "C" {
 struct rotate_state;
 
 struct rotate_state *rotate_init(cudaStream_t stream);
-struct dec_image rotate(struct rotate_state *state, const struct dec_image *in);
+struct owned_image *rotate(struct rotate_state *state, const struct dec_image *in);
 void rotate_destroy(struct rotate_state *s);
 
 

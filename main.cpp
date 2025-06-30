@@ -456,8 +456,9 @@ int main(int argc, char **argv)
                         dec = downscale(state.downscaler,
                                         opts.downscale_factor, &dec);
                 }
-                dec = rotate(state.rotate, &dec);
-                encode(&state, opts.req_gpujpeg_quality, dec, ifname, ofdir);
+                struct owned_image *rotated = rotate(state.rotate, &dec);
+                encode(&state, opts.req_gpujpeg_quality, rotated->img, ifname, ofdir);
+                rotated->free(rotated);
                 TIMER_STOP(transcode);
         }
 
