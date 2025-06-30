@@ -30,9 +30,6 @@ struct rotate_state {
 #ifdef NPP_NEW_API
         NppStreamContext nppStreamCtx;
 #endif
-
-        uint8_t *output;
-        size_t output_allocated;
 };
 
 struct rotate_state *rotate_init(cudaStream_t stream)
@@ -53,7 +50,6 @@ void rotate_destroy(struct rotate_state *s)
         if (s == NULL) {
                 return;
         }
-        CHECK_CUDA(cudaFreeAsync(s->output, s->stream));
         free(s);
 }
 
@@ -181,14 +177,31 @@ static void adjust_size(int *width, int *height, int comp_count) {
                  *width, *height);
 }
 
-struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
+static void release_owned_image(struct owned_image *img) {
+        CHECK_CUDA(cudaFree(img->img.data));
+        free(img);
+}
+
+static struct owned_image *take_ownership(const struct dec_image *in)
+{
+        struct owned_image *ret = malloc(sizeof *ret);
+        memcpy(&ret->img, in, sizeof *in);
+        const size_t size = (size_t) in->width * in->height * in->comp_count;
+        CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
+        CHECK_CUDA(
+            cudaMemcpy(ret->img.data, in->data, size, cudaMemcpyDefault));
+        ret->free = release_owned_image;
+        return ret;
+}
+
+struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
 {
         if (s == NULL) {
-                return *in;
+                return take_ownership(in);
         }
         if (!in->coords_set) {
                 WARN_MSG("Coordinates not set, not normalizing image...\n");
-                return *in;
+                return take_ownership(in);
         }
 
 #ifndef NPP_NEW_API
@@ -209,59 +222,57 @@ struct dec_image rotate(struct rotate_state *s, const struct dec_image *in)
         const double dst_aspect = normalize_coords(coords);
         if (dst_aspect == -1) {
                 DEBUG_MSG("Near North/South pole - not rotating\n");
-                return *in;
+                return take_ownership(in);
         }
         assert(dst_aspect > 0);
 
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};
 
-        struct dec_image ret = *in;
+        struct owned_image *ret = malloc(sizeof *ret);
+        memcpy(&ret->img, in, sizeof *in);
+        ret->free = release_owned_image;
         // keep one side as in original and upscale the other to meet dst
         // projection dimension
         const double src_aspect = (double)in->width / in->height;
         if (dst_aspect >= src_aspect) {
-                ret.width = (int)(ret.height * dst_aspect);
+                ret->img.width = (int)(ret->img.height * dst_aspect);
         } else {
-                ret.height = (int)(ret.width / dst_aspect);
+                ret->img.height = (int)(ret->img.width / dst_aspect);
         }
-        adjust_size(&ret.width, &ret.height, in->comp_count);
+        adjust_size(&ret->img.width, &ret->img.height, in->comp_count);
 
-        const size_t req_size = (size_t)ret.width * ret.height * ret.comp_count;
-        if (req_size >= s->output_allocated) {
-                CHECK_CUDA(cudaFree(s->output));
-                s->output = NULL;
-                CHECK_CUDA(cudaMalloc((void **)&s->output, req_size));
-                s->output_allocated = req_size;
-        }
-        ret.data = s->output;
+        const size_t req_size = (size_t)ret->img.width * ret->img.height *
+                                ret->img.comp_count;
+        CHECK_CUDA(cudaMalloc((void **)&ret->img.data, req_size));
 
-        NppiRect oDstROI = {0, 0, ret.width, ret.height};
+        NppiRect oDstROI = {0, 0, ret->img.width, ret->img.height};
         double aDstQuad[4][2] = {
-            {coords[0].longitude * ret.width,
-             coords[0].latitude * ret.height}, // Top-left
-            {coords[1].longitude * ret.width,
-             coords[1].latitude * ret.height}, // Top-right
-            {coords[2].longitude * ret.width,
-             coords[2].latitude * ret.height}, // Bottom-right
-            {coords[3].longitude * ret.width,
-             coords[3].latitude * ret.height}, // Bottom-left
+            {coords[0].longitude * ret->img.width,
+             coords[0].latitude * ret->img.height}, // Top-left
+            {coords[1].longitude * ret->img.width,
+             coords[1].latitude * ret->img.height}, // Top-right
+            {coords[2].longitude * ret->img.width,
+             coords[2].latitude * ret->img.height}, // Bottom-right
+            {coords[3].longitude * ret->img.width,
+             coords[3].latitude * ret->img.height}, // Bottom-left
         };
 
         GPU_TIMER_START(rotate, LL_DEBUG, s->stream);
-        CHECK_CUDA(cudaMemsetAsync(
-            ret.data, 0, (size_t)ret.width * ret.height * ret.comp_count,
-            s->stream));
+        CHECK_CUDA(cudaMemsetAsync(ret->img.data, 0,
+                                   (size_t)ret->img.width * ret->img.height *
+                                       ret->img.comp_count,
+                                   s->stream));
         const int interpolation = NPPI_INTER_LINEAR;
         if (in->comp_count == 1) {
                 CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C1R)(
-                    in->data, oSrcSize, in->width, oSrcROI, aSrcQuad, ret.data,
-                    ret.width, oDstROI, aDstQuad, interpolation CONTEXT));
+                    in->data, oSrcSize, in->width, oSrcROI, aSrcQuad, ret->img.data,
+                    ret->img.width, oDstROI, aDstQuad, interpolation CONTEXT));
         } else {
                 assert(in->comp_count == 3);
                 CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C3R)(
                     in->data, oSrcSize, 3 * in->width, oSrcROI, aSrcQuad,
-                    ret.data, 3 * ret.width, oDstROI, aDstQuad,
+                    ret->img.data, 3 * ret->img.width, oDstROI, aDstQuad,
                     interpolation CONTEXT));
         }
         GPU_TIMER_STOP(rotate);

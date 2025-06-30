@@ -30,6 +30,7 @@
 #include <libgpujpeg/gpujpeg_encoder.h>
 #include <libgpujpeg/gpujpeg_type.h>
 #include <libgpujpeg/gpujpeg_version.h>
+#include <linux/limits.h>
 #include <unistd.h>
 
 #include "defs.h"
@@ -163,8 +164,16 @@ static dec_image decode(struct state_gjtiff *s, const char *fname)
         return decode_tiff(s, fname);
 }
 
+struct ifiles {
+        struct {
+                char ifname[PATH_MAX];
+                struct owned_image *img;
+        } ifiles[3];
+        int count;
+};
+
 static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
-                        const char *ofname)
+                        const char *ofname, bool planar)
 {
         gpujpeg_parameters param = gpujpeg_default_parameters();
         param.interleaved = 1;
@@ -189,8 +198,10 @@ static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_im
 #endif
         param_image.color_space =
             uncomp.comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
-        param_image.pixel_format =
-            uncomp.comp_count == 1 ? GPUJPEG_U8 : GPUJPEG_444_U8_P012;
+        param_image.pixel_format = uncomp.comp_count == 1
+                                       ? GPUJPEG_U8
+                                       : (planar ? GPUJPEG_444_U8_P0P1P2
+                                                 : GPUJPEG_444_U8_P012);
         gpujpeg_encoder_input encoder_input = gpujpeg_encoder_input_gpu_image(
             uncomp.data);
         uint8_t *out = nullptr;
@@ -226,19 +237,73 @@ static void print_bbox(struct coordinate coords[4]) {
                lat_max);
 }
 
+static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifiles,
+                        const char *ofname)
+{
+        assert(ifiles->count == 3);
+        if (s->gj_enc == nullptr) {
+                ERROR_MSG("Uncompressed write not supported for combination now!\n");
+                return 0;
+        }
+        const size_t plane_lenght = (size_t)ifiles->ifiles[0].img->img.width *
+                                    ifiles->ifiles[0].img->img.height;
+        uint8_t *d_data = nullptr;
+        CHECK_CUDA(cudaMallocAsync(
+            &d_data, (size_t)ifiles->count * plane_lenght, s->stream));
+        bool err = false;
+        for (int i = 0; i < ifiles->count; ++i) {
+                const struct dec_image *first = &ifiles->ifiles[0].img->img;
+                const struct dec_image *cur = &ifiles->ifiles[i].img->img;
+                // safety checks
+                err = true;
+                if (cur->width != first->width) {
+                        ERROR_MSG("Incompatible width %d vs %d!\n", cur->width,
+                                  first->width);
+                        break;
+                }
+                if (cur->height != first->height) {
+                        ERROR_MSG("Incompatible height %d vs %d!\n", cur->height,
+                                  first->height);
+                        break;
+                }
+                if (cur->comp_count != 1) {
+                        ERROR_MSG("Cannot combine image with %d channels!!\n",
+                                  cur->comp_count);
+                        break;
+                }
+                CHECK_CUDA(cudaMemcpyAsync(d_data + (i * plane_lenght), cur->data,
+                                plane_lenght, cudaMemcpyDefault, s->stream));
+                err = false;
+        }
+        size_t len = 0;
+        if (!err) {
+                struct dec_image uncomp = ifiles->ifiles[0].img->img;
+                uncomp.comp_count = ifiles->count;
+                uncomp.data = d_data;
+                len = encode_jpeg(s, s->opts.req_gpujpeg_quality, uncomp,
+                                  ofname, true);
+        }
+        CHECK_CUDA(cudaFree(d_data));
+        return len;
+}
+
 static void encode(struct state_gjtiff *s, int req_quality,
-                   struct dec_image uncomp, const char *ifname,
+                   const struct ifiles *ifiles, const char *ifname,
                    const char *ofname)
 {
+        struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
         size_t len = 0;
-        if (s->gj_enc != nullptr) {
-                len = encode_jpeg(s, req_quality, uncomp, ofname);
+        if (ifiles->count > 1) {
+                len = encode_multi_jpeg(s, ifiles, ofname);
+        } else if (s->gj_enc != nullptr) {
+                len = encode_jpeg(s, req_quality, *uncomp,
+                                  ofname,false);
         } else {
-                len = uncomp.width * uncomp.height * uncomp.comp_count;
+                len = (size_t) uncomp->width * uncomp->height * uncomp->comp_count;
                 unsigned char *data = new unsigned char[len];
-                CHECK_CUDA(cudaMemcpy(data, uncomp.data, len, cudaMemcpyDefault));
-                    pam_write(ofname, uncomp.width, uncomp.height,
-                              uncomp.comp_count, 255, data, true);
+                CHECK_CUDA(cudaMemcpy(data, uncomp->data, len, cudaMemcpyDefault));
+                    pam_write(ofname, uncomp->width, uncomp->height,
+                              uncomp->comp_count, 255, data, true);
                 delete[] data;
         }
         char buf[UINT64_ASCII_LEN + 1];
@@ -252,11 +317,11 @@ static void encode(struct state_gjtiff *s, int req_quality,
                 s->first = false;
                 printf("\t\t\"infile\": \"%s\",\n", ifname);
                 printf("\t\t\"outfile\": \"%s\",\n", fullpath);
-                print_bbox(uncomp.coords);
+                print_bbox(uncomp->coords);
                 printf("\t}");
         }
         INFO_MSG("%s (%dx%d; %s B) encoded %ssuccessfully\n", ofname,
-               uncomp.width, uncomp.height,
+               uncomp->width, uncomp->height,
                format_number_with_delim(len, buf, sizeof buf),
                (len == 0 ? "un" : ""));
 }
@@ -351,6 +416,30 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
         return parse_fname_opts(buf, opts);
 }
 
+static ifiles parse_ifiles(const char *ifnames)
+{
+        struct ifiles ret = {};
+        char copy[PATH_MAX];
+        snprintf(copy, sizeof copy, "%s", ifnames);
+        char *saveptr = nullptr;
+        char *item = nullptr;
+        char *tmp = copy;
+        while ((item = strtok_r(tmp, ",", &saveptr)) != nullptr) {
+                if (ret.count == ARR_SIZE(ret.ifiles)) {
+                        ERROR_MSG("More than 3 images not supported!\n");
+                        return {};
+                }
+                snprintf(ret.ifiles[ret.count++].ifname,
+                         sizeof ret.ifiles[0].ifname, "%s", item);
+                tmp = nullptr;
+        }
+        if (ret.count == 2) {
+                ERROR_MSG("Combination of 2 bands unsupported, must be 3!\n");
+                return {};
+        }
+        return ret;
+}
+
 const char *fg_bold = "";
 const char *fg_red = "";
 const char *fg_yellow = "";
@@ -437,28 +526,45 @@ int main(int argc, char **argv)
 
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf, &opts)) {
+                struct ifiles ifiles = parse_ifiles(ifname);
+                if (ifiles.count == 0) {
+                        ret = EXIT_FAILURE;
+                        continue;
+                }
                 TIMER_START(transcode, LL_VERBOSE);
-                set_ofname(ifname, ofdir + d_pref_len,
-                           sizeof ofdir - d_pref_len, state.gj_enc != nullptr);
-
-                struct dec_image dec = decode(&state, ifname);
-                if (dec.data == nullptr) {
-                        ret = ERR_SOME_FILES_NOT_TRANSCODED;
-                        continue;
+                bool err = false;
+                for (int i = 0; i < ifiles.count; ++i) {
+                        struct dec_image dec = decode(&state, ifiles.ifiles[i].ifname);
+                        if (dec.data == nullptr) {
+                                ret = ERR_SOME_FILES_NOT_TRANSCODED;
+                                err = true;
+                                break;
+                        }
+                        if (dec.comp_count != 1 && dec.comp_count != 3) {
+                                ERROR_MSG(
+                                    "Only 1 or 3 channel images are currently "
+                                    "supported! Skipping %s...\n",
+                                    ifname);
+                                ret = ERR_SOME_FILES_NOT_TRANSCODED;
+                                err = true;
+                                break;
+                        }
+                        if (opts.downscale_factor != 1) {
+                                dec = downscale(state.downscaler,
+                                                opts.downscale_factor, &dec);
+                        }
+                        ifiles.ifiles[i].img = rotate(state.rotate, &dec);
                 }
-                if (dec.comp_count != 1 && dec.comp_count != 3) {
-                        ERROR_MSG("Only 1 or 3 channel images are currently "
-                                  "supported! Skipping %s...\n",
-                                  ifname);
-                        ret = ERR_SOME_FILES_NOT_TRANSCODED;
-                        continue;
+                if (!err) {
+                        set_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,
+                                   sizeof ofdir - d_pref_len,
+                                   state.gj_enc != nullptr);
+                        encode(&state, opts.req_gpujpeg_quality, &ifiles,
+                               ifname, ofdir);
                 }
-                if (opts.downscale_factor != 1) {
-                        dec = downscale(state.downscaler,
-                                        opts.downscale_factor, &dec);
+                for (int i = 0; i < ifiles.count; ++i) {
+                        ifiles.ifiles[i].img->free(ifiles.ifiles[i].img);
                 }
-                dec = rotate(state.rotate, &dec);
-                encode(&state, opts.req_gpujpeg_quality, dec, ifname, ofdir);
                 TIMER_STOP(transcode);
         }
 
