@@ -248,8 +248,8 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                            image_comp_info[0].component_height;
         conv_size += conv_size / bps;
         if (s->converted_allocated < conv_size) {
-                cudaFree(s->converted);
-                cudaMalloc((void **)&s->converted, conv_size);
+                CHECK_CUDA(cudaFree(s->converted));
+                CHECK_CUDA(cudaMalloc((void **)&s->converted, conv_size * 2));
                 s->converted_allocated = conv_size;
         }
 
@@ -288,13 +288,13 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
 }
 
 void nvj2k_destroy(struct nvj2k_state *s) {
-        cudaFreeHost(s->bitstream_buffer);
-        cudaFree(s->decode_output);
-        cudaFree(s->converted);
-        nvjpeg2kDecodeParamsDestroy(s->decode_params);
-        nvjpeg2kStreamDestroy(s->nvjpeg2k_stream);
-        nvjpeg2kDecodeStateDestroy(s->decode_state);
-        nvjpeg2kDestroy(s->nvjpeg2k_handle);
+        CHECK_CUDA(cudaFreeHost(s->bitstream_buffer));
+        CHECK_CUDA(cudaFree(s->decode_output));
+        CHECK_CUDA(cudaFree(s->converted));
+        CHECK_NVJPEG2K(nvjpeg2kDecodeParamsDestroy(s->decode_params), );
+        CHECK_NVJPEG2K(nvjpeg2kStreamDestroy(s->nvjpeg2k_stream), );
+        CHECK_NVJPEG2K(nvjpeg2kDecodeStateDestroy(s->decode_state), );
+        CHECK_NVJPEG2K(nvjpeg2kDestroy(s->nvjpeg2k_handle), );
         free(s);
 }
 
