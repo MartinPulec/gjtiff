@@ -62,7 +62,8 @@ struct options {
         bool use_libtiff;
         bool norotate;
         bool write_uncompressed;
-#define OPTIONS_INIT {-1, 1, false, false, false}
+        bool debug;
+#define OPTIONS_INIT {-1, 1, false, false, false, false}
 };
 
 struct state_gjtiff {
@@ -123,6 +124,10 @@ state_gjtiff::~state_gjtiff()
         CHECK_CUDA(cudaEventDestroy(cuda_event_stop));
         // destroy last - components may hold the stream
         CHECK_CUDA(cudaStreamDestroy(stream));
+
+        if (opts.debug) {
+                cudaDeviceReset();
+        }
 }
 
 /**
@@ -390,6 +395,7 @@ static void show_help(const char *progname)
         INFO_MSG("%s [options] img [img2...]\n", progname);
         INFO_MSG("%s [options] -\n\n", progname);
         INFO_MSG("Options:\n");
+        INFO_MSG("\t-b       - debug (currently only emits cudaDeviceReset())\n");
         INFO_MSG("\t-d       - list of CUDA devices\n");
         INFO_MSG("\t-h       - show help\n");
         INFO_MSG("\t-l       - use libtiff if nvCOMP not available\n");
@@ -499,7 +505,7 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+I:M:Qdhnno:q:rs:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+I:M:Qbdhnno:q:rs:v")) != -1) {
                 switch (opt) {
                 case 'I':
                         interpolation = (int)strtol(optarg, nullptr, 0);
@@ -509,6 +515,9 @@ int main(int argc, char **argv)
                         break;
                 case 'Q':
                         log_level -= 1;
+                        break;
+                case 'b':
+                        global_opts.debug = true;
                         break;
                 case 'd':
                         return !!gpujpeg_print_devices_info();
