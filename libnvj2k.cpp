@@ -150,8 +150,9 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         fseek(f, 0, SEEK_END);
         const long filesize = ftell(f);
         if (s->bitstream_buffer_allocated < (size_t) filesize) {
-                cudaFreeHost(s->bitstream_buffer);
-                cudaMallocHost((void **)&s->bitstream_buffer, filesize);
+                CHECK_CUDA(cudaFreeHost(s->bitstream_buffer));
+                CHECK_CUDA(
+                    cudaMallocHost((void **)&s->bitstream_buffer, filesize));
                 s->bitstream_buffer_allocated = filesize;
         }
         fseek(f, 0, SEEK_SET);
@@ -224,10 +225,11 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 s->dec_out_height_allocated = MAX(
                     s->dec_out_height_allocated,
                     image_comp_info[0].component_height);
-                cudaFree(s->decode_output);
-                cudaMallocPitch((void **)&s->decode_output, &s->pitch_in_bytes,
-                                s->dec_out_linesize_allocated,
-                                s->dec_out_height_allocated);
+                CHECK_CUDA(cudaFree(s->decode_output));
+                CHECK_CUDA(cudaMallocPitch((void **)&s->decode_output,
+                                           &s->pitch_in_bytes,
+                                           s->dec_out_linesize_allocated,
+                                           s->dec_out_height_allocated));
         }
 
         output_image.pixel_data = (void **) &s->decode_output;

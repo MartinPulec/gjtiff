@@ -113,6 +113,6 @@ void downscaler_destroy(struct downscaler_state *s) {
         if (s == NULL) {
                 return;
         }
-        cudaFreeAsync(s->output, s->stream);
+        CHECK_CUDA(cudaFreeAsync(s->output, s->stream));
         free(s);
 }

@@ -146,14 +146,17 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
             &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[STDDEV]
             CONTEXT));
         Npp64f stddev_mean_res[MEAN_STDDEV_RES_COUNT];
-        cudaMemcpyAsync(stddev_mean_res, state.stat[MEAN_STDDEV].d_res,
-                        sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream);
+        CHECK_CUDA(cudaMemcpyAsync(
+            stddev_mean_res, state.stat[MEAN_STDDEV].d_res,
+            sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream));
 
         CHECK_NPP(t::max((typename t::nv_type *)in->data, ROI.width * bps, ROI,
                     (Npp8u *)state.stat[MAX].data,
                     (typename t::nv_type *)state.stat[MAX].d_res CONTEXT));
         typename t::nv_type max_res = 0;
-        cudaMemcpyAsync(&max_res, state.stat[MAX].d_res, sizeof max_res, cudaMemcpyDeviceToHost, stream);
+        CHECK_CUDA(cudaMemcpyAsync(&max_res, state.stat[MAX].d_res,
+                                   sizeof max_res, cudaMemcpyDeviceToHost,
+                                   stream));
 
         VERBOSE_MSG("MEAN: %f STDDEV: %f MAX: %hu\n", stddev_mean_res[MEAN],
                     stddev_mean_res[STDDEV], max_res);
