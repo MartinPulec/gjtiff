@@ -54,9 +54,19 @@ cudaEvent_t cuda_event_stop;
 int interpolation = 0;
 long long mem_limit = 0;
 
+struct options {
+        int req_gpujpeg_quality;
+        int downscale_factor;
+        bool use_libtiff;
+        bool norotate;
+        bool write_uncompressed;
+#define OPTIONS_INIT {-1, 1, false, false, false}
+};
+
 struct state_gjtiff {
-        state_gjtiff(bool use_libtiff, bool norotate, bool write_uncompressed);
+        state_gjtiff(struct options opts);
         ~state_gjtiff();
+        struct options opts;
         bool use_libtiff; // if nvCOMP not found, enforce libtiff
         cudaStream_t stream;
         struct nvj2k_state *state_nvj2k;
@@ -72,8 +82,8 @@ struct state_gjtiff {
         bool first = true;
 };
 
-state_gjtiff::state_gjtiff(bool u, bool norotate, bool write_uncompressed)
-    : use_libtiff(u)
+state_gjtiff::state_gjtiff(struct options opts)
+    : opts(opts)
 {
         CHECK_CUDA(cudaStreamCreate(&stream));
         CHECK_CUDA(cudaEventCreate(&cuda_event_start));
@@ -84,13 +94,13 @@ state_gjtiff::state_gjtiff(bool u, bool norotate, bool write_uncompressed)
         assert(state_nvj2k != nullptr);
         state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
-        if (!write_uncompressed) {
+        if (!opts.write_uncompressed) {
                 gj_enc = gpujpeg_encoder_create(stream);
                 assert(gj_enc != nullptr);
         }
         downscaler = downscaler_init(stream);
         assert(downscaler != nullptr);
-        if (!norotate) {
+        if (!opts.norotate) {
                 rotate = rotate_init(stream);
                 assert(rotate != nullptr);
         }
@@ -300,12 +310,6 @@ static void show_help(const char *progname)
         INFO_MSG("\tfname[:q=<JPEG_q>][:s=<downscale_factor>]\n");
 }
 
-struct options {
-        int req_gpujpeg_quality;
-        int downscale_factor;
-#define OPTIONS_INIT {-1, 1}
-};
-
 static char *parse_fname_opts(char *buf, struct options *opts)
 {
         if (buf == nullptr) {
@@ -365,9 +369,6 @@ int main(int argc, char **argv)
 {
         init_term_colors();
 
-        bool use_libtiff = false;
-        bool norotate = false;
-        bool write_uncompressed = false;
         char ofdir[1024] = "./";
         struct options global_opts = OPTIONS_INIT;
 
@@ -389,10 +390,10 @@ int main(int argc, char **argv)
                         show_help(argv[0]);
                         return EXIT_SUCCESS;
                 case 'l':
-                        use_libtiff = true;
+                        global_opts.use_libtiff = true;
                         break;
                 case 'n':
-                        norotate = true;
+                        global_opts.norotate = true;
                         break;
                 case 'o':
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);
@@ -402,7 +403,7 @@ int main(int argc, char **argv)
                             optarg, nullptr, 10);
                         break;
                 case 'r':
-                        write_uncompressed = true;
+                        global_opts.write_uncompressed = true;
                         break;
                 case 's':
                         global_opts.downscale_factor = (int)strtol(optarg,
@@ -423,7 +424,7 @@ int main(int argc, char **argv)
         }
 
         gpu_memory = get_cuda_dev_global_memory();
-        struct state_gjtiff state(use_libtiff, norotate, write_uncompressed);
+        struct state_gjtiff state(global_opts);
         int ret = EXIT_SUCCESS;
 
         char path_buf[PATH_MAX];
