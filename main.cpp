@@ -327,23 +327,35 @@ static void encode(struct state_gjtiff *s, int req_quality,
                (len == 0 ? "un" : ""));
 }
 
-static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpeg)
+
+
+static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen, bool jpeg)
 {
         const char *ext = jpeg ? "jpg" : "pnm";
         buflen = std::min<size_t>(buflen, NAME_MAX + 1);
 
-        char *basename = nullptr;
-        if (strrchr(ifname, '/') != nullptr) {
-                basename = strdup(strrchr(ifname, '/') + 1);
-        } else {
-                basename = strdup(ifname);
+        for (int i = 0; i < ifiles->count; ++i) {
+                const char *ifname = ifiles->ifiles[i].ifname;
+                char *basename = nullptr;
+                if (strrchr(ifname, '/') != nullptr) {
+                        basename = strdup(strrchr(ifname, '/') + 1);
+                } else {
+                        basename = strdup(ifname);
+                }
+                char *last_dot = strrchr(basename, '.');
+                if (last_dot != nullptr) {
+                        *last_dot = '\0';
+                }
+                char delim[4] = "";
+                if (i != 0) {
+                        snprintf(delim, sizeof delim, "%%%X", ',');
+                }
+                int bytes = snprintf(ofname, buflen, "%s%s", delim, basename);
+                ofname += bytes;
+                buflen -= bytes;
+                free(basename);
         }
-        char *last_dot = strrchr(basename, '.');
-        if (last_dot != nullptr) {
-                *last_dot = '\0';
-        }
-        snprintf(ofname, buflen, "%s.%s", basename, ext);
-        free(basename);
+        snprintf(ofname, buflen, ".%s", ext);
 }
 
 static void show_help(const char *progname)
@@ -557,7 +569,7 @@ int main(int argc, char **argv)
                         ifiles.ifiles[i].img = rotate(state.rotate, &dec);
                 }
                 if (!err) {
-                        set_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,
+                        set_ofname(&ifiles, ofdir + d_pref_len,
                                    sizeof ofdir - d_pref_len,
                                    state.gj_enc != nullptr);
                         encode(&state, opts.req_gpujpeg_quality, &ifiles,
