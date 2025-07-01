@@ -577,7 +577,10 @@ int main(int argc, char **argv)
                                ifname, ofdir);
                 }
                 for (int i = 0; i < ifiles.count; ++i) {
-                        ifiles.ifiles[i].img->free(ifiles.ifiles[i].img);
+                        if (ifiles.ifiles[i].img != nullptr) {
+                                ifiles.ifiles[i].img->free(
+                                    ifiles.ifiles[i].img);
+                        }
                 }
                 TIMER_STOP(transcode);
         }
