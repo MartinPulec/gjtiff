@@ -165,14 +165,31 @@ static dec_image decode(struct state_gjtiff *s, const char *fname)
         return decode_tiff(s, fname);
 }
 
+struct ifile {
+        char ifname[PATH_MAX];
+        struct owned_image *img;
+};
 struct ifiles {
-        struct {
-                char ifname[PATH_MAX];
-                struct owned_image *img;
-        } ifiles[3];
+        struct ifile ifiles[3];
         int count;
 };
 
+static void ifile_destroy(struct ifile *ifile)
+{
+        if (ifile->img == nullptr) {
+                return;
+        }
+        ifile->img->free(ifile->img);
+        ifile->img = nullptr;
+}
+
+static void ifiles_destroy(struct ifiles *ifiles) {
+        for (int i = 0; i < ifiles->count; ++i) {
+                ifile_destroy(&ifiles->ifiles[i]);
+        }
+        ifiles->count = 0;
+        free(ifiles);
+}
 static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
                         const char *ofname, bool planar)
 {
@@ -434,21 +451,22 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
         return parse_fname_opts(buf, opts);
 }
 
-static ifiles parse_ifiles(const char *ifnames)
+static ifiles *parse_ifiles(const char *ifnames)
 {
-        struct ifiles ret = {};
+        struct ifiles *ret = (struct ifiles *)calloc(1, sizeof *ret);
         char copy[PATH_MAX];
         snprintf(copy, sizeof copy, "%s", ifnames);
         char *saveptr = nullptr;
         char *item = nullptr;
         char *tmp = copy;
         while ((item = strtok_r(tmp, ",", &saveptr)) != nullptr) {
-                if (ret.count == ARR_SIZE(ret.ifiles)) {
+                if (ret->count == ARR_SIZE(ret->ifiles)) {
                         ERROR_MSG("More than 3 images not supported!\n");
-                        return {};
+                        ifiles_destroy(ret);
+                        return nullptr;
                 }
-                snprintf(ret.ifiles[ret.count++].ifname,
-                         sizeof ret.ifiles[0].ifname, "%s", item);
+                snprintf(ret->ifiles[ret->count++].ifname,
+                         sizeof ret->ifiles[0].ifname, "%s", item);
                 tmp = nullptr;
         }
         return ret;
@@ -540,15 +558,16 @@ int main(int argc, char **argv)
 
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf, &opts)) {
-                struct ifiles ifiles = parse_ifiles(ifname);
-                if (ifiles.count == 0) {
+                struct ifiles *ifiles = parse_ifiles(ifname);
+                if (ifiles == nullptr) {
                         ret = EXIT_FAILURE;
                         continue;
                 }
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
-                for (int i = 0; i < ifiles.count; ++i) {
-                        struct dec_image dec = decode(&state, ifiles.ifiles[i].ifname);
+                for (int i = 0; i < ifiles->count; ++i) {
+                        struct dec_image dec = decode(&state,
+                                                      ifiles->ifiles[i].ifname);
                         if (dec.data == nullptr) {
                                 ret = ERR_SOME_FILES_NOT_TRANSCODED;
                                 err = true;
@@ -567,21 +586,16 @@ int main(int argc, char **argv)
                                 dec = downscale(state.downscaler,
                                                 opts.downscale_factor, &dec);
                         }
-                        ifiles.ifiles[i].img = rotate(state.rotate, &dec);
+                        ifiles->ifiles[i].img = rotate(state.rotate, &dec);
                 }
                 if (!err) {
-                        set_ofname(&ifiles, ofdir + d_pref_len,
+                        set_ofname(ifiles, ofdir + d_pref_len,
                                    sizeof ofdir - d_pref_len,
                                    state.gj_enc != nullptr);
-                        encode(&state, opts.req_gpujpeg_quality, &ifiles,
+                        encode(&state, opts.req_gpujpeg_quality, ifiles,
                                ifname, ofdir);
                 }
-                for (int i = 0; i < ifiles.count; ++i) {
-                        if (ifiles.ifiles[i].img != nullptr) {
-                                ifiles.ifiles[i].img->free(
-                                    ifiles.ifiles[i].img);
-                        }
-                }
+                ifiles_destroy(ifiles);
                 TIMER_STOP(transcode);
         }
 
