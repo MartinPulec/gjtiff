@@ -255,7 +255,7 @@ static void print_bbox(struct coordinate coords[4]) {
                lat_max);
 }
 
-static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifiles,
+static size_t combine_encode_jpeg(struct state_gjtiff *s, struct ifiles *ifiles,
                         const char *ofname)
 {
         assert(ifiles->count > 1);
@@ -272,26 +272,31 @@ static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifi
         bool err = false;
         for (int i = 0; i < ifiles->count; ++i) {
                 const struct dec_image *first = &ifiles->ifiles[0].img->img;
-                const struct dec_image *cur = &ifiles->ifiles[i].img->img;
-                // safety checks
+                struct owned_image **cur = &ifiles->ifiles[i].img;
+                // safety check
                 err = true;
-                if (cur->width != first->width) {
-                        ERROR_MSG("Incompatible width %d vs %d!\n", cur->width,
-                                  first->width);
-                        break;
-                }
-                if (cur->height != first->height) {
-                        ERROR_MSG("Incompatible height %d vs %d!\n", cur->height,
-                                  first->height);
-                        break;
-                }
-                if (cur->comp_count != 1) {
+                if ((*cur)->img.comp_count != 1) {
                         ERROR_MSG("Cannot combine image with %d channels!!\n",
-                                  cur->comp_count);
+                                  (*cur)->img.comp_count);
                         break;
                 }
-                CHECK_CUDA(cudaMemcpyAsync(d_data + (i * plane_lenght), cur->data,
-                                plane_lenght, cudaMemcpyDefault, s->stream));
+                if ((*cur)->img.width != first->width ||
+                    (*cur)->img.height != first->height) {
+                        VERBOSE_MSG("Incompatible size %dx%d vs %dx%d, scaling "
+                                    "to the later one...\n",
+                                    (*cur)->img.width, (*cur)->img.height,
+                                    first->width, first->height);
+                        struct owned_image *scaled = scale(
+                            s->downscaler, first->width, first->height,
+                            ifiles->ifiles[i].img);
+                        // remove delete old data
+                        (*cur)->free(*cur);
+                        // set the scaled one, instead
+                        (*cur) = scaled;
+                }
+                CHECK_CUDA(cudaMemcpyAsync(d_data + (i * plane_lenght),
+                                           (*cur)->img.data, plane_lenght,
+                                           cudaMemcpyDefault, s->stream));
                 err = false;
         }
         if (!err && ifiles->count == 2) {
@@ -311,13 +316,13 @@ static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifi
 }
 
 static void encode(struct state_gjtiff *s, int req_quality,
-                   const struct ifiles *ifiles, const char *ifname,
+                   struct ifiles *ifiles, const char *ifname,
                    const char *ofname)
 {
         struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
         size_t len = 0;
         if (ifiles->count > 1) {
-                len = encode_multi_jpeg(s, ifiles, ofname);
+                len = combine_encode_jpeg(s, ifiles, ofname);
         } else if (s->gj_enc != nullptr) {
                 len = encode_jpeg(s, req_quality, *uncomp,
                                   ofname,false);
