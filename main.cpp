@@ -458,7 +458,7 @@ int main(int argc, char **argv)
 {
         init_term_colors();
 
-        char ofdir[1024] = "./";
+        char ofdir[PATH_MAX] = "./";
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
