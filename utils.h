@@ -126,4 +126,8 @@ EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
                                cudaStream_t stream);
 #endif
 
+struct dec_image;
+struct owned_image;
+struct owned_image *new_cuda_owned_image(const struct dec_image *in);
+
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015

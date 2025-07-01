@@ -216,7 +216,7 @@ size_t get_cuda_dev_global_memory()
 }
 
 #if NPP_NEW_API
-EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
+void init_npp_context(NppStreamContext *nppStreamCtx,
                                cudaStream_t stream)
 {
         memset(nppStreamCtx, 0, sizeof *nppStreamCtx);
@@ -241,3 +241,20 @@ EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
         nppStreamCtx->nSharedMemPerBlock = oDeviceProperties.sharedMemPerBlock;
 }
 #endif
+
+static void release_owned_cuda_image(struct owned_image *img)
+{
+        CHECK_CUDA(cudaFree(img->img.data));
+        free(img);
+}
+
+struct owned_image *new_cuda_owned_image(const struct dec_image *in)
+{
+        struct owned_image *ret = malloc(sizeof *ret);
+        memcpy(&ret->img, in, sizeof *in);
+        const size_t size = (size_t) in->width * in->height * in->comp_count;
+        CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
+        ret->free = release_owned_cuda_image;
+        return ret;
+}
+

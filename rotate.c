@@ -177,20 +177,12 @@ static void adjust_size(int *width, int *height, int comp_count) {
                  *width, *height);
 }
 
-static void release_owned_image(struct owned_image *img) {
-        CHECK_CUDA(cudaFree(img->img.data));
-        free(img);
-}
-
 static struct owned_image *take_ownership(const struct dec_image *in)
 {
-        struct owned_image *ret = malloc(sizeof *ret);
-        memcpy(&ret->img, in, sizeof *in);
-        const size_t size = (size_t) in->width * in->height * in->comp_count;
-        CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
+        struct owned_image *ret = new_cuda_owned_image(in);
+        const size_t size = (size_t)in->width * in->height * in->comp_count;
         CHECK_CUDA(
             cudaMemcpy(ret->img.data, in->data, size, cudaMemcpyDefault));
-        ret->free = release_owned_image;
         return ret;
 }
 
@@ -229,9 +221,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};
 
-        struct owned_image *ret = malloc(sizeof *ret);
-        memcpy(&ret->img, in, sizeof *in);
-        ret->free = release_owned_image;
+        struct owned_image *ret = new_cuda_owned_image(in);
         // keep one side as in original and upscale the other to meet dst
         // projection dimension
         const double src_aspect = (double)in->width / in->height;
