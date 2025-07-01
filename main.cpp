@@ -20,6 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include <algorithm>      // for std::min
 #include <cassert>
 #include <cerrno>
 #include <cstdint>
@@ -329,20 +330,20 @@ static void encode(struct state_gjtiff *s, int req_quality,
 static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpeg)
 {
         const char *ext = jpeg ? "jpg" : "pnm";
+        buflen = std::min<size_t>(buflen, NAME_MAX + 1);
 
+        char *basename = nullptr;
         if (strrchr(ifname, '/') != nullptr) {
-                snprintf(ofname, buflen, "%s", strrchr(ifname, '/') + 1);
+                basename = strdup(strrchr(ifname, '/') + 1);
         } else {
-                snprintf(ofname, buflen, "%s", ifname);
+                basename = strdup(ifname);
         }
-        if (strrchr(ofname, '.') != nullptr) {
-                char *ptr = strrchr(ofname, '.') + 1;
-                size_t avail_len = buflen - (ptr - ofname);
-                snprintf(ptr, avail_len, "%s", ext);
-        } else {
-                snprintf(ofname + strlen(ofname), buflen - strlen(ofname),
-                         ".%s", ext);
+        char *last_dot = strrchr(basename, '.');
+        if (last_dot != nullptr) {
+                *last_dot = '\0';
         }
+        snprintf(ofname, buflen, "%s.%s", basename, ext);
+        free(basename);
 }
 
 static void show_help(const char *progname)
