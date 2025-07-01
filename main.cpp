@@ -241,7 +241,8 @@ static void print_bbox(struct coordinate coords[4]) {
 static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifiles,
                         const char *ofname)
 {
-        assert(ifiles->count == 3);
+        assert(ifiles->count > 1);
+        assert(ifiles->count <= 3);
         if (s->gj_enc == nullptr) {
                 ERROR_MSG("Uncompressed write not supported for combination now!\n");
                 return 0;
@@ -250,7 +251,7 @@ static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifi
                                     ifiles->ifiles[0].img->img.height;
         uint8_t *d_data = nullptr;
         CHECK_CUDA(cudaMallocAsync(
-            &d_data, (size_t)ifiles->count * plane_lenght, s->stream));
+            &d_data, (size_t)3 * plane_lenght, s->stream));
         bool err = false;
         for (int i = 0; i < ifiles->count; ++i) {
                 const struct dec_image *first = &ifiles->ifiles[0].img->img;
@@ -275,6 +276,10 @@ static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifi
                 CHECK_CUDA(cudaMemcpyAsync(d_data + (i * plane_lenght), cur->data,
                                 plane_lenght, cudaMemcpyDefault, s->stream));
                 err = false;
+        }
+        if (!err && ifiles->count == 2) {
+                CHECK_CUDA(cudaMemsetAsync(d_data + (2 * plane_lenght), 0,
+                                           plane_lenght, s->stream));
         }
         size_t len = 0;
         if (!err) {
@@ -445,10 +450,6 @@ static ifiles parse_ifiles(const char *ifnames)
                 snprintf(ret.ifiles[ret.count++].ifname,
                          sizeof ret.ifiles[0].ifname, "%s", item);
                 tmp = nullptr;
-        }
-        if (ret.count == 2) {
-                ERROR_MSG("Combination of 2 bands unsupported, must be 3!\n");
-                return {};
         }
         return ret;
 }

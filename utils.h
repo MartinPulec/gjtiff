@@ -105,6 +105,9 @@ extern cudaEvent_t cuda_event_stop;
 #define cudaMallocAsync(ptr, size, stream)                                     \
         cudaStreamSynchronize(stream);                                         \
         cudaMalloc(ptr, size)
+#define cudaMemsetAsync(devPtr, value, count, stream)                          \
+        cudaStreamSynchronize(stream);                                         \
+        cudaMemset(devPtr, value, count);
 #endif
 
 EXTERN_C const char *npp_status_to_str(NppStatus rc);
