@@ -118,6 +118,16 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         return downscaled;
 }
 
+struct owned_image *scale(struct downscaler_state *state, int new_width, int new_height,
+                           const struct owned_image *old) {
+        struct dec_image new_desc = old->img;
+        new_desc.width = new_width;
+        new_desc.height = new_height;
+        struct owned_image *ret = new_cuda_owned_image(&new_desc);
+        downscale_int(state, new_width, new_height, &old->img, ret->img.data);
+        return ret;
+}
+
 void downscaler_destroy(struct downscaler_state *s) {
         if (s == NULL) {
                 return;
