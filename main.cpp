@@ -272,7 +272,7 @@ static ifiles *combine_images(struct state_gjtiff *s,
         assert((*ifiles)->count <= 3);
         if (s->gj_enc == nullptr) {
                 ERROR_MSG("Uncompressed write not supported for combination now!\n");
-                return 0;
+                return nullptr;
         }
         const size_t plane_lenght = (size_t)(*ifiles)->ifiles[0].img->img.width *
                                     (*ifiles)->ifiles[0].img->img.height;
@@ -331,6 +331,9 @@ static void encode(struct state_gjtiff *s, int req_quality,
 {
         if ((*ifiles)->count > 1) {
                 *ifiles = combine_images(s, ifiles);
+                if (*ifiles == nullptr) {
+                        return;
+                }
         }
         assert((*ifiles)->count == 1);
         size_t len = 0;
