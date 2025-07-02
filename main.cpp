@@ -265,32 +265,20 @@ static void print_bbox(struct coordinate const *coords) {
                lat_max);
 }
 
-static ifiles *combine_images(struct state_gjtiff *s,
+static ifiles *unify_sizes(struct state_gjtiff *s,
                                    struct ifiles **ifiles)
 {
-        assert((*ifiles)->count > 1);
-        assert((*ifiles)->count <= 3);
-        if (s->gj_enc == nullptr) {
-                ERROR_MSG("Uncompressed write not supported for combination now!\n");
-                return nullptr;
-        }
-        const size_t plane_lenght = (size_t)(*ifiles)->ifiles[0].img->img.width *
-                                    (*ifiles)->ifiles[0].img->img.height;
-        struct dec_image new_desc =(*ifiles)->ifiles[0].img->img;
-        new_desc.comp_count = 3;
-        struct owned_image *nimg = new_cuda_owned_image(&new_desc);
-        nimg->planar = true;
-        bool err = false;
+        const struct dec_image *first = &(*ifiles)->ifiles[0].img->img;
         for (int i = 0; i < (*ifiles)->count; ++i) {
-                const struct dec_image *first = &(*ifiles)->ifiles[0].img->img;
                 struct owned_image **cur = &(*ifiles)->ifiles[i].img;
                 // safety check
-                err = true;
                 if ((*cur)->img.comp_count != 1) {
                         ERROR_MSG("Cannot combine image with %d channels!!\n",
                                   (*cur)->img.comp_count);
-                        break;
+                        ifiles_destroy(ifiles);
+                        return nullptr;
                 }
+
                 if ((*cur)->img.width != first->width ||
                     (*cur)->img.height != first->height) {
                         VERBOSE_MSG("Incompatible size %dx%d vs %dx%d, scaling "
@@ -305,18 +293,30 @@ static ifiles *combine_images(struct state_gjtiff *s,
                         // set the scaled one, instead
                         (*cur) = scaled;
                 }
+        }
+        return *ifiles;
+}
+
+static ifiles *combine_images(struct state_gjtiff *s,
+                                   struct ifiles **ifiles)
+{
+        assert((*ifiles)->count > 1);
+        assert((*ifiles)->count <= 3);
+        const size_t plane_lenght = (size_t)(*ifiles)->ifiles[0].img->img.width *
+                                    (*ifiles)->ifiles[0].img->img.height;
+        struct dec_image new_desc =(*ifiles)->ifiles[0].img->img;
+        new_desc.comp_count = 3;
+        struct owned_image *nimg = new_cuda_owned_image(&new_desc);
+        nimg->planar = true;
+        for (int i = 0; i < (*ifiles)->count; ++i) {
+                struct owned_image **cur = &(*ifiles)->ifiles[i].img;
                 CHECK_CUDA(cudaMemcpyAsync(nimg->img.data + (i * plane_lenght),
                                            (*cur)->img.data, plane_lenght,
                                            cudaMemcpyDefault, s->stream));
-                err = false;
         }
-        if (!err && (*ifiles)->count == 2) {
+        if ((*ifiles)->count == 2) {
                 CHECK_CUDA(cudaMemsetAsync(nimg->img.data + (2 * plane_lenght), 0,
                                            plane_lenght, s->stream));
-        }
-        if (err) {
-                nimg->free(nimg);
-                nimg = nullptr;
         }
         ifiles_destroy(ifiles);
         struct ifiles *ret = (struct ifiles *)calloc(1, sizeof *nimg);
@@ -325,15 +325,29 @@ static ifiles *combine_images(struct state_gjtiff *s,
         return ret;
 }
 
+static ifiles *process_images(struct state_gjtiff *s,
+                                   struct ifiles **ifiles) {
+        if ((*ifiles)->count == 1) {
+                return *ifiles;
+        }
+        *ifiles = unify_sizes(s, ifiles);
+        if (*ifiles == nullptr) {
+                return nullptr;
+        }
+        *ifiles = combine_images(s, ifiles);
+        if (*ifiles == nullptr) {
+                return nullptr;
+        }
+        return *ifiles;
+}
+
 static void encode(struct state_gjtiff *s, int req_quality,
                    struct ifiles **ifiles, const char *ifname,
                    const char *ofname)
 {
-        if ((*ifiles)->count > 1) {
-                *ifiles = combine_images(s, ifiles);
-                if (*ifiles == nullptr) {
-                        return;
-                }
+        *ifiles = process_images(s, ifiles);
+        if (*ifiles == nullptr) {
+                return;
         }
         assert((*ifiles)->count == 1);
         size_t len = 0;
