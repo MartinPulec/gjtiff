@@ -173,11 +173,23 @@ static dec_image decode(struct state_gjtiff *s, const char *fname)
 struct ifile {
         char ifname[PATH_MAX];
         struct owned_image *img;
+        struct ifile *next;
 };
 struct ifiles {
-        struct ifile ifiles[3];
-        int count;
+        struct ifile *head;
 };
+
+static struct ifiles *new_ifiles(struct owned_image *head)
+{
+        struct ifiles *ret = (struct ifiles *)calloc(1, sizeof *ret);
+        if (head == NULL) {
+                return ret;
+        }
+        struct ifile *ifile = (struct ifile *)calloc(1, sizeof *ifile);
+        ret->head = ifile;
+        ret->head->img = head;
+        return ret;
+}
 
 static void ifile_destroy(struct ifile *ifile)
 {
@@ -192,10 +204,13 @@ static void ifiles_destroy(struct ifiles **ifiles) {
         if (*ifiles == nullptr) {
                 return;
         }
-        for (int i = 0; i < (*ifiles)->count; ++i) {
-                ifile_destroy(&(*ifiles)->ifiles[i]);
+        struct ifile *cur = (*ifiles)->head;
+        while (cur != nullptr) {
+                ifile_destroy(cur);
+                struct ifile *tmp = cur;
+                cur = cur->next;
+                free(tmp);
         }
-        (*ifiles)->count = 0;
         free(*ifiles);
         *ifiles = nullptr;
 }
@@ -268,31 +283,38 @@ static void print_bbox(struct coordinate const *coords) {
 static ifiles *unify_sizes(struct state_gjtiff *s,
                                    struct ifiles **ifiles)
 {
-        const struct dec_image *first = &(*ifiles)->ifiles[0].img->img;
-        for (int i = 0; i < (*ifiles)->count; ++i) {
-                struct owned_image **cur = &(*ifiles)->ifiles[i].img;
-                // safety check
-                if ((*cur)->img.comp_count != 1) {
+        const struct dec_image *first = &(*ifiles)->head->img->img;
+        struct ifile *cur = (*ifiles)->head;
+        int count = 0;
+        while (cur != nullptr) {
+                // safety checks
+                if (cur->img->img.comp_count != 1) {
                         ERROR_MSG("Cannot combine image with %d channels!!\n",
-                                  (*cur)->img.comp_count);
+                                  cur->img->img.comp_count);
+                        ifiles_destroy(ifiles);
+                        return nullptr;
+                }
+                if (++count > 3) {
+                        ERROR_MSG("Cannot combine more than 3 images!!\n");
                         ifiles_destroy(ifiles);
                         return nullptr;
                 }
 
-                if ((*cur)->img.width != first->width ||
-                    (*cur)->img.height != first->height) {
+                if (cur->img->img.width != first->width ||
+                    cur->img->img.height != first->height) {
                         VERBOSE_MSG("Incompatible size %dx%d vs %dx%d, scaling "
                                     "to the later one...\n",
-                                    (*cur)->img.width, (*cur)->img.height,
+                                    cur->img->img.width, cur->img->img.height,
                                     first->width, first->height);
                         struct owned_image *scaled = scale(
                             s->downscaler, first->width, first->height,
-                            (*ifiles)->ifiles[i].img);
+                            cur->img);
                         // remove delete old data
-                        (*cur)->free(*cur);
+                        cur->img->free(cur->img);
                         // set the scaled one, instead
-                        (*cur) = scaled;
+                        cur->img = scaled;
                 }
+                cur = cur->next;
         }
         return *ifiles;
 }
@@ -300,34 +322,33 @@ static ifiles *unify_sizes(struct state_gjtiff *s,
 static ifiles *combine_images(struct state_gjtiff *s,
                                    struct ifiles **ifiles)
 {
-        assert((*ifiles)->count > 1);
-        assert((*ifiles)->count <= 3);
-        const size_t plane_lenght = (size_t)(*ifiles)->ifiles[0].img->img.width *
-                                    (*ifiles)->ifiles[0].img->img.height;
-        struct dec_image new_desc =(*ifiles)->ifiles[0].img->img;
+        const size_t plane_lenght = (size_t)(*ifiles)->head->img->img.width *
+                                    (*ifiles)->head->img->img.height;
+        struct dec_image new_desc = (*ifiles)->head->img->img;
         new_desc.comp_count = 3;
         struct owned_image *nimg = new_cuda_owned_image(&new_desc);
         nimg->planar = true;
-        for (int i = 0; i < (*ifiles)->count; ++i) {
-                struct owned_image **cur = &(*ifiles)->ifiles[i].img;
-                CHECK_CUDA(cudaMemcpyAsync(nimg->img.data + (i * plane_lenght),
-                                           (*cur)->img.data, plane_lenght,
+        uint8_t *d_ptr = nimg->img.data;
+        struct ifile *cur = (*ifiles)->head;
+        while (cur != nullptr) {
+                CHECK_CUDA(cudaMemcpyAsync(d_ptr,
+                                           cur->img->img.data, plane_lenght,
                                            cudaMemcpyDefault, s->stream));
+                cur = cur->next;
+                d_ptr += plane_lenght;
         }
-        if ((*ifiles)->count == 2) {
-                CHECK_CUDA(cudaMemsetAsync(nimg->img.data + (2 * plane_lenght), 0,
-                                           plane_lenght, s->stream));
+        size_t img_len = d_ptr - nimg->img.data;
+        if (img_len < 3 * plane_lenght) {
+                CHECK_CUDA(cudaMemsetAsync(d_ptr, 0, (3 * plane_lenght) - img_len,
+                                           s->stream));
         }
         ifiles_destroy(ifiles);
-        struct ifiles *ret = (struct ifiles *)calloc(1, sizeof *nimg);
-        ret->count = 1;
-        ret->ifiles[0].img = nimg;
-        return ret;
+        return new_ifiles(nimg);
 }
 
 static ifiles *process_images(struct state_gjtiff *s,
                                    struct ifiles **ifiles) {
-        if ((*ifiles)->count == 1) {
+        if ((*ifiles)->head->next == nullptr) {
                 return *ifiles;
         }
         *ifiles = unify_sizes(s, ifiles);
@@ -349,9 +370,8 @@ static void encode(struct state_gjtiff *s, int req_quality,
         if (*ifiles == nullptr) {
                 return;
         }
-        assert((*ifiles)->count == 1);
         size_t len = 0;
-        const struct owned_image *img = (*ifiles)->ifiles[0].img;
+        const struct owned_image *img = (*ifiles)->head->img;
         const struct dec_image *uncomp = &img->img;
         if (s->gj_enc != nullptr) {
                 len = encode_jpeg(s, req_quality, img,
@@ -395,8 +415,9 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
         const char *ext = jpeg ? "jpg" : "pnm";
         buflen = std::min<size_t>(buflen, NAME_MAX + 1);
 
-        for (int i = 0; i < ifiles->count; ++i) {
-                const char *ifname = ifiles->ifiles[i].ifname;
+        struct ifile *cur = ifiles->head;
+        while (cur != nullptr) {
+                const char *ifname = cur->ifname;
                 char *basename = nullptr;
                 if (strrchr(ifname, '/') != nullptr) {
                         basename = strdup(strrchr(ifname, '/') + 1);
@@ -408,13 +429,14 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
                         *last_dot = '\0';
                 }
                 char delim[4] = "";
-                if (i != 0) {
+                if (cur != ifiles->head) {
                         snprintf(delim, sizeof delim, "%%%X", ',');
                 }
                 int bytes = snprintf(ofname, buflen, "%s%s", delim, basename);
                 ofname += bytes;
                 buflen -= bytes;
                 free(basename);
+                cur = cur->next;
         }
         snprintf(ofname, buflen, ".%s", ext);
 }
@@ -493,20 +515,17 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
 
 static ifiles *parse_ifiles(const char *ifnames)
 {
-        struct ifiles *ret = (struct ifiles *)calloc(1, sizeof *ret);
+        struct ifiles *ret = new_ifiles(nullptr);
+        struct ifile **tail = &ret->head;
         char copy[PATH_MAX];
         snprintf(copy, sizeof copy, "%s", ifnames);
         char *saveptr = nullptr;
         char *item = nullptr;
         char *tmp = copy;
         while ((item = strtok_r(tmp, ",", &saveptr)) != nullptr) {
-                if (ret->count == ARR_SIZE(ret->ifiles)) {
-                        ERROR_MSG("More than 3 images not supported!\n");
-                        ifiles_destroy(&ret);
-                        return nullptr;
-                }
-                snprintf(ret->ifiles[ret->count++].ifname,
-                         sizeof ret->ifiles[0].ifname, "%s", item);
+                *tail = (struct ifile *)calloc(1, sizeof **tail);
+                snprintf((*tail)->ifname, sizeof(*tail)->ifname, "%s", item);
+                tail = &(*tail)->next;
                 tmp = nullptr;
         }
         return ret;
@@ -608,9 +627,9 @@ int main(int argc, char **argv)
                 }
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
-                for (int i = 0; i < ifiles->count; ++i) {
-                        struct dec_image dec = decode(&state,
-                                                      ifiles->ifiles[i].ifname);
+                struct ifile *cur = ifiles->head;
+                while (cur != nullptr) {
+                        struct dec_image dec = decode(&state, cur->ifname);
                         if (dec.data == nullptr) {
                                 ret = ERR_SOME_FILES_NOT_TRANSCODED;
                                 err = true;
@@ -629,7 +648,8 @@ int main(int argc, char **argv)
                                 dec = downscale(state.downscaler,
                                                 opts.downscale_factor, &dec);
                         }
-                        ifiles->ifiles[i].img = rotate(state.rotate, &dec);
+                        cur->img = rotate(state.rotate, &dec);
+                        cur = cur->next;
                 }
                 if (!err) {
                         set_ofname(ifiles, ofdir + d_pref_len,
