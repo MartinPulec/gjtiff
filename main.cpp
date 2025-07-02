@@ -188,16 +188,21 @@ static void ifile_destroy(struct ifile *ifile)
         ifile->img = nullptr;
 }
 
-static void ifiles_destroy(struct ifiles *ifiles) {
-        for (int i = 0; i < ifiles->count; ++i) {
-                ifile_destroy(&ifiles->ifiles[i]);
+static void ifiles_destroy(struct ifiles **ifiles) {
+        if (*ifiles == nullptr) {
+                return;
         }
-        ifiles->count = 0;
-        free(ifiles);
+        for (int i = 0; i < (*ifiles)->count; ++i) {
+                ifile_destroy(&(*ifiles)->ifiles[i]);
+        }
+        (*ifiles)->count = 0;
+        free(*ifiles);
+        *ifiles = nullptr;
 }
-static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
-                        const char *ofname, bool planar)
+static size_t encode_jpeg(struct state_gjtiff *s, int req_quality,
+                          const struct owned_image *img, const char *ofname)
 {
+        const struct dec_image *uncomp = &img->img;
         gpujpeg_parameters param = gpujpeg_default_parameters();
         param.interleaved = 1;
         if (req_quality != -1) {
@@ -214,19 +219,19 @@ static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_im
 
         gpujpeg_image_parameters param_image =
             gpujpeg_default_image_parameters();
-        param_image.width = uncomp.width;
-        param_image.height = uncomp.height;
+        param_image.width = uncomp->width;
+        param_image.height = uncomp->height;
 #if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 25, 0)
         param_image.comp_count = comp_count;
 #endif
         param_image.color_space =
-            uncomp.comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
-        param_image.pixel_format = uncomp.comp_count == 1
+            uncomp->comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
+        param_image.pixel_format = uncomp->comp_count == 1
                                        ? GPUJPEG_U8
-                                       : (planar ? GPUJPEG_444_U8_P0P1P2
+                                       : (img->planar ? GPUJPEG_444_U8_P0P1P2
                                                  : GPUJPEG_444_U8_P012);
         gpujpeg_encoder_input encoder_input = gpujpeg_encoder_input_gpu_image(
-            uncomp.data);
+            uncomp->data);
         uint8_t *out = nullptr;
         size_t len = 0;
         if (gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input,
@@ -245,7 +250,7 @@ static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_im
         return len;
 }
 
-static void print_bbox(struct coordinate coords[4]) {
+static void print_bbox(struct coordinate const *coords) {
         double lon_min = 0;
         double lon_max = 0;
         double lat_min = 0;
@@ -260,24 +265,25 @@ static void print_bbox(struct coordinate coords[4]) {
                lat_max);
 }
 
-static size_t combine_encode_jpeg(struct state_gjtiff *s, struct ifiles *ifiles,
-                        const char *ofname)
+static ifiles *combine_images(struct state_gjtiff *s,
+                                   struct ifiles **ifiles)
 {
-        assert(ifiles->count > 1);
-        assert(ifiles->count <= 3);
+        assert((*ifiles)->count > 1);
+        assert((*ifiles)->count <= 3);
         if (s->gj_enc == nullptr) {
                 ERROR_MSG("Uncompressed write not supported for combination now!\n");
                 return 0;
         }
-        const size_t plane_lenght = (size_t)ifiles->ifiles[0].img->img.width *
-                                    ifiles->ifiles[0].img->img.height;
-        uint8_t *d_data = nullptr;
-        CHECK_CUDA(cudaMallocAsync(
-            &d_data, (size_t)3 * plane_lenght, s->stream));
+        const size_t plane_lenght = (size_t)(*ifiles)->ifiles[0].img->img.width *
+                                    (*ifiles)->ifiles[0].img->img.height;
+        struct dec_image new_desc =(*ifiles)->ifiles[0].img->img;
+        new_desc.comp_count = 3;
+        struct owned_image *nimg = new_cuda_owned_image(&new_desc);
+        nimg->planar = true;
         bool err = false;
-        for (int i = 0; i < ifiles->count; ++i) {
-                const struct dec_image *first = &ifiles->ifiles[0].img->img;
-                struct owned_image **cur = &ifiles->ifiles[i].img;
+        for (int i = 0; i < (*ifiles)->count; ++i) {
+                const struct dec_image *first = &(*ifiles)->ifiles[0].img->img;
+                struct owned_image **cur = &(*ifiles)->ifiles[i].img;
                 // safety check
                 err = true;
                 if ((*cur)->img.comp_count != 1) {
@@ -293,52 +299,58 @@ static size_t combine_encode_jpeg(struct state_gjtiff *s, struct ifiles *ifiles,
                                     first->width, first->height);
                         struct owned_image *scaled = scale(
                             s->downscaler, first->width, first->height,
-                            ifiles->ifiles[i].img);
+                            (*ifiles)->ifiles[i].img);
                         // remove delete old data
                         (*cur)->free(*cur);
                         // set the scaled one, instead
                         (*cur) = scaled;
                 }
-                CHECK_CUDA(cudaMemcpyAsync(d_data + (i * plane_lenght),
+                CHECK_CUDA(cudaMemcpyAsync(nimg->img.data + (i * plane_lenght),
                                            (*cur)->img.data, plane_lenght,
                                            cudaMemcpyDefault, s->stream));
                 err = false;
         }
-        if (!err && ifiles->count == 2) {
-                CHECK_CUDA(cudaMemsetAsync(d_data + (2 * plane_lenght), 0,
+        if (!err && (*ifiles)->count == 2) {
+                CHECK_CUDA(cudaMemsetAsync(nimg->img.data + (2 * plane_lenght), 0,
                                            plane_lenght, s->stream));
         }
-        size_t len = 0;
-        if (!err) {
-                struct dec_image uncomp = ifiles->ifiles[0].img->img;
-                uncomp.comp_count = ifiles->count;
-                uncomp.data = d_data;
-                len = encode_jpeg(s, s->opts.req_gpujpeg_quality, uncomp,
-                                  ofname, true);
+        if (err) {
+                nimg->free(nimg);
+                nimg = nullptr;
         }
-        CHECK_CUDA(cudaFree(d_data));
-        return len;
+        ifiles_destroy(ifiles);
+        struct ifiles *ret = (struct ifiles *)calloc(1, sizeof *nimg);
+        ret->count = 1;
+        ret->ifiles[0].img = nimg;
+        return ret;
 }
 
 static void encode(struct state_gjtiff *s, int req_quality,
-                   struct ifiles *ifiles, const char *ifname,
+                   struct ifiles **ifiles, const char *ifname,
                    const char *ofname)
 {
-        struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
+        if ((*ifiles)->count > 1) {
+                *ifiles = combine_images(s, ifiles);
+        }
+        assert((*ifiles)->count == 1);
         size_t len = 0;
-        if (ifiles->count > 1) {
-                len = combine_encode_jpeg(s, ifiles, ofname);
-        } else if (s->gj_enc != nullptr) {
-                len = encode_jpeg(s, req_quality, *uncomp,
-                                  ofname,false);
-        } else {
-                len = (size_t) uncomp->width * uncomp->height * uncomp->comp_count;
+        const struct owned_image *img = (*ifiles)->ifiles[0].img;
+        const struct dec_image *uncomp = &img->img;
+        if (s->gj_enc != nullptr) {
+                len = encode_jpeg(s, req_quality, img,
+                                  ofname);
+        } else if (!img->planar) {
+                len = (size_t)uncomp->width * uncomp->height *
+                      uncomp->comp_count;
                 unsigned char *data = new unsigned char[len];
                 CHECK_CUDA(cudaMemcpy(data, uncomp->data, len, cudaMemcpyDefault));
                     pam_write(ofname, uncomp->width, uncomp->height,
                               uncomp->comp_count, 255, data, true);
                 delete[] data;
+        } else {
+                ERROR_MSG("Cannot write planar RAW!\n");
         }
+        ifiles_destroy(ifiles);
         char buf[UINT64_ASCII_LEN + 1];
         char fullpath[PATH_MAX + 1];
         realpath(ofname, fullpath);
@@ -473,7 +485,7 @@ static ifiles *parse_ifiles(const char *ifnames)
         while ((item = strtok_r(tmp, ",", &saveptr)) != nullptr) {
                 if (ret->count == ARR_SIZE(ret->ifiles)) {
                         ERROR_MSG("More than 3 images not supported!\n");
-                        ifiles_destroy(ret);
+                        ifiles_destroy(&ret);
                         return nullptr;
                 }
                 snprintf(ret->ifiles[ret->count++].ifname,
@@ -606,10 +618,10 @@ int main(int argc, char **argv)
                         set_ofname(ifiles, ofdir + d_pref_len,
                                    sizeof ofdir - d_pref_len,
                                    state.gj_enc != nullptr);
-                        encode(&state, opts.req_gpujpeg_quality, ifiles,
+                        encode(&state, opts.req_gpujpeg_quality, &ifiles,
                                ifname, ofdir);
                 }
-                ifiles_destroy(ifiles);
+                ifiles_destroy(&ifiles);
                 TIMER_STOP(transcode);
         }
 

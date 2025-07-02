@@ -42,6 +42,7 @@ struct dec_image {
 
 struct owned_image {
         struct dec_image img;
+        bool planar;
         void (*free)(struct owned_image *img);
 };
 
