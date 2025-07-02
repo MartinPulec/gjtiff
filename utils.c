@@ -215,7 +215,7 @@ size_t get_cuda_dev_global_memory()
 }
 
 #if NPP_NEW_API
-EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
+void init_npp_context(NppStreamContext *nppStreamCtx,
                                cudaStream_t stream)
 {
         memset(nppStreamCtx, 0, sizeof *nppStreamCtx);
