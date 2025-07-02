@@ -24,12 +24,6 @@
 #define NPP_CONTEXTIZE(...) __VA_ARGS__
 #endif
 
-#ifdef __cplusplus
-#define EXTERN_C extern "C"
-#else
-#define EXTERN_C
-#endif
-
 #define TIMER_DECLARE(name, enabled)                                           \
         struct timespec t0_##name = {0, 0};                                    \
         struct timespec t1_##name = {0, 0};                                    \
@@ -110,24 +104,32 @@ extern cudaEvent_t cuda_event_stop;
         cudaMemset(devPtr, value, count);
 #endif
 
-EXTERN_C const char *npp_status_to_str(NppStatus rc);
-EXTERN_C const char *nvtiff_status_to_str(int rc);
-EXTERN_C const char *nvj2k_status_to_str(int rc);
+#ifdef __cplusplus
+extern "C" {
+#endif // _cplusplus
+
+const char *npp_status_to_str(NppStatus rc);
+const char *nvtiff_status_to_str(int rc);
+const char *nvj2k_status_to_str(int rc);
 enum {
         UINT64_ASCII_LEN = 20,
 };
-EXTERN_C char* format_number_with_delim(uint64_t num, char* buf, size_t buflen);
-EXTERN_C size_t get_cuda_dev_global_memory();
+char* format_number_with_delim(uint64_t num, char* buf, size_t buflen);
+size_t get_cuda_dev_global_memory();
 
 extern const char *const coord_pos_name[4];
 
 #ifdef NPP_NEW_API
-EXTERN_C void init_npp_context(NppStreamContext *nppStreamCtx,
+void init_npp_context(NppStreamContext *nppStreamCtx,
                                cudaStream_t stream);
 #endif
 
 struct dec_image;
 struct owned_image;
 struct owned_image *new_cuda_owned_image(const struct dec_image *in);
+
+#ifdef __cplusplus
+}
+#endif // _cplusplus
 
 #endif // defined UTILS_H_3A62EF66_2DE8_441D_8381_B3FBB49EC015
