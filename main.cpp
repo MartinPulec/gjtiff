@@ -414,6 +414,8 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
 {
         const char *ext = jpeg ? "jpg" : "pnm";
         buflen = std::min<size_t>(buflen, NAME_MAX + 1);
+        assert(buflen >= 5);
+        buflen -= 4;  // reserve 4 B for .ext
 
         struct ifile *cur = ifiles->head;
         while (cur != nullptr) {
@@ -433,12 +435,15 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
                         snprintf(delim, sizeof delim, "%%%X", ',');
                 }
                 int bytes = snprintf(ofname, buflen, "%s%s", delim, basename);
+                if (bytes >= (int) buflen) { // output truncated
+                        bytes = (int) buflen - 1;
+                }
                 ofname += bytes;
                 buflen -= bytes;
                 free(basename);
                 cur = cur->next;
         }
-        snprintf(ofname, buflen, ".%s", ext);
+        snprintf(ofname, 5, ".%s", ext);
 }
 
 static void show_help(const char *progname)
