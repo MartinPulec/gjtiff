@@ -430,9 +430,9 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
                 if (last_dot != nullptr) {
                         *last_dot = '\0';
                 }
-                char delim[4] = "";
-                if (cur != ifiles->head) {
-                        snprintf(delim, sizeof delim, "%%%X", ',');
+                char delim[] = "-COMMA-";
+                if (cur == ifiles->head) {
+                        delim[0] = '\0';
                 }
                 int bytes = snprintf(ofname, buflen, "%s%s", delim, basename);
                 if (bytes >= (int) buflen) { // output truncated
