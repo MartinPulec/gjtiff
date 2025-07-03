@@ -8,11 +8,6 @@
 
 enum { INIT_SZ =  32 };
 #define is_operand_char(ch) (isalnum(ch) || (ch) == '_' || (ch) == '.')
-#define operator_prec(ch)                                                      \
-        ((ch) == ',' ? 1                                                       \
-                     : (((ch) == '+' || (ch) == '-')                           \
-                            ? 2                                                \
-                            : (((ch) == '*' || (ch) == '/') ? 3 : 0)))
 
 static void realloc_helper(void **var, int n, int req_sz, int *cur_sz) {
     if (req_sz <= *cur_sz) {
@@ -31,7 +26,8 @@ typedef enum {
 // expr      : input C-string, e.g. "(a+b)/(a-b)"
 // output[]  : caller-allocated array of char* of size MAX_TOKENS
 // *out_cnt  : returns the number of tokens filled in output[]
-char **to_postfix(const char *expr, int *out_cnt) {
+// operator_prec: evaluator of operators - the lower number the lower priority, return 0 for non-operator, all operators are binary
+char **to_postfix(const char *expr, int *out_cnt, int (*operator_prec)(int ch)) {
     int out_sz = INIT_SZ;
     char **output = (char **) malloc(out_sz * sizeof *output);
     int opst_len = INIT_SZ;
@@ -166,13 +162,20 @@ error:
 }
 
 #ifdef SHUNTING_DEMO
+int default_operator_prec(int ch)
+{
+        return (ch == ',' ? 1
+                            : ((ch == '+' || ch == '-')
+                                   ? 2
+                                   : ((ch == '*' || ch == '/') ? 3 : 0)));
+}
 // demo
 int main(int argc, char *argv[])
 {
         const char *expr = argc == 1 ? "(b3+b8)/(b3-b8)" : argv[1];
         int np = 0;
 
-        char **post = to_postfix(expr, &np);
+        char **post = to_postfix(expr, &np, default_operator_prec);
         if (post == NULL) {
                 return 1;
         }

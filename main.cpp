@@ -588,10 +588,20 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
         return parse_fname_opts(buf, opts);
 }
 
+static int operator_prec(int ch)
+{
+        switch (ch) {
+        case ',':
+                return 1;
+        default:
+                return 0;
+        };
+}
+
 static ifiles *parse_ifiles(const char *ifnames)
 {
         int count = 0;
-        char **tokens = to_postfix(ifnames, &count);
+        char **tokens = to_postfix(ifnames, &count, operator_prec);
         if (tokens == nullptr) {
                 return nullptr;
         }
