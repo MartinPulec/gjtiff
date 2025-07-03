@@ -22,6 +22,11 @@ static void realloc_helper(void **var, int n, int req_sz, int *cur_sz) {
     *var = realloc(*var, (size_t) *cur_sz * n);
 }
 
+typedef enum {
+    EXPECT_OPERAND,
+    EXPECT_OPERATOR
+} State;
+
 // Shunting-Yard: infix → postfix
 // expr      : input C-string, e.g. "(a+b)/(a-b)"
 // output[]  : caller-allocated array of char* of size MAX_TOKENS
@@ -36,6 +41,9 @@ char **to_postfix(const char *expr, int *out_cnt) {
     int i = 0;
     const int n = (int)strlen(expr);
 
+    State state = EXPECT_OPERAND;
+    int parenthesis = 0;
+
     while (i < n) {
             realloc_helper((void **)&output, sizeof(char *), (out_top + 1),
                            &out_sz);
@@ -47,6 +55,11 @@ char **to_postfix(const char *expr, int *out_cnt) {
                     continue;
             }
             if (is_operand_char(c)) {
+                    if (state == EXPECT_OPERATOR) {
+                            fprintf(stderr, "Expecting operator!\n");
+                            goto error;
+                    }
+                    state = EXPECT_OPERATOR;
                     // read an alphanumeric operand
                     int buflen = INIT_SZ;
                     char *buf = malloc(buflen);
@@ -62,10 +75,23 @@ char **to_postfix(const char *expr, int *out_cnt) {
                     continue;
             }
             if (c == '(') {
+                    if (state == EXPECT_OPERATOR) {
+                            fprintf(
+                                stderr,
+                                "Left parenthsis where operator expected!\n");
+                            goto error;
+                    }
+                    parenthesis++;
                     op_stack[++top_op] = strdup("(");
                     continue;
             }
             if (c == ')') {
+                    if (state == EXPECT_OPERAND) {
+                            fprintf(
+                                stderr,
+                                "Right parenthsis where operator expected!\n");
+                            goto error;
+                    }
                     // pop until '('
                     while (top_op >= 0 && strcmp(op_stack[top_op], "(") != 0) {
                             realloc_helper((void **)&output, sizeof(char *),
@@ -76,11 +102,17 @@ char **to_postfix(const char *expr, int *out_cnt) {
                             fprintf(stderr, "Error: unmatched ')'!\n");
                             goto error;
                     }
+                    parenthesis--;
                     free(op_stack[top_op--]); // drop the "("
                     continue;
             }
             int prec = operator_prec(c);
             if (prec != 0) {
+                    if (state == EXPECT_OPERAND) {
+                            fprintf(stderr, "Expecting operand!\n");
+                            goto error;
+                    }
+                    state = EXPECT_OPERAND;
                     char tmp[2] = {c, 0};
                     // pop any ops ≥ our precedence
                     while (top_op >= 0 && strcmp(op_stack[top_op], "(") != 0) {
@@ -109,6 +141,16 @@ error:
             }
             free((void *)output);
             return NULL;
+    }
+
+    if (parenthesis != 0) {
+            fprintf(stderr, "Unmatched parenthesis!\n");
+            goto error;
+    }
+
+    if (state == EXPECT_OPERAND) {
+            fprintf(stderr, "Expecting operator!\n");
+            goto error;
     }
 
     // drain remaining operators
