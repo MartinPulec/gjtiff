@@ -302,23 +302,11 @@ static bool unify_sizes(struct state_gjtiff *s, struct ifiles *ifiles)
 {
         const struct dec_image *first = &ifiles->head->img->img;
         struct ifile *cur = ifiles->head;
-        int count = 0;
         while (cur != nullptr) {
                 if (cur->img == nullptr) { // operator
                         cur = cur->next;
                         continue;
                 }
-                // safety checks
-                if (cur->img->img.comp_count != 1) {
-                        ERROR_MSG("Cannot combine image with %d channels!!\n",
-                                  cur->img->img.comp_count);
-                        return false;
-                }
-                if (++count > 3) {
-                        ERROR_MSG("Cannot combine more than 3 images!!\n");
-                        return false;
-                }
-
                 if (cur->img->img.width != first->width ||
                     cur->img->img.height != first->height) {
                         VERBOSE_MSG("Incompatible size %dx%d vs %dx%d, scaling "
@@ -366,12 +354,12 @@ static ifile *combine_images(struct state_gjtiff *s, struct ifile **first_p)
                             first->ifname, second->ifname, comma_op->ifname);
                 assert(first->img->img.comp_count == 3);
                 if (!first->img->planar) {
-                        ERROR_MSG("Combined image is not planar!");
+                        ERROR_MSG("Combined image is not planar!\n");
                         return nullptr;
                 }
                 if (first->img->planes_used != 2) {
                         ERROR_MSG("Cannot append another plane if image has %d "
-                                  "planes!",
+                                  "planes!\n",
                                   first->img->planes_used);
                         return nullptr;
                 }
