@@ -298,11 +298,10 @@ static void print_bbox(struct coordinate const *coords) {
                lat_max);
 }
 
-static ifiles *unify_sizes(struct state_gjtiff *s,
-                                   struct ifiles **ifiles)
+static bool unify_sizes(struct state_gjtiff *s, struct ifiles *ifiles)
 {
-        const struct dec_image *first = &(*ifiles)->head->img->img;
-        struct ifile *cur = (*ifiles)->head;
+        const struct dec_image *first = &ifiles->head->img->img;
+        struct ifile *cur = ifiles->head;
         int count = 0;
         while (cur != nullptr) {
                 if (cur->img == nullptr) { // operator
@@ -313,13 +312,11 @@ static ifiles *unify_sizes(struct state_gjtiff *s,
                 if (cur->img->img.comp_count != 1) {
                         ERROR_MSG("Cannot combine image with %d channels!!\n",
                                   cur->img->img.comp_count);
-                        ifiles_destroy(ifiles);
-                        return nullptr;
+                        return false;
                 }
                 if (++count > 3) {
                         ERROR_MSG("Cannot combine more than 3 images!!\n");
-                        ifiles_destroy(ifiles);
-                        return nullptr;
+                        return false;
                 }
 
                 if (cur->img->img.width != first->width ||
@@ -338,7 +335,7 @@ static ifiles *unify_sizes(struct state_gjtiff *s,
                 }
                 cur = cur->next;
         }
-        return *ifiles;
+        return true;
 }
 
 static ifile *combine_images(struct state_gjtiff *s, struct ifile **first_p)
@@ -436,31 +433,30 @@ static void reduce(struct state_gjtiff *s, struct ifiles *ifiles)
         }
 }
 
-static void process_images(struct state_gjtiff *s,
-                                   struct ifiles **ifiles) {
-        if ((*ifiles)->head->next == nullptr) {
+static void process_images(struct state_gjtiff *s, struct ifiles *ifiles)
+{
+        if (ifiles->head->next == nullptr) {
                 return;
         }
-        *ifiles = unify_sizes(s, ifiles);
-        if (*ifiles == nullptr) {
+        if (!unify_sizes(s, ifiles)) {
                 return;
         }
-        reduce(s, *ifiles);
+        reduce(s, ifiles);
 }
 
 static void encode(struct state_gjtiff *s, int req_quality,
-                   struct ifiles **ifiles, const char *ifname,
+                   struct ifiles *ifiles, const char *ifname,
                    const char *ofname)
 {
         process_images(s, ifiles);
-        if ((*ifiles)->head->next != nullptr) {
+        if (ifiles->head->next != nullptr) {
                 ERROR_MSG(
                     "Error - more than one item on stack, cannot encode!\n");
                 return;
         }
 
         size_t len = 0;
-        const struct owned_image *img = (*ifiles)->head->img;
+        const struct owned_image *img = ifiles->head->img;
         const struct dec_image *uncomp = &img->img;
         if (s->gj_enc != nullptr) {
                 len = encode_jpeg(s, req_quality, img,
@@ -476,7 +472,6 @@ static void encode(struct state_gjtiff *s, int req_quality,
         } else {
                 ERROR_MSG("Cannot write planar RAW!\n");
         }
-        ifiles_destroy(ifiles);
         char buf[UINT64_ASCII_LEN + 1];
         char fullpath[PATH_MAX + 1];
         realpath(ofname, fullpath);
@@ -757,7 +752,7 @@ int main(int argc, char **argv)
                         set_ofname(ifiles, ofdir + d_pref_len,
                                    sizeof ofdir - d_pref_len,
                                    state.gj_enc != nullptr);
-                        encode(&state, opts.req_gpujpeg_quality, &ifiles,
+                        encode(&state, opts.req_gpujpeg_quality, ifiles,
                                ifname, ofdir);
                 }
                 ifiles_destroy(&ifiles);
