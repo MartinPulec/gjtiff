@@ -43,6 +43,7 @@ struct dec_image {
 struct owned_image {
         struct dec_image img;
         bool planar;
+        int planes_used; // if planar, tells if 2 or 3 planes is used if img.comp_count=3
         void (*free)(struct owned_image *img);
 };
 

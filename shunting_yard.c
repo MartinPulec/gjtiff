@@ -1,3 +1,5 @@
+#include "shunting_yard.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -138,6 +140,7 @@ int main(int argc, char *argv[])
                 printf("%s ", post[i]);
                 free(post[i]);
         }
+        free(post);
         printf("\n");
         return 0;
 }

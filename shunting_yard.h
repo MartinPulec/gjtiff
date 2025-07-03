@@ -5,7 +5,7 @@
 // expr      : input C-string, e.g. "(a+b)/(a-b)"
 // returns   : array of tokens in post-fix notation
 // *out_cnt  : returns the number of tokens returned
-#ifdef _cplusplus
+#ifdef __cplusplus
 extern "C"
 #endif
 char **to_postfix(const char *expr, int *out_cnt);

@@ -42,6 +42,7 @@
 #include "libtiff.hpp"
 #include "pam.h"
 #include "rotate.h"
+#include "shunting_yard.h"
 #include "utils.h"
 
 #ifndef PATH_MAX
@@ -174,30 +175,48 @@ struct ifile {
         char ifname[PATH_MAX];
         struct owned_image *img;
         struct ifile *next;
+        struct ifile *prev;
+        int ref;
 };
 struct ifiles {
         struct ifile *head;
 };
 
+struct ifile *new_ifile() {
+        struct ifile *ifile = (struct ifile *)calloc(1, sizeof *ifile);
+        ifile->ref = 1;
+        return ifile;
+}
+
 static struct ifiles *new_ifiles(struct owned_image *head)
 {
         struct ifiles *ret = (struct ifiles *)calloc(1, sizeof *ret);
-        if (head == NULL) {
+        if (head == nullptr) {
                 return ret;
         }
-        struct ifile *ifile = (struct ifile *)calloc(1, sizeof *ifile);
-        ret->head = ifile;
+        ret->head = new_ifile();
         ret->head->img = head;
         return ret;
 }
 
-static void ifile_destroy(struct ifile *ifile)
+static void ifile_add_ref(struct ifile *ifile)
 {
-        if (ifile->img == nullptr) {
+        ifile->ref += 1;
+}
+
+static void ifile_del_ref(struct ifile *ifile)
+{
+        if (ifile == nullptr) {
                 return;
         }
-        ifile->img->free(ifile->img);
-        ifile->img = nullptr;
+        ifile->ref -= 1;
+        if (ifile->ref > 0) {
+                return;
+        }
+        if (ifile->img != nullptr) {
+                ifile->img->free(ifile->img);
+        }
+        free(ifile);
 }
 
 static void ifiles_destroy(struct ifiles **ifiles) {
@@ -206,10 +225,9 @@ static void ifiles_destroy(struct ifiles **ifiles) {
         }
         struct ifile *cur = (*ifiles)->head;
         while (cur != nullptr) {
-                ifile_destroy(cur);
-                struct ifile *tmp = cur;
-                cur = cur->next;
-                free(tmp);
+                struct ifile *next= cur->next;
+                ifile_del_ref(cur);
+                cur = next;
         }
         free(*ifiles);
         *ifiles = nullptr;
@@ -287,6 +305,10 @@ static ifiles *unify_sizes(struct state_gjtiff *s,
         struct ifile *cur = (*ifiles)->head;
         int count = 0;
         while (cur != nullptr) {
+                if (cur->img == nullptr) { // operator
+                        cur = cur->next;
+                        continue;
+                }
                 // safety checks
                 if (cur->img->img.comp_count != 1) {
                         ERROR_MSG("Cannot combine image with %d channels!!\n",
@@ -319,57 +341,124 @@ static ifiles *unify_sizes(struct state_gjtiff *s,
         return *ifiles;
 }
 
-static ifiles *combine_images(struct state_gjtiff *s,
-                                   struct ifiles **ifiles)
+static ifile *combine_images(struct state_gjtiff *s, struct ifile **first_p)
 {
-        const size_t plane_lenght = (size_t)(*ifiles)->head->img->img.width *
-                                    (*ifiles)->head->img->img.height;
-        struct dec_image new_desc = (*ifiles)->head->img->img;
-        new_desc.comp_count = 3;
-        struct owned_image *nimg = new_cuda_owned_image(&new_desc);
-        nimg->planar = true;
-        uint8_t *d_ptr = nimg->img.data;
-        struct ifile *cur = (*ifiles)->head;
-        while (cur != nullptr) {
-                CHECK_CUDA(cudaMemcpyAsync(d_ptr,
-                                           cur->img->img.data, plane_lenght,
+        struct ifile *first = *first_p;
+        struct ifile *second = first->next;
+        struct ifile *comma_op = second->next;
+        const size_t plane_lenght = (size_t)first->img->img.width *
+                                    first->img->img.height;
+        struct ifile *combined = nullptr;
+        if (first->img->img.comp_count == 1) { // need to ealloc new frame
+                VERBOSE_MSG("Creating new combined image: %s %s %s\n",
+                            first->ifname, second->ifname, comma_op->ifname);
+                struct dec_image new_desc = first->img->img;
+                new_desc.comp_count = 3;
+                struct owned_image *nimg = new_cuda_owned_image(&new_desc);
+                nimg->planar = true;
+                nimg->planes_used = 1;
+                combined = new_ifile();
+                snprintf(combined->ifname, sizeof combined->ifname, "(combined)");
+                combined->img = nimg;
+                combined->prev = first->prev;
+                CHECK_CUDA(cudaMemcpyAsync(combined->img->img.data,
+                                           first->img->img.data, plane_lenght,
                                            cudaMemcpyDefault, s->stream));
-                cur = cur->next;
-                d_ptr += plane_lenght;
+        } else {
+                VERBOSE_MSG("Appending image to existing one: %s %s %s\n",
+                            first->ifname, second->ifname, comma_op->ifname);
+                assert(first->img->img.comp_count == 3);
+                if (!first->img->planar) {
+                        ERROR_MSG("Combined image is not planar!");
+                        return nullptr;
+                }
+                if (first->img->planes_used != 2) {
+                        ERROR_MSG("Cannot append another plane if image has %d "
+                                  "planes!",
+                                  first->img->planes_used);
+                        return nullptr;
+                }
+                ifile_add_ref(first);
+                combined = first;
         }
-        size_t img_len = d_ptr - nimg->img.data;
-        if (img_len < 3 * plane_lenght) {
-                CHECK_CUDA(cudaMemsetAsync(d_ptr, 0, (3 * plane_lenght) - img_len,
-                                           s->stream));
+
+        uint8_t *d_ptr = combined->img->img.data +
+                         (combined->img->planes_used * plane_lenght);
+        CHECK_CUDA(cudaMemcpyAsync(d_ptr, second->img->img.data, plane_lenght,
+                                   cudaMemcpyDefault, s->stream));
+        combined->img->planes_used += 1;
+        d_ptr += plane_lenght;
+
+        if (combined->img->planes_used < 3) {
+                CHECK_CUDA(cudaMemsetAsync(d_ptr, 0, plane_lenght, s->stream));
         }
-        ifiles_destroy(ifiles);
-        return new_ifiles(nimg);
+
+        combined->next = comma_op->next;
+        if (combined->next != nullptr) {
+                combined->next->prev = combined;
+        }
+        *first_p = combined;
+
+        ifile_del_ref(first);
+        ifile_del_ref(second);
+        ifile_del_ref(comma_op);
+
+        return combined;
 }
 
-static ifiles *process_images(struct state_gjtiff *s,
+static void reduce(struct state_gjtiff *s, struct ifiles *ifiles)
+{
+        struct ifile *cur = ifiles->head;
+        while (cur != nullptr) {
+                if (strlen(cur->ifname) > 1) { // operand
+                        cur = cur->next;
+                        continue;
+                }
+                if (cur->ifname[0] != ',') {
+                        ERROR_MSG("Unexpected operator '%c'!\n", cur->ifname[0]);
+                        return;
+                }
+
+                if (cur->prev == nullptr || cur->prev->prev == nullptr) {
+                        ERROR_MSG(
+                            "Not enough operands for ',' - need 2, got %d!\n",
+                            cur->prev == nullptr ? 0 : 1);
+                        return;
+                }
+                auto *first = cur->prev->prev;
+                auto **first_ptr = first->prev != nullptr ? &first->prev
+                                                          : &ifiles->head;
+                cur = combine_images(s, first_ptr);
+                if (cur == nullptr) {
+                        return;
+                }
+                cur = cur->next;
+        }
+}
+
+static void process_images(struct state_gjtiff *s,
                                    struct ifiles **ifiles) {
         if ((*ifiles)->head->next == nullptr) {
-                return *ifiles;
+                return;
         }
         *ifiles = unify_sizes(s, ifiles);
         if (*ifiles == nullptr) {
-                return nullptr;
+                return;
         }
-        *ifiles = combine_images(s, ifiles);
-        if (*ifiles == nullptr) {
-                return nullptr;
-        }
-        return *ifiles;
+        reduce(s, *ifiles);
 }
 
 static void encode(struct state_gjtiff *s, int req_quality,
                    struct ifiles **ifiles, const char *ifname,
                    const char *ofname)
 {
-        *ifiles = process_images(s, ifiles);
-        if (*ifiles == nullptr) {
+        process_images(s, ifiles);
+        if ((*ifiles)->head->next != nullptr) {
+                ERROR_MSG(
+                    "Error - more than one item on stack, cannot encode!\n");
                 return;
         }
+
         size_t len = 0;
         const struct owned_image *img = (*ifiles)->head->img;
         const struct dec_image *uncomp = &img->img;
@@ -416,12 +505,13 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
         buflen = std::min<size_t>(buflen, NAME_MAX + 1);
         assert(buflen >= 5);
         buflen -= 4;  // reserve 4 B for .ext
-
         struct ifile *cur = ifiles->head;
         while (cur != nullptr) {
                 const char *ifname = cur->ifname;
                 char *basename = nullptr;
-                if (strrchr(ifname, '/') != nullptr) {
+                if (strcmp(ifname, ",") == 0) {
+                        basename = strdup("COMMA");
+                } else if (strrchr(ifname, '/') != nullptr) {
                         basename = strdup(strrchr(ifname, '/') + 1);
                 } else {
                         basename = strdup(ifname);
@@ -430,10 +520,7 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
                 if (last_dot != nullptr) {
                         *last_dot = '\0';
                 }
-                char delim[] = "-COMMA-";
-                if (cur == ifiles->head) {
-                        delim[0] = '\0';
-                }
+                const char *delim = cur == ifiles->head ? "" : "-";
                 int bytes = snprintf(ofname, buflen, "%s%s", delim, basename);
                 if (bytes >= (int) buflen) { // output truncated
                         bytes = (int) buflen - 1;
@@ -520,19 +607,25 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
 
 static ifiles *parse_ifiles(const char *ifnames)
 {
+        int count = 0;
+        char **tokens = to_postfix(ifnames, &count);
+        if (tokens == nullptr) {
+                return nullptr;
+        }
         struct ifiles *ret = new_ifiles(nullptr);
         struct ifile **tail = &ret->head;
-        char copy[PATH_MAX];
-        snprintf(copy, sizeof copy, "%s", ifnames);
-        char *saveptr = nullptr;
-        char *item = nullptr;
-        char *tmp = copy;
-        while ((item = strtok_r(tmp, ",", &saveptr)) != nullptr) {
-                *tail = (struct ifile *)calloc(1, sizeof **tail);
-                snprintf((*tail)->ifname, sizeof(*tail)->ifname, "%s", item);
+        struct ifile *prev = nullptr;
+
+        for (int i = 0; i < count; i++) {
+                *tail = new_ifile();
+                snprintf((*tail)->ifname, sizeof(*tail)->ifname, "%s", tokens[i]);
+                (*tail)->prev = prev;
+                prev = *tail;
                 tail = &(*tail)->next;
-                tmp = nullptr;
+                free(tokens[i]);
         }
+        free(tokens);
+
         return ret;
 }
 
@@ -634,6 +727,10 @@ int main(int argc, char **argv)
                 bool err = false;
                 struct ifile *cur = ifiles->head;
                 while (cur != nullptr) {
+                        if (strlen(cur->ifname) == 1) { // operator
+                                cur = cur->next;
+                                continue;
+                        }
                         struct dec_image dec = decode(&state, cur->ifname);
                         if (dec.data == nullptr) {
                                 ret = ERR_SOME_FILES_NOT_TRANSCODED;
