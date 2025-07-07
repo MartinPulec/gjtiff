@@ -27,6 +27,11 @@ struct coordinate {
         double longitude;
 };
 
+struct ramp {
+        double src;
+        uint32_t dst;
+};
+
 struct dec_image {
         enum rc rc; ///< defined only if data=nullptr
         int width;
@@ -44,6 +49,7 @@ struct owned_image {
         struct dec_image img;
         bool planar;
         int planes_used; // if planar, tells if 2 or 3 planes is used if img.comp_count=3
+        bool in_float; // samples are stored in float
         void (*free)(struct owned_image *img);
 };
 

@@ -86,6 +86,16 @@ struct state_gjtiff {
         bool first = true;
 };
 
+const static struct {
+        char symbol;
+        int priority;
+        const char *name;
+} operators[] = {
+        {',', 1, "COMMA"},
+        {'+', 2, "PLUS"},
+        {'-', 2, "MINUS"},
+};
+
 state_gjtiff::state_gjtiff(struct options opts)
     : opts(opts)
 {
@@ -326,6 +336,67 @@ static bool unify_sizes(struct state_gjtiff *s, struct ifiles *ifiles)
         return true;
 }
 
+static ifile *op_images(struct state_gjtiff *s, struct ifile **first_p, char op)
+{
+        struct ifile *first = *first_p;
+        struct ifile *second = first->next;
+        struct ifile *add_op = second->next;
+
+        struct dec_image desc = first->img->img;
+        size_t sample_count = (size_t) desc.width * desc.height;
+        for (auto *it : {first, second}) {
+                if (!it->img->in_float) {
+                        struct owned_image *in_fl = new_cuda_owned_float_image(
+                            &desc);
+                        convert_u8_to_float(it->img->img.data,
+                                            (float *)in_fl->img.data,
+                                            sample_count, s->stream);
+                        it->img->free(it->img);
+                        it->img = in_fl;
+                }
+        }
+        struct owned_image *res_fl = new_cuda_owned_float_image(&desc);
+        npp_float_operation((const float *)first->img->img.data,
+                            (const float *)second->img->img.data,
+                            (float *)res_fl->img.data, op, sample_count,
+                            s->stream);
+
+        struct ifile *combined = new_ifile();
+        combined->img = res_fl;
+        combined->prev = first->prev;
+        combined->next = add_op->next;
+        if (combined->next != nullptr) {
+                combined->next->prev = combined;
+        }
+        snprintf(combined->ifname, sizeof combined->ifname, "(operator%c)", op);
+        *first_p = combined;
+
+        ifile_del_ref(first);
+        ifile_del_ref(second);
+        ifile_del_ref(add_op);
+
+        return combined;
+}
+
+static void to_rgba(struct state_gjtiff *s, struct ifile *ifile)
+{
+        struct dec_image new_desc =ifile->img->img;
+        new_desc.comp_count = 4;
+        struct owned_image *nimg = new_cuda_owned_image(&new_desc);
+
+        struct ramp ramp[] = {
+                {-1, 0x00}, 
+                {1, 0xFF}, 
+        };
+        uint32_t *d_lut = get_lut(2, ramp, s->stream);
+        convert_float_to_u32((float *)ifile->img->img.data, (uint32_t *) nimg->img.data,
+                             (size_t) ifile->img->img.width * ifile->img->img.height,
+                             d_lut, s->stream);
+
+        ifile->img->free(ifile->img);
+        ifile->img = nimg;
+}
+
 static ifile *combine_images(struct state_gjtiff *s, struct ifile **first_p)
 {
         struct ifile *first = *first_p;
@@ -391,6 +462,8 @@ static ifile *combine_images(struct state_gjtiff *s, struct ifile **first_p)
         return combined;
 }
 
+static int operator_prec(int ch);
+
 static void reduce(struct state_gjtiff *s, struct ifiles *ifiles)
 {
         struct ifile *cur = ifiles->head;
@@ -399,21 +472,26 @@ static void reduce(struct state_gjtiff *s, struct ifiles *ifiles)
                         cur = cur->next;
                         continue;
                 }
-                if (cur->ifname[0] != ',') {
+                const char op = cur->ifname[0];
+                if (operator_prec(op) == 0) {
                         ERROR_MSG("Unexpected operator '%c'!\n", cur->ifname[0]);
                         return;
                 }
 
                 if (cur->prev == nullptr || cur->prev->prev == nullptr) {
-                        ERROR_MSG(
-                            "Not enough operands for ',' - need 2, got %d!\n",
-                            cur->prev == nullptr ? 0 : 1);
+                        ERROR_MSG("Not enough operands for binary '%c' - need "
+                                  "2, got %d!\n",
+                                  op, cur->prev == nullptr ? 0 : 1);
                         return;
                 }
                 auto *first = cur->prev->prev;
                 auto **first_ptr = first->prev != nullptr ? &first->prev
                                                           : &ifiles->head;
-                cur = combine_images(s, first_ptr);
+                if (op == ',') {
+                        cur = combine_images(s, first_ptr);
+                } else {
+                        cur = op_images(s, first_ptr, op);
+                }
                 if (cur == nullptr) {
                         return;
                 }
@@ -421,25 +499,36 @@ static void reduce(struct state_gjtiff *s, struct ifiles *ifiles)
         }
 }
 
-static void process_images(struct state_gjtiff *s, struct ifiles *ifiles)
+static bool process_images(struct state_gjtiff *s, struct ifiles *ifiles)
 {
-        if (ifiles->head->next == nullptr) {
-                return;
+        if (ifiles->head->next == nullptr) { // single image
+                return true;
         }
         if (!unify_sizes(s, ifiles)) {
-                return;
+                return false;
         }
         reduce(s, ifiles);
+        if (ifiles->head->next != nullptr) {
+                ERROR_MSG(
+                    "Error - more than one item on stack, cannot encode! The stack:\n");
+                auto *cur = ifiles->head;
+                while (cur != nullptr) {
+                        printf("\t- %s\n", cur->ifname);
+                        cur = cur->next;
+                }
+                return false;
+        }
+        if (ifiles->head->img->in_float) {
+                to_rgba(s, ifiles->head);
+        }
+        return true;
 }
 
 static void encode(struct state_gjtiff *s, int req_quality,
                    struct ifiles *ifiles, const char *ifname,
                    const char *ofname)
 {
-        process_images(s, ifiles);
-        if (ifiles->head->next != nullptr) {
-                ERROR_MSG(
-                    "Error - more than one item on stack, cannot encode!\n");
+        if (!process_images(s, ifiles)) {
                 return;
         }
 
@@ -492,11 +581,17 @@ static void set_ofname(const struct ifiles *ifiles, char *ofname, size_t buflen,
         while (cur != nullptr) {
                 const char *ifname = cur->ifname;
                 char *basename = nullptr;
-                if (strcmp(ifname, ",") == 0) {
-                        basename = strdup("COMMA");
-                } else if (strrchr(ifname, '/') != nullptr) {
+                if (strrchr(ifname, '/') != nullptr) {
                         basename = strdup(strrchr(ifname, '/') + 1);
-                } else {
+                } else if (strlen(ifname) == 1) {
+                        for (unsigned i = 0; i < ARR_SIZE(operators); ++i) {
+                                if (operators[i].symbol == ifname[0]) {
+                                        basename = strdup(operators[i].name);
+                                        break;
+                                }
+                        }
+                }
+                if (basename == nullptr) {
                         basename = strdup(ifname);
                 }
                 char *last_dot = strrchr(basename, '.');
@@ -590,12 +685,13 @@ static char *get_next_ifname(bool from_stdin, char ***argv, char *buf,
 
 static int operator_prec(int ch)
 {
-        switch (ch) {
-        case ',':
-                return 1;
-        default:
-                return 0;
-        };
+        for (unsigned i = 0; i < ARR_SIZE(operators); ++i) {
+                if (operators[i].symbol == ch) {
+                        return operators[i].priority;
+                }
+                
+        }
+        return 0;
 }
 
 static ifiles *parse_ifiles(const char *ifnames)

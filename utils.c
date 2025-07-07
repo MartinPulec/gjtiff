@@ -248,13 +248,24 @@ static void release_owned_cuda_image(struct owned_image *img)
         free(img);
 }
 
-struct owned_image *new_cuda_owned_image(const struct dec_image *in)
+static struct owned_image *new_cuda_owned_image_int(const struct dec_image *in, int bpp)
 {
         struct owned_image *ret = malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
-        const size_t size = (size_t) in->width * in->height * in->comp_count;
+        const size_t size = (size_t) in->width * in->height * in->comp_count * bpp;
         CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
         ret->free = release_owned_cuda_image;
         return ret;
 }
 
+struct owned_image *new_cuda_owned_image(const struct dec_image *in)
+{
+        return new_cuda_owned_image_int(in, sizeof(uint8_t));
+}
+
+struct owned_image *new_cuda_owned_float_image(const struct dec_image *in)
+{
+        struct owned_image *ret = new_cuda_owned_image_int(in, sizeof(float));
+        ret->in_float = true;
+        return ret;
+}

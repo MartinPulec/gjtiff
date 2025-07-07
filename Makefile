@@ -9,7 +9,7 @@ INSTALL = install
 LDFLAGS += -fopenmp -L$(NVCC_DIR)/../lib64
 LIBS += $(shell pkg-config --libs gdal)
 LIBS += -lcudart -lgpujpeg -lm \
-	-lnppc -lnppig -lnpps -lnppist \
+	-lnppc -lnppidei -lnppial -lnppig -lnpps -lnppist \
 	-lnvjpeg2k -lnvtiff -ltiff
 	# -lgrok
 BUILD_DIR ?= .

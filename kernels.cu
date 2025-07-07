@@ -1,5 +1,6 @@
 #include "kernels.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <nppcore.h>
 #include <nppdefs.h>
@@ -30,6 +31,14 @@ __global__ void kernel_normalize(t *in, uint8_t *out, size_t count, float scale)
 #endif
         out[position] = normalized * 255;
 }
+
+#define OBTAIN_NPP_CTX                                                         \
+        static thread_local NppStreamContext nppStreamCtx{};                   \
+        static thread_local cudaStream_t saved_stream = (cudaStream_t)1;       \
+        if (stream != saved_stream) {                                          \
+                init_npp_context(&nppStreamCtx, (cudaStream_t)stream);         \
+                saved_stream = (cudaStream_t)stream;                           \
+        }
 
 static struct {
         struct {
@@ -92,12 +101,7 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
                                  // obtain scale
         };
 #ifdef NPP_NEW_API
-        static thread_local NppStreamContext nppStreamCtx{};
-        static thread_local cudaStream_t saved_stream = (cudaStream_t) 1;
-        if (stream != saved_stream) {
-                init_npp_context(&nppStreamCtx, stream);
-                saved_stream = stream;
-        }
+        OBTAIN_NPP_CTX
 #else
         if (nppGetStream() != stream) {
                 nppSetStream(stream);
@@ -329,6 +333,110 @@ void downscale_image_cuda(const uint8_t *in, uint8_t *out, int comp_count,
                             "Downscaling for %d channels not supported!\n",
                             comp_count);
                 }
+        CHECK_CUDA(cudaGetLastError());
+}
+
+void convert_u8_to_float(const uint8_t *in, float *out, size_t count, void *stream) {
+        OBTAIN_NPP_CTX
+        NppiSize ROI;
+        ROI.width = count;
+        ROI.height = 1;
+        CHECK_NPP(nppiConvert_8u32f_C1R_Ctx(
+            in, count, out, count * sizeof(float), ROI, nppStreamCtx));
+}
+
+void npp_float_operation(const float *in1, const float *in2,
+                         float *out, char op, size_t count, void *stream) {
+        OBTAIN_NPP_CTX
+        NppiSize ROI;
+        ROI.width = count;
+        ROI.height = 1;
+        int step = count * sizeof(float);
+        if (op == '+') {
+                nppiAdd_32f_C1R_Ctx(in1, step, in2, step, out, step, ROI, nppStreamCtx);
+        } else {
+                ERROR_MSG("Unexpected operation %c!\n", op);
+                abort();
+        }
+        
+}
+
+uint32_t *get_lut(int ramp_sz, const struct ramp *ramp, void *vstream) {
+        uint32_t lut[1000];
+        int first_idx = ramp->src * 1000;
+        for (int i = 0; i < first_idx; ++i) {
+                lut[i] = ramp->dst;
+        }
+
+        for (int i = 1; i < ramp_sz - 1; ++i) {
+                int a1 = ramp[-1].dst >> 24;
+                int b1 = (ramp[-1].dst >> 16) & 0xFF;
+                int g1 = (ramp[-1].dst >> 8) & 0xFF;
+                int r1 = (ramp[-1].dst >> 0) & 0xFF;
+
+                int a2 = ramp[0].dst >> 24;
+                int b2 = (ramp[0].dst >> 16) & 0xFF;
+                int g2 = (ramp[0].dst >> 8) & 0xFF;
+                int r2 = (ramp[0].dst >> 0) & 0xFF;
+
+                int first_idx = ramp[-1].src * 1000;
+                int last_idx = ramp[0].src * 1000;
+                double scale = last_idx - first_idx;
+                for (int i = first_idx; i < last_idx; ++i) {
+                         int a = a1 + i * scale * (a2 - a1) / 1000;
+                         int b = b1 + i * scale * (b2 - b1) / 1000;
+                         int g = g1 + i * scale * (g2 - g1) / 1000;
+                         int r = r1 + i * scale * (r2 - r1) / 1000;
+
+                         lut[i] = std::clamp(a, 0, 255) << 24 |
+                                  std::clamp(b, 0, 255) << 24 |
+                                  std::clamp(g, 0, 255) << 24 |
+                                  std::clamp(r, 0, 255) << 24;
+                }
+        }
+        int last_idx = ramp[ramp_sz - 1].src * 1000;
+        int last_rgb = ramp[ramp_sz - 1].dst * 1000;
+        for (int i = last_idx; i < 1000; ++i) {
+                lut[i] = last_rgb;
+        }
+
+        uint32_t *ret = nullptr;
+        auto *stream = (cudaStream_t) vstream;
+        CHECK_CUDA(cudaMallocAsync(&ret, sizeof lut, stream));
+        CHECK_CUDA(
+            cudaMemcpyAsync(ret, lut, sizeof lut, cudaMemcpyDefault, stream));
+        return ret;
+}
+
+static __global__ void kernel_convert_float_to_u32(const float *in,
+                                                   uint32_t *out,
+                                                   const uint32_t *lut,
+                                                   size_t datalen)
+{
+        int position = threadIdx.x +
+                       (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x;
+        if (position > datalen) {
+                return;
+        }
+        float val = in[position]; // range -1.0-1.0
+        val += 1.0;
+        val /= 2.0;
+        int index= val * 1000;
+        if (index < 0) {
+                index = 0;
+        }
+        if (index > 999) {
+                index = 999;
+        }
+        out[position] = lut[index];
+}
+
+void convert_float_to_u32(const float *d_in, uint32_t *d_out, size_t count,
+                          const uint32_t *d_lut, void *stream)
+{
+        kernel_convert_float_to_u32<<<dim3((count+ 255) / 256),
+                                        dim3(256), 0, (cudaStream_t)stream>>>(
+            d_in, d_out, d_lut, count);
         CHECK_CUDA(cudaGetLastError());
 }
 

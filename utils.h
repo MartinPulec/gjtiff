@@ -127,6 +127,7 @@ void init_npp_context(NppStreamContext *nppStreamCtx,
 struct dec_image;
 struct owned_image;
 struct owned_image *new_cuda_owned_image(const struct dec_image *in);
+struct owned_image *new_cuda_owned_float_image(const struct dec_image *in);
 
 #ifdef __cplusplus
 }
