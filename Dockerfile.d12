@@ -1,0 +1,22 @@
+FROM debian:12
+WORKDIR /build
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN echo "nvidia-legacy-check nvidia-driver/check-for-unsupported-gpu boolean false" | debconf-set-selections
+RUN sed -i 's/^Components:.*/Components: main contrib non-free non-free-firmware/' \
+  /etc/apt/sources.list.d/debian.sources
+RUN apt -y update
+RUN apt -y install cmake curl g++ gcc git libgdal-dev libtiff-dev make pkgconf wget xz-utils
+RUN apt -y --no-install-recommends install nvidia-cuda-toolkit
+
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/\
+debian12/x86_64/cuda-keyring_1.1-1_all.deb && \
+dpkg -i cuda-keyring_1.1-1_all.deb
+RUN apt -y update
+RUN apt -y install nvcomp nvjpeg2k-cuda-11 nvtiff-cuda-11
+
+RUN curl -LO https://github.com/CESNET/GPUJPEG/releases/download/continuous/\
+GPUJPEG-Linux-all.tar.xz && tar xaf GPUJPEG*tar* && cp -r GPUJPEG/* /usr
+
+COPY *c *cpp *h *hpp *cu Makefile gjtiff/
+RUN cd gjtiff && make -j $(nproc) install
