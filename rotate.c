@@ -81,7 +81,9 @@ void get_lat_lon_min_max(struct coordinate coords[4], double *lat_min,
  * normalize the coordinates to 0..1 and
  * @return asoect ratio
  */
-static double normalize_coords_intrn(struct coordinate coords[4], bool second_run)
+static double normalize_coords_intrn(const struct coordinate src_coords[4],
+                                     struct coordinate coords[4],
+                                     bool second_run)
 {
         double lat_min = 0;
         double lat_max = 0;
@@ -94,6 +96,7 @@ static double normalize_coords_intrn(struct coordinate coords[4], bool second_ru
         };
 
         if (!second_run) {
+                memcpy(coords, src_coords, 4 * sizeof(struct coordinate));
                 // make the coordinates positive:
                 // - lat - 270-450
                 // - lon - 0-360
@@ -113,7 +116,7 @@ static double normalize_coords_intrn(struct coordinate coords[4], bool second_ru
                         }
                 }
                 assert(!second_run);
-                return normalize_coords_intrn(coords, true);
+                return normalize_coords_intrn(src_coords, coords, true);
         }
         if (lat_min < LAT_OFF - 85 || lat_max > LAT_OFF + 85) {
                 const double near_pole_pt_lat =
@@ -141,8 +144,8 @@ static double normalize_coords_intrn(struct coordinate coords[4], bool second_ru
         return (lon_range / lat_range) * lon_lat_ratio;
 }
 
-static double normalize_coords(struct coordinate coords[4]) {
-        return normalize_coords_intrn(coords, false);
+static double normalize_coords(const struct coordinate src_coords[4], struct coordinate dst_coords[4]) {
+        return normalize_coords_intrn(src_coords, dst_coords, false);
 }
 
 /// fullfill GPUJPEG mem requirements
@@ -218,8 +221,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         };
 
         struct coordinate coords[4];
-        memcpy(coords, in->coords, sizeof coords);
-        const double dst_aspect = normalize_coords(coords);
+        const double dst_aspect = normalize_coords(in->coords, coords);
         if (dst_aspect == -1) {
                 DEBUG_MSG("Near North/South pole - not rotating\n");
                 return take_ownership(in);
