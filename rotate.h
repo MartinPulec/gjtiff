@@ -17,7 +17,7 @@ void rotate_destroy(struct rotate_state *s);
 
 
 // util for print_bbox
-void get_lat_lon_min_max(struct coordinate coords[4], double *lat_min,
+void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
                          double *lat_max, double *lon_min, double *lon_max);
 
 #ifdef __cplusplus

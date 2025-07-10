@@ -53,7 +53,7 @@ void rotate_destroy(struct rotate_state *s)
         free(s);
 }
 
-void get_lat_lon_min_max(struct coordinate coords[4], double *lat_min,
+void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
                          double *lat_max, double *lon_min, double *lon_max)
 {
         *lat_min = 1e6;
@@ -81,71 +81,39 @@ void get_lat_lon_min_max(struct coordinate coords[4], double *lat_min,
  * normalize the coordinates to 0..1 and
  * @return asoect ratio
  */
-static double normalize_coords_intrn(const struct coordinate src_coords[4],
-                                     struct coordinate coords[4],
-                                     bool second_run)
+static double normalize_coords(const struct coordinate src_coords[4],
+                               struct coordinate coords[4])
 {
+        for (unsigned i = 0; i < 4; ++i) {
+                double lat_rad = src_coords[i].latitude / 180. * M_PI;
+                coords[i].latitude = (M_PI -
+                                      log(tan((M_PI / 4.) + (lat_rad / 2.)))) /
+                                     (2. * M_PI);
+                double lon_rad = src_coords[i].longitude / 180. * M_PI;
+                coords[i].longitude = (M_PI + lon_rad) / (2. * M_PI);
+        }
+
         double lat_min = 0;
         double lat_max = 0;
         double lon_min = 0;
         double lon_max = 0;
-
-        enum {
-                LAT_OFF = 360, // val that added is inert to cos()
-                LON_OFF = 180,
-        };
-
-        if (!second_run) {
-                memcpy(coords, src_coords, 4 * sizeof(struct coordinate));
-                // make the coordinates positive:
-                // - lat - 270-450
-                // - lon - 0-360
-                for (unsigned i = 0; i < 4; ++i) {
-                        coords[i].latitude += LAT_OFF;
-                        coords[i].longitude += LON_OFF;
-                }
-        }
         get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
-
-        // handle longitude 179->-179 transition (eastern to western
-        // hemishpere); zero is now shifted to 180
-        if (lon_min < LON_OFF && lon_max >= LON_OFF) {
-                for (unsigned i = 0; i < 4; ++i) {
-                        if (coords[i].longitude < LON_OFF) {
-                                coords[i].longitude += 360.0;
-                        }
-                }
-                assert(!second_run);
-                return normalize_coords_intrn(src_coords, coords, true);
-        }
-        if (lat_min < LAT_OFF - 85 || lat_max > LAT_OFF + 85) {
-                const double near_pole_pt_lat =
-                    (lat_max > LAT_OFF + 85 ? lat_max : lat_min) - LAT_OFF;
-                WARN_MSG("Not normalizing areas near North/South Pole! (at "
-                         "least one point at most 5° /%f°/ degrees from the "
-                         "Pole)\n", near_pole_pt_lat);
-                return -1;
-        }
 
         double lat_range = lat_max - lat_min;
         double lon_range = lon_max - lon_min;
 
+        // fprintf(stderr,
+        //         "lat_min: %f lat_max: %f lon_min: %f lon_max: %f lat_range: %f "
+        //         "lon_range: %f\n",
+        //         lat_min, lat_max, lon_min, lon_max, lat_range, lon_range);
+
         for (unsigned i = 0; i < 4; ++i) {
-                coords[i].latitude = 1.0 -
-                                     (coords[i].latitude - lat_min) / lat_range;
+                coords[i].latitude = (coords[i].latitude - lat_min) / lat_range;
                 coords[i].longitude = (coords[i].longitude - lon_min) /
                                       lon_range;
         }
 
-        double lat_mean = lat_min + ((lat_max - lat_min) / 2);
-        static_assert(LAT_OFF % 360 == 0);
-        double lon_lat_ratio = cos(M_PI * lat_mean / 180.0);
-
-        return (lon_range / lat_range) * lon_lat_ratio;
-}
-
-static double normalize_coords(const struct coordinate src_coords[4], struct coordinate dst_coords[4]) {
-        return normalize_coords_intrn(src_coords, dst_coords, false);
+        return lon_range / lat_range;
 }
 
 /// fullfill GPUJPEG mem requirements
