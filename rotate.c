@@ -84,6 +84,23 @@ void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
 static double normalize_coords(const struct coordinate src_coords[4],
                                struct coordinate coords[4])
 {
+        double lat_min = 0;
+        double lat_max = 0;
+        double lon_min = 0;
+        double lon_max = 0;
+
+        // check if not near poles
+        get_lat_lon_min_max(src_coords, &lat_min, &lat_max, &lon_min, &lon_max);
+        if (lat_min < -85. || lat_max > 85.) {
+                const double near_pole_pt_lat = (lat_max > 85 ? lat_max
+                                                              : lat_min);
+                WARN_MSG("Not normalizing areas near North/South Pole! (at "
+                         "least one point at most 5° /%f°/ degrees from the "
+                         "Pole)\n",
+                         near_pole_pt_lat);
+                return -1;
+        }
+
         for (unsigned i = 0; i < 4; ++i) {
                 double lat_rad = src_coords[i].latitude / 180. * M_PI;
                 coords[i].latitude = (M_PI -
@@ -93,10 +110,6 @@ static double normalize_coords(const struct coordinate src_coords[4],
                 coords[i].longitude = (M_PI + lon_rad) / (2. * M_PI);
         }
 
-        double lat_min = 0;
-        double lat_max = 0;
-        double lon_min = 0;
-        double lon_max = 0;
         get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
 
         double lat_range = lat_max - lat_min;
