@@ -20,6 +20,9 @@ void rotate_destroy(struct rotate_state *s);
 void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
                          double *lat_max, double *lon_min, double *lon_max);
 
+void gcs_to_wgs(const struct coordinate src_coords[4],
+                struct coordinate coords[4]);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

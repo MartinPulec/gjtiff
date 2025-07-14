@@ -77,6 +77,19 @@ void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
         }
 }
 
+void gcs_to_wgs(const struct coordinate src_coords[4],
+                struct coordinate coords[4])
+{
+        for (unsigned i = 0; i < 4; ++i) {
+                double lat_rad = src_coords[i].latitude / 180. * M_PI;
+                coords[i].latitude = (M_PI -
+                                      log(tan((M_PI / 4.) + (lat_rad / 2.)))) /
+                                     (2. * M_PI);
+                double lon_rad = src_coords[i].longitude / 180. * M_PI;
+                coords[i].longitude = (M_PI + lon_rad) / (2. * M_PI);
+        }
+}
+
 /**
  * normalize the coordinates to 0..1 and
  * @return asoect ratio
@@ -101,15 +114,7 @@ static double normalize_coords(const struct coordinate src_coords[4],
                 return -1;
         }
 
-        for (unsigned i = 0; i < 4; ++i) {
-                double lat_rad = src_coords[i].latitude / 180. * M_PI;
-                coords[i].latitude = (M_PI -
-                                      log(tan((M_PI / 4.) + (lat_rad / 2.)))) /
-                                     (2. * M_PI);
-                double lon_rad = src_coords[i].longitude / 180. * M_PI;
-                coords[i].longitude = (M_PI + lon_rad) / (2. * M_PI);
-        }
-
+        gcs_to_wgs(src_coords, coords);
         get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
 
         double lat_range = lat_max - lat_min;
