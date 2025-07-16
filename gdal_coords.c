@@ -52,9 +52,18 @@ void set_coords_from_gdal(const char *fname, struct dec_image *image)
                 return;
         }
 
+        image->bounds[0] = x_min;
+        image->bounds[1] = y_max;
+        image->bounds[2] = x_max;
+        image->bounds[3] = y_min;
+
         OGRSpatialReferenceH src_srs = OSRNewSpatialReference(proj_wkt);
         OGRSpatialReferenceH dst_srs = OSRNewSpatialReference(NULL);
         OSRSetWellKnownGeogCS(dst_srs, "WGS84");
+
+        snprintf(image->authority, sizeof image->authority, "%s:%s",
+                 OSRGetAuthorityName(src_srs, NULL),
+                 OSRGetAuthorityCode(src_srs, NULL));
 
         OGRCoordinateTransformationH transform = OCTNewCoordinateTransformation(
             src_srs, dst_srs);
@@ -83,6 +92,9 @@ void set_coords_from_gdal(const char *fname, struct dec_image *image)
                   transform_and_print(x_min, y_min, transform,
                                       &image->coords[3], coord_pos_name[3]);
         image->coords_set = success;
+
+        INFO_MSG("\t%s (%s): %.2f %.2f %.2f %.2f\n", image->authority, OSRGetName(src_srs), image->bounds[0],
+                 image->bounds[1], image->bounds[2], image->bounds[3]);
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);

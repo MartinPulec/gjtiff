@@ -38,6 +38,9 @@ struct dec_image {
         /// (@sa coord_pos_name)
         struct coordinate coords[4];
         bool coords_set;
+
+        char authority[20]; // EPSG:xxxx or "" if not set
+        double bounds[4]; // x_min, y_max (lwft top), x_max, y_min (right bottom)
 };
 
 struct owned_image {
