@@ -40,6 +40,7 @@ $(BUILD_DIR)/gjtiff: \
 	$(BUILD_DIR)/main.o \
 	$(BUILD_DIR)/pam.o \
 	$(BUILD_DIR)/rotate.o \
+	$(BUILD_DIR)/rotate_utm.o \
 	$(BUILD_DIR)/utils.o
 	$(CXX) $(LDFLAGS) $^ $(LIBS) -o $@
 

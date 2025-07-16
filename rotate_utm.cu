@@ -1,4 +1,4 @@
-#include "rotate.h"
+#include "rotate_utm.h"
 
 #include <assert.h>
 #include <cuda_runtime.h>
@@ -15,72 +15,34 @@
 #include "defs.h"
 #include "nppdefs.h"
 #include "nppi_geometry_transforms.h"
-#include "rotate_utm.h"
+#include "rotate.h" // for get_lat_lon_min_max
 #include "utils.h"
-
-#ifdef NPP_NEW_API
-#define CONTEXT , s->nppStreamCtx
-#else
-#define CONTEXT
-#endif
 
 extern long long mem_limit; // defined in main.c
 
-struct rotate_state {
+struct rotate_utm_state {
         cudaStream_t stream;
-#ifdef NPP_NEW_API
         NppStreamContext nppStreamCtx;
-#endif
-        struct rotate_utm_state *rotate_utm;
 };
 
-struct rotate_state *rotate_init(cudaStream_t stream)
+struct rotate_utm_state *rotate_utm_init(cudaStream_t stream)
 {
-        struct rotate_state *s = calloc(1, sizeof *s);
+        struct rotate_utm_state *s = (struct rotate_utm_state *)calloc(
+            1, sizeof *s);
         assert(s != NULL);
         s->stream = stream;
 
-#ifdef NPP_NEW_API
         init_npp_context(&s->nppStreamCtx, stream);
-#endif
-
-        s->rotate_utm = rotate_utm_init(stream);
-        assert(s->rotate_utm != NULL);
 
         return s;
 }
 
-void rotate_destroy(struct rotate_state *s)
+void rotate_utm_destroy(struct rotate_utm_state *s)
 {
         if (s == NULL) {
                 return;
         }
-        rotate_utm_destroy(s->rotate_utm);
         free(s);
-}
-
-void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
-                         double *lat_max, double *lon_min, double *lon_max)
-{
-        *lat_min = 1e6;
-        *lat_max = -1e6;
-        *lon_min = 1e6;
-        *lon_max = -1e6;
-
-        for (unsigned i = 0; i < 4; ++i) {
-                if (coords[i].latitude < *lat_min) {
-                        *lat_min = coords[i].latitude;
-                }
-                if (coords[i].latitude > *lat_max) {
-                        *lat_max = coords[i].latitude;
-                }
-                if (coords[i].longitude < *lon_min) {
-                        *lon_min = coords[i].longitude;
-                }
-                if (coords[i].longitude > *lon_max) {
-                        *lon_max = coords[i].longitude;
-                }
-        }
 }
 
 /**
@@ -174,7 +136,7 @@ static void release_owned_image(struct owned_image *img) {
 
 static struct owned_image *take_ownership(const struct dec_image *in)
 {
-        struct owned_image *ret = malloc(sizeof *ret);
+        struct owned_image *ret = (struct owned_image *)malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
         const size_t size = (size_t) in->width * in->height * in->comp_count;
         CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
@@ -184,31 +146,13 @@ static struct owned_image *take_ownership(const struct dec_image *in)
         return ret;
 }
 
-struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
+struct owned_image *rotate_utm(struct rotate_utm_state *s, const struct dec_image *in)
 {
-        if (s == NULL) {
-                return take_ownership(in);
-        }
-        if (!in->coords_set) {
-                WARN_MSG("Coordinates not set, not normalizing image...\n");
-                return take_ownership(in);
-        }
-
-        if (strlen(in->authority) != 0)  {
-                return rotate_utm(s->rotate_utm, in);
-        }
-
-#ifndef NPP_NEW_API
-        if (nppGetStream() != s->stream) {
-                nppSetStream(s->stream);
-        }
-#endif
-
         double aSrcQuad[4][2] = {
-            {0.0, 0.0},              // Top-left
-            {in->width, 0},          // Top-right
-            {in->width, in->height}, // Bottom-right
-            {0.0, in->height}        // Bottom-left
+            {0.0, 0.0},                              // Top-left
+            {(double)in->width, 0},                  // Top-right
+            {(double)in->width, (double)in->height}, // Bottom-right
+            {0.0, (double)in->height}                // Bottom-left
         };
 
         struct coordinate coords[4];
@@ -222,7 +166,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};
 
-        struct owned_image *ret = malloc(sizeof *ret);
+        struct owned_image *ret = (struct owned_image *) malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
         ret->free = release_owned_image;
         // keep one side as in original and upscale the other to meet dst
@@ -258,15 +202,16 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                                    s->stream));
         const int interpolation = NPPI_INTER_LINEAR;
         if (in->comp_count == 1) {
-                CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C1R)(
-                    in->data, oSrcSize, in->width, oSrcROI, aSrcQuad, ret->img.data,
-                    ret->img.width, oDstROI, aDstQuad, interpolation CONTEXT));
+                CHECK_NPP(nppiWarpPerspectiveQuad_8u_C1R_Ctx(
+                    in->data, oSrcSize, in->width, oSrcROI, aSrcQuad,
+                    ret->img.data, ret->img.width, oDstROI, aDstQuad,
+                    interpolation, s->nppStreamCtx));
         } else {
                 assert(in->comp_count == 3);
-                CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C3R)(
+                CHECK_NPP(nppiWarpPerspectiveQuad_8u_C3R_Ctx(
                     in->data, oSrcSize, 3 * in->width, oSrcROI, aSrcQuad,
                     ret->img.data, 3 * ret->img.width, oDstROI, aDstQuad,
-                    interpolation CONTEXT));
+                    interpolation, s->nppStreamCtx));
         }
         GPU_TIMER_STOP(rotate);
 
