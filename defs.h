@@ -48,7 +48,7 @@ struct owned_image {
         void (*free)(struct owned_image *img);
 };
 
-#define DEC_IMG_ERR(rc) {rc, 0, 0, 0, 0, {0.0, 0.0}, false}
+#define DEC_IMG_ERR(rc) {rc, 0, 0, 0, 0, {0.0, 0.0}, false, "", {0, 0, 0, 0}}
 
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \
