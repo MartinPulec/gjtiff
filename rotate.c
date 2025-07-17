@@ -222,18 +222,18 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};
 
-        struct owned_image *ret = malloc(sizeof *ret);
-        memcpy(&ret->img, in, sizeof *in);
-        ret->free = release_owned_image;
         // keep one side as in original and upscale the other to meet dst
         // projection dimension
         const double src_aspect = (double)in->width / in->height;
+        struct dec_image dst_desc = *in;
         if (dst_aspect >= src_aspect) {
-                ret->img.width = (int)(ret->img.height * dst_aspect);
+                dst_desc.width = (int)(dst_desc.height * dst_aspect);
         } else {
-                ret->img.height = (int)(ret->img.width / dst_aspect);
+                dst_desc.height = (int)(dst_desc.width / dst_aspect);
         }
-        adjust_size(&ret->img.width, &ret->img.height, in->comp_count);
+        adjust_size(&dst_desc.width, &dst_desc.height, in->comp_count);
+
+        struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         const size_t req_size = (size_t)ret->img.width * ret->img.height *
                                 ret->img.comp_count;
