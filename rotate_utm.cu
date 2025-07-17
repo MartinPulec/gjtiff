@@ -1,7 +1,10 @@
 #include "rotate_utm.h"
 
+#include <algorithm>
 #include <assert.h>
 #include <cuda_runtime.h>
+#include <cuproj/projection_factories.cuh>
+#include <cuproj/vec_2d.hpp>
 #include <errno.h>
 #include <limits.h> // PATH_MAX
 #include <math.h>
@@ -17,6 +20,8 @@
 #include "nppi_geometry_transforms.h"
 #include "rotate.h" // for get_lat_lon_min_max
 #include "utils.h"
+
+using namespace std;
 
 extern long long mem_limit; // defined in main.c
 
@@ -134,20 +139,60 @@ static void release_owned_image(struct owned_image *img) {
         free(img);
 }
 
-static struct owned_image *take_ownership(const struct dec_image *in)
+static __global__ void
+kernel(const uint8_t* d_in, uint8_t* d_out,
+                     int in_width,
+                     int in_height,
+                     int out_width,
+                     int out_height
+)
 {
-        struct owned_image *ret = (struct owned_image *)malloc(sizeof *ret);
-        memcpy(&ret->img, in, sizeof *in);
-        const size_t size = (size_t) in->width * in->height * in->comp_count;
-        CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
-        CHECK_CUDA(
-            cudaMemcpy(ret->img.data, in->data, size, cudaMemcpyDefault));
-        ret->free = release_owned_image;
+    int x = blockIdx.x * blockDim.x + threadIdx.x; // column index
+    int y = blockIdx.y * blockDim.y + threadIdx.y; // row index
+
+    if ( x >= out_width || y >= out_height ) {
+            return;
+    }
+    d_out[x + y * out_width] = d_in[x + y * in_width];
+}
+
+
+static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
+                                        const struct dec_image *in)
+{
+        double src_ratio = (in->bounds[XMAX] - in->bounds[XMIN]) /
+                           (in->bounds[YMAX] - in->bounds[YMIN]);
+        double lat_top = max(in->coords[ULEFT].latitude, in->coords[URIGHT].latitude);
+        double lat_bot = min(in->coords[BLEFT].latitude, in->coords[BRIGHT].latitude);
+        double lon_left = min(in->coords[ULEFT].longitude, in->coords[BLEFT].longitude);
+        double lon_right = max(in->coords[URIGHT].longitude, in->coords[BRIGHT].longitude);
+        double dst_ratio = (lon_right - lon_left) / (lat_top - lat_bot);
+        struct dec_image dst_desc = *in;
+        if (dst_ratio >= src_ratio) {
+                dst_desc.width = (int)(in->height * dst_ratio);
+        } else {
+                dst_desc.height = (int)(in->width / dst_ratio);
+        }
+        struct owned_image *ret = new_cuda_owned_image(&dst_desc);
+
+        dim3 block(16, 16);
+        int width = dst_desc.width;
+        int height = dst_desc.height;
+        dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+        kernel<<<grid, block, 0, s->stream>>>(
+            in->data, ret->img.data, in->width, in->height, width, height);
+
         return ret;
 }
 
 struct owned_image *rotate_utm(struct rotate_utm_state *s, const struct dec_image *in)
 {
+        struct owned_image *epsg4326 = to_epsg_4326(s, in);
+        if (epsg4326 == nullptr) {
+                return nullptr;
+        }
+        return epsg4326;
+
         double aSrcQuad[4][2] = {
             {0.0, 0.0},                              // Top-left
             {(double)in->width, 0},                  // Top-right
@@ -157,11 +202,6 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s, const struct dec_imag
 
         struct coordinate coords[4];
         const double dst_aspect = normalize_coords(in->coords, coords);
-        if (dst_aspect == -1) {
-                DEBUG_MSG("Near North/South pole - not rotating\n");
-                return take_ownership(in);
-        }
-        assert(dst_aspect > 0);
 
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};

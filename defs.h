@@ -27,6 +27,9 @@ struct coordinate {
         double longitude;
 };
 
+enum { ULEFT, URIGHT, BRIGHT, BLEFT, };
+enum { XMIN, YMAX, XMAX, YMIN, };
+
 struct dec_image {
         enum rc rc; ///< defined only if data=nullptr
         int width;

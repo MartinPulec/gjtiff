@@ -555,6 +555,7 @@ int main(int argc, char **argv)
                                                 opts.downscale_factor, &dec);
                         }
                         ifiles.ifiles[i].img = rotate(state.rotate, &dec);
+                        assert(ifiles.ifiles[i].img != nullptr);
                 }
                 if (!err) {
                         set_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,

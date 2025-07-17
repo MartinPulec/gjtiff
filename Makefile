@@ -1,7 +1,7 @@
 NVCC ?= nvcc
 NVCC_DIR := $(shell dirname $$(command -v $(NVCC)))
 COMMON = $(shell pkg-config --cflags gdal) -g -Wall -Wextra -fopenmp \
-	-I$(NVCC_DIR)/../include
+	-I$(NVCC_DIR)/../include -DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE
 CFLAGS += $(COMMON)
 CXXFLAGS += $(COMMON)
 CUDAFLAGS ?= 
@@ -10,11 +10,17 @@ LDFLAGS += -fopenmp -L$(NVCC_DIR)/../lib64
 LIBS += $(shell pkg-config --libs gdal)
 LIBS += -lcudart -lgpujpeg -lm \
 	-lnppc -lnppig -lnpps -lnppist \
-	-lnvjpeg2k -lnvtiff -ltiff
+	-lnvjpeg2k -lnvtiff \
+	-lproj -lrmm \
+	-ltiff
 	# -lgrok
 BUILD_DIR ?= .
-# build for all supported CUDA architectures
-CUDAARCHS != for n in $$(nvcc --list-gpu-arch); \
+## build for all supported CUDA architectures
+## @todo filtered out CC >= 10.0 - cuspatial is incompatible with that,
+## compilation yields errors like in
+## <https://github.com/bitsandbytes-foundation/bitsandbytes/issues/1688>
+CUDAARCHS != for n in $$(nvcc --list-gpu-arch | \
+	grep -v '[[:digit:]]\{3\}'); \
 	do echo "$$n" | sed -e 's/.*_\([0-9]*\).*/\1/' \
 	-e 's/.*/-gencode arch=compute_&,code=sm_&/'; done | tr '\n' ' '
 
