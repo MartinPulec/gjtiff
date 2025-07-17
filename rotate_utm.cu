@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <assert.h>
 #include <cuda_runtime.h>
+#define NDEBUG
 #include <cuproj/projection_factories.cuh>
 #include <cuproj/vec_2d.hpp>
 #include <errno.h>
@@ -139,27 +140,80 @@ static void release_owned_image(struct owned_image *img) {
         free(img);
 }
 
-static __global__ void
-kernel(const uint8_t* d_in, uint8_t* d_out,
-                     int in_width,
-                     int in_height,
-                     int out_width,
-                     int out_height
-)
+struct bounds {
+        float bound[4];
+};
+using device_projection = cuproj::device_projection<cuproj::vec_2d<float>>;
+static __global__ void kernel(device_projection const d_proj,device_projection const d_proj2,
+                              const uint8_t *d_in, uint8_t *d_out, int in_width,
+                              int in_height, int out_width, int out_height,
+                              struct bounds src_bounds,
+                              struct bounds dst_bounds)
 {
-    int x = blockIdx.x * blockDim.x + threadIdx.x; // column index
-    int y = blockIdx.y * blockDim.y + threadIdx.y; // row index
+        int x = blockIdx.x * blockDim.x + threadIdx.x; // column index
+        int y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
-    if ( x >= out_width || y >= out_height ) {
-            return;
-    }
-    d_out[x + y * out_width] = d_in[x + y * in_width];
+        if (x >= out_width || y >= out_height) {
+                return;
+        }
+
+        float lat_scale = dst_bounds.bound[YMAX] - dst_bounds.bound[YMIN];
+        float this_lat = dst_bounds.bound[YMIN];
+        this_lat += lat_scale * ((x + .5f) / out_height);
+
+        float lon_scale = dst_bounds.bound[XMAX] - dst_bounds.bound[XMIN];
+        float this_lon = dst_bounds.bound[XMIN];
+        this_lon += lon_scale * ((y + .5f) / out_width);
+
+        if (x > 0 || y > 0) return;
+        cuproj::vec_2d<float> in{500000,0};
+        printf("\t%f ddd  %f\n\n\n\n", this_lat, this_lon);
+        printf("\t%f ddd %f\n\n\n\n", in.x, in.y);
+        cuproj::vec_2d<float> out = d_proj.transform(in);
+        printf("%f %f\n", out.x, out.y);
+        in = d_proj2.transform(out);
+        printf("%f %f\n", in.x, in.y);
+        
+        d_out[x + y * out_width] = d_in[x + y * in_width];
 }
 
+__global__ void example_kernel(device_projection const d_proj,
+                               cuproj::vec_2d<float> const* in,
+                               cuproj::vec_2d<float>* out,
+                               size_t n)
+{
+  for (size_t i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += gridDim.x * blockDim.x) {
+    out[i] = d_proj.transform(in[i]);
+  }
+}
+
+void test() {
+  using coordinate = cuproj::vec_2d<float>;
+
+  // Make a projection to convert WGS84 (lat, lon) coordinates to
+  // UTM zone 56S (x, y) coordinates
+  auto proj = cuproj::make_projection<coordinate>("EPSG:4326", "EPSG:32756");
+
+  // Sydney, NSW, Australia
+  coordinate sydney{-33.858700, 151.214000};
+  thrust::device_vector<coordinate> d_in{1, sydney};
+  thrust::device_vector<coordinate> d_out(d_in.size());
+
+  auto d_proj            = proj->get_device_projection(cuproj::direction::FORWARD);
+  std::size_t block_size = 256;
+  std::size_t grid_size  = (d_in.size() + block_size - 1) / block_size;
+  example_kernel<<<grid_size, block_size>>>(
+    d_proj, d_in.data().get(), d_out.data().get(), d_in.size());
+  cudaDeviceSynchronize();
+        CHECK_CUDA(cudaDeviceSynchronize());
+        exit(1);
+        
+}
 
 static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
                                         const struct dec_image *in)
 {
+        // test(); return nullptr;
         double src_ratio = (in->bounds[XMAX] - in->bounds[XMIN]) /
                            (in->bounds[YMAX] - in->bounds[YMIN]);
         double lat_top = max(in->coords[ULEFT].latitude, in->coords[URIGHT].latitude);
@@ -167,6 +221,16 @@ static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
         double lon_left = min(in->coords[ULEFT].longitude, in->coords[BLEFT].longitude);
         double lon_right = max(in->coords[URIGHT].longitude, in->coords[BRIGHT].longitude);
         double dst_ratio = (lon_right - lon_left) / (lat_top - lat_bot);
+        struct bounds dst_bounds;
+        dst_bounds.bound[XMIN] = lon_left;
+        dst_bounds.bound[YMAX] = lat_top;
+        dst_bounds.bound[XMAX] = lon_right;
+        dst_bounds.bound[YMIN] = lat_bot;
+        struct bounds src_bounds;
+        src_bounds.bound[XMIN] = in->bounds[XMIN];
+        src_bounds.bound[YMAX] = in->bounds[YMAX];
+        src_bounds.bound[XMAX] = in->bounds[XMAX];
+        src_bounds.bound[YMIN] = in->bounds[YMIN];
         struct dec_image dst_desc = *in;
         if (dst_ratio >= src_ratio) {
                 dst_desc.width = (int)(in->height * dst_ratio);
@@ -175,12 +239,18 @@ static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
         }
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
+        using coordinate = cuproj::vec_2d<float>;
+        auto proj = cuproj::make_projection<coordinate>(in->authority, "EPSG:4326"
+                                                         );
+        auto d_proj = proj->get_device_projection(cuproj::direction::FORWARD);
+        auto d_proj2 = proj->get_device_projection(cuproj::direction::INVERSE);
+
         dim3 block(16, 16);
         int width = dst_desc.width;
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-        kernel<<<grid, block, 0, s->stream>>>(
-            in->data, ret->img.data, in->width, in->height, width, height);
+        kernel<<<grid, block, 0, s->stream>>>(d_proj,d_proj2,
+            in->data, ret->img.data, in->width, in->height, width, height, src_bounds, dst_bounds);
 
         return ret;
 }
