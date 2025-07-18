@@ -304,10 +304,12 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
         // struct dec_image dst_desc = *in;
 
         struct dec_image dst_desc = *in;
+        dst_desc.width = orig_width;
+        dst_desc.height = orig_height;
         if (dst_ratio >= src_ratio) {
-                dst_desc.width = (int)(in->height * dst_ratio);
+                dst_desc.width *= dst_ratio;
         } else {
-                dst_desc.height = (int)(in->width / dst_ratio);
+                dst_desc.height /= dst_ratio;
         }
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
@@ -323,6 +325,11 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
 
 struct owned_image *rotate_utm(struct rotate_utm_state *s, const struct dec_image *in)
 {
+        if (in->comp_count > 1) {
+                // WARN_MSG("TODO: implement more than 1 channel (have %d)!\n",
+                //          in->comp_count);
+                return nullptr;
+        }
         struct owned_image *epsg4326 = to_epsg_4326(s, in);
         if (epsg4326 == nullptr) {
                 return nullptr;

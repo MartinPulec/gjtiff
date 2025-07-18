@@ -199,7 +199,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 if (ret != NULL) {
                         return ret;
                 }
-                WARN_MSG("rotate_utm returned nullptr!\n");
+                // WARN_MSG("rotate_utm returned nullptr!\n");
         }
 
 #ifndef NPP_NEW_API
