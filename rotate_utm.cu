@@ -3,9 +3,16 @@
 #include <algorithm>
 #include <assert.h>
 #include <cuda_runtime.h>
+
+#ifndef NDEBUG
 #define NDEBUG
 #include <cuproj/projection_factories.cuh>
 #include <cuproj/vec_2d.hpp>
+#undef NDEBUG
+#else
+#include <cuproj/projection_factories.cuh>
+#include <cuproj/vec_2d.hpp>
+#endif
 #include <errno.h>
 #include <limits.h> // PATH_MAX
 #include <math.h>
@@ -140,74 +147,107 @@ static void release_owned_image(struct owned_image *img) {
         free(img);
 }
 
+// Device function: bilinear sample at (x, y) in [0..W) × [0..H)
+__device__ uint8_t bilinearSample(
+    const uint8_t* src,
+    int W, int H,
+    float x, float y)
+{
+    // Compute integer bounds
+    int x0 = int(floorf(x));
+    int y0 = int(floorf(y));
+    int x1 = x0 + 1;
+    int y1 = y0 + 1;
+
+    // Clamp to image edges
+    x0 = max(0, min(x0, W - 1));
+    y0 = max(0, min(y0, H - 1));
+    x1 = max(0, min(x1, W - 1));
+    y1 = max(0, min(y1, H - 1));
+
+    // Fetch four neighbors
+    float I00 = src[y0 * W + x0];
+    float I10 = src[y0 * W + x1];
+    float I01 = src[y1 * W + x0];
+    float I11 = src[y1 * W + x1];
+
+    // fractional part
+    float dx = x - float(x0);
+    float dy = y - float(y0);
+
+    // interpolate in x direction
+    float a = I00 + dx * (I10 - I00);
+    float b = I01 + dx * (I11 - I01);
+
+    // interpolate in y direction
+    return a + dy * (b - a);
+}
+
+
 struct bounds {
         float bound[4];
 };
 using device_projection = cuproj::device_projection<cuproj::vec_2d<float>>;
-static __global__ void kernel(device_projection const d_proj,device_projection const d_proj2,
+static __global__ void kernel_to_wgs84(device_projection const d_proj,
                               const uint8_t *d_in, uint8_t *d_out, int in_width,
                               int in_height, int out_width, int out_height,
                               struct bounds src_bounds,
                               struct bounds dst_bounds)
 {
-        int x = blockIdx.x * blockDim.x + threadIdx.x; // column index
-        int y = blockIdx.y * blockDim.y + threadIdx.y; // row index
+        int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
+        int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
-        if (x >= out_width || y >= out_height) {
+        if (out_x >= out_width || out_y >= out_height) {
                 return;
         }
 
         float lat_scale = dst_bounds.bound[YMAX] - dst_bounds.bound[YMIN];
         float this_lat = dst_bounds.bound[YMIN];
-        this_lat += lat_scale * ((x + .5f) / out_height);
+        this_lat += lat_scale * ((out_y + .5f) / out_height);
 
         float lon_scale = dst_bounds.bound[XMAX] - dst_bounds.bound[XMIN];
         float this_lon = dst_bounds.bound[XMIN];
-        this_lon += lon_scale * ((y + .5f) / out_width);
+        this_lon += lon_scale * ((out_x + .5f) / out_width);
 
-        if (x > 0 || y > 0) return;
-        cuproj::vec_2d<float> in{500000,0};
-        printf("\t%f ddd  %f\n\n\n\n", this_lat, this_lon);
-        printf("\t%f ddd %f\n\n\n\n", in.x, in.y);
-        cuproj::vec_2d<float> out = d_proj.transform(in);
-        printf("%f %f\n", out.x, out.y);
-        in = d_proj2.transform(out);
-        printf("%f %f\n", in.x, in.y);
+        cuproj::vec_2d<float> pos_wgs84{this_lat, this_lon};
+        cuproj::vec_2d<float> pos_utm = d_proj.transform(pos_wgs84);
+        pos_utm = d_proj.transform(pos_wgs84);
+
+        double rel_pos_src_x = (pos_utm.x - src_bounds.bound[XMIN]) / (src_bounds.bound[XMAX] - src_bounds.bound[XMIN]);
+        double rel_pos_src_y = (pos_utm.y - src_bounds.bound[YMIN]) / (src_bounds.bound[YMAX] - src_bounds.bound[YMIN]);
         
-        d_out[x + y * out_width] = d_in[x + y * in_width];
-}
+        // if (x  == 0 && y == 0) {
+                // printf("%f %f\n\n", in.x, in.y);
+                // printf("%f %f\n\n", out.x, out.y);
+                // printf("%f %f\n\n", rel_pos_src_x, rel_pos_src_y);
+                // printf("%f \n\n", this_lon);
+        // }
+        if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
+            rel_pos_src_y < 0 || rel_pos_src_y > 1) {
+                d_out[out_x + out_y * out_width] = 0;
+                return;
+        }
 
-__global__ void example_kernel(device_projection const d_proj,
-                               cuproj::vec_2d<float> const* in,
-                               cuproj::vec_2d<float>* out,
-                               size_t n)
-{
-  for (size_t i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += gridDim.x * blockDim.x) {
-    out[i] = d_proj.transform(in[i]);
-  }
-}
+        if (out_x == out_width / 2 && out_y == out_height / 2) {
+                printf("%f %f\n\n", pos_wgs84.x, pos_wgs84.y);
+                printf("%f %f\n\n", pos_utm.x, pos_utm.y);
+                printf("%f %f\n\n", rel_pos_src_x, rel_pos_src_y);
+        }
 
-void test() {
-  using coordinate = cuproj::vec_2d<float>;
+        double abs_pos_src_x = rel_pos_src_x * in_width;
+        double abs_pos_src_y = rel_pos_src_y * in_height;
 
-  // Make a projection to convert WGS84 (lat, lon) coordinates to
-  // UTM zone 56S (x, y) coordinates
-  auto proj = cuproj::make_projection<coordinate>("EPSG:4326", "EPSG:32756");
+        // if (out_x == out_width / 2 && out_y == out_height / 2) {
+        //         printf("%f %f\n\n", pos_wgs84.x, pos_wgs84.y);
+        //         printf("%f %f\n\n", pos_utm.x, pos_utm.y);
+        //         printf("%f %f\n\n", rel_pos_src_x, rel_pos_src_y);
+        //         printf("%f %f\n", abs_pos_src_x, abs_pos_src_y);
+        // }
 
-  // Sydney, NSW, Australia
-  coordinate sydney{-33.858700, 151.214000};
-  thrust::device_vector<coordinate> d_in{1, sydney};
-  thrust::device_vector<coordinate> d_out(d_in.size());
-
-  auto d_proj            = proj->get_device_projection(cuproj::direction::FORWARD);
-  std::size_t block_size = 256;
-  std::size_t grid_size  = (d_in.size() + block_size - 1) / block_size;
-  example_kernel<<<grid_size, block_size>>>(
-    d_proj, d_in.data().get(), d_out.data().get(), d_in.size());
-  cudaDeviceSynchronize();
-        CHECK_CUDA(cudaDeviceSynchronize());
-        exit(1);
-        
+        // d_out[out_x + out_y * out_width] = d_in[out_x + out_y * in_width];
+        d_out[out_x + out_y * out_width] = bilinearSample(d_in, in_width, in_height, abs_pos_src_x, abs_pos_src_y);
+        // d_out[out_x + out_y * out_width] = d_in[(int) abs_pos_src_x + out_y *(int) abs_pos_src_y];
+        // d_out[out_x + out_y * out_width] = rel_pos_src_y * 255;;
 }
 
 static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
@@ -240,16 +280,14 @@ static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         using coordinate = cuproj::vec_2d<float>;
-        auto proj = cuproj::make_projection<coordinate>(in->authority, "EPSG:4326"
-                                                         );
+        auto proj = cuproj::make_projection<coordinate>( "EPSG:4326", in->authority );
         auto d_proj = proj->get_device_projection(cuproj::direction::FORWARD);
-        auto d_proj2 = proj->get_device_projection(cuproj::direction::INVERSE);
 
         dim3 block(16, 16);
         int width = dst_desc.width;
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-        kernel<<<grid, block, 0, s->stream>>>(d_proj,d_proj2,
+        kernel_to_wgs84<<<grid, block, 0, s->stream>>>(d_proj,
             in->data, ret->img.data, in->width, in->height, width, height, src_bounds, dst_bounds);
 
         return ret;
