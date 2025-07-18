@@ -124,9 +124,11 @@ static __global__ void kernel_to_wgs84(device_projection const d_proj,
         cuproj::vec_2d<float> pos_utm = d_proj.transform(pos_wgs84);
         pos_utm = d_proj.transform(pos_wgs84);
 
-        double rel_pos_src_x = (pos_utm.x - src_bounds.bound[XMIN]) / (src_bounds.bound[XMAX] - src_bounds.bound[XMIN]);
-        double rel_pos_src_y = (pos_utm.y - src_bounds.bound[YMIN]) / (src_bounds.bound[YMAX] - src_bounds.bound[YMIN]);
-        
+        float rel_pos_src_x = (pos_utm.x - src_bounds.bound[XMIN]) /
+                              (src_bounds.bound[XMAX] - src_bounds.bound[XMIN]);
+        float rel_pos_src_y = (pos_utm.y - src_bounds.bound[YMIN]) /
+                              (src_bounds.bound[YMAX] - src_bounds.bound[YMIN]);
+
         // if (x  == 0 && y == 0) {
                 // printf("%f %f\n\n", in.x, in.y);
                 // printf("%f %f\n\n", out.x, out.y);
@@ -145,8 +147,8 @@ static __global__ void kernel_to_wgs84(device_projection const d_proj,
                 // printf("%f %f\n\n", rel_pos_src_x, rel_pos_src_y);
         // }
 
-        double abs_pos_src_x = rel_pos_src_x * in_width;
-        double abs_pos_src_y = rel_pos_src_y * in_height;
+        float abs_pos_src_x = rel_pos_src_x * in_width;
+        float abs_pos_src_y = rel_pos_src_y * in_height;
 
         // if (out_x == out_width / 2 && out_y == out_height / 2) {
         //         printf("%f %f\n\n", pos_wgs84.x, pos_wgs84.y);
