@@ -210,9 +210,58 @@ static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
         return ret;
 }
 
+static __global__ void kernel_to_web_mercator(
+                              const uint8_t *d_in, uint8_t *d_out, int in_width,
+                              int in_height, int out_width, int out_height,
+                              struct bounds src_bounds,
+                              struct bounds dst_bounds)
+{
+        int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
+        int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
+
+        if (out_x >= out_width || out_y >= out_height) {
+                return;
+        }
+
+        float y_scale = dst_bounds.bound[YMAX] - dst_bounds.bound[YMIN];
+        float this_y = dst_bounds.bound[YMIN];
+        this_y += y_scale * ((out_y + .5f) / out_height);
+
+        float x_scale = dst_bounds.bound[XMAX] - dst_bounds.bound[XMIN];
+        float this_x = dst_bounds.bound[XMIN];
+        this_x += x_scale * ((out_x + .5f) / out_width);
+
+        // transformace
+        float pos_wgs84_lon = 360. * this_x - 180.; // lambda
+        float t = (float) M_PI * (1. - 2. *  this_y);
+        float fi_rad = 2 * atanf(powf(M_E, t)) - (M_PI / 2);
+        float pos_wgs84_lat = fi_rad * 180. / M_PI;
+
+        float rel_pos_src_x = (pos_wgs84_lon - src_bounds.bound[XMIN]) / (src_bounds.bound[XMAX] - src_bounds.bound[XMIN]);
+        float rel_pos_src_y = (pos_wgs84_lat - src_bounds.bound[YMIN]) / (src_bounds.bound[YMAX] - src_bounds.bound[YMIN]);
+
+        if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
+            rel_pos_src_y < 0 || rel_pos_src_y > 1) {
+                d_out[out_x + out_y * out_width] = 0;
+                return;
+        }
+
+        // if (out_x == out_width / 2 && out_y == out_height / 2) {
+        //         printf("%f %f\n\n", this_x, this_y);
+        //         printf("%f %f\n\n", pos_wgs84_lat, pos_wgs84_lon);
+        //         printf("%f %f\n\n", rel_pos_src_x, rel_pos_src_y);
+        // }
+
+        float abs_pos_src_x = rel_pos_src_x * in_width;
+        rel_pos_src_y = 1 - rel_pos_src_y;
+        float abs_pos_src_y = rel_pos_src_y * in_height;
+
+        d_out[out_x + out_y * out_width] = bilinearSample(d_in, in_width, in_height, abs_pos_src_x, abs_pos_src_y);
+}
+
 // WSG84 (lon, lat) to Web Mercator
 static struct owned_image *
-epsg_4326_to_epsg_3857(const struct dec_image *in,
+epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
                        int orig_width, int orig_height)
 {
         const double src_ratio = (double) orig_width / orig_height;
@@ -233,6 +282,17 @@ epsg_4326_to_epsg_3857(const struct dec_image *in,
         double dst_width = lon_merc_left - lon_merc_right;
         double dst_ratio = dst_width / dst_height;
 
+        struct bounds src_bounds{};
+        for (unsigned i = 0; i < ARR_SIZE(in->bounds); ++i) {
+                src_bounds.bound[i] = (float) in->bounds[i];
+        }
+        struct bounds dst_bounds{};
+        dst_bounds.bound[XMIN] = (float) lon_merc_left;
+        dst_bounds.bound[YMAX] = (float) lat_merc_bottom;
+        dst_bounds.bound[XMAX] = (float) lon_merc_right;
+        dst_bounds.bound[YMIN] = (float) lat_merc_top;
+        // struct dec_image dst_desc = *in;
+
         struct dec_image dst_desc = *in;
         if (dst_ratio >= src_ratio) {
                 dst_desc.width = (int)(in->height * dst_ratio);
@@ -240,6 +300,13 @@ epsg_4326_to_epsg_3857(const struct dec_image *in,
                 dst_desc.height = (int)(in->width / dst_ratio);
         }
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
+
+        dim3 block(16, 16);
+        int width = dst_desc.width;
+        int height = dst_desc.height;
+        dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+        kernel_to_web_mercator<<<grid, block, 0, stream>>>(
+            in->data, ret->img.data, in->width, in->height, width, height, src_bounds, dst_bounds);
 
         return ret;
 }
@@ -250,7 +317,8 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s, const struct dec_imag
         if (epsg4326 == nullptr) {
                 return nullptr;
         }
-        struct owned_image *epsg3857 = epsg_4326_to_epsg_3857(&epsg4326->img, in->width, in->height);
+        struct owned_image *epsg3857 = epsg_4326_to_epsg_3857(
+            s->stream, &epsg4326->img, in->width, in->height);
         epsg4326->free(epsg4326);
         return epsg3857;
 }
