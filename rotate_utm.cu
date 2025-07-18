@@ -112,22 +112,23 @@ static __global__ void kernel_to_wgs84(device_projection const d_proj,
                 return;
         }
 
-        float lat_scale = dst_bounds.bound[YMAX] - dst_bounds.bound[YMIN];
-        float this_lat = dst_bounds.bound[YMIN];
-        this_lat += lat_scale * ((out_y + .5f) / out_height);
+        float lat_scale = dst_bounds.bound[YTOP] - dst_bounds.bound[YBOTTOM];
+        float this_lat = dst_bounds.bound[YTOP];
+        this_lat -= lat_scale * ((out_y + .5f) / out_height);
 
-        float lon_scale = dst_bounds.bound[XMAX] - dst_bounds.bound[XMIN];
-        float this_lon = dst_bounds.bound[XMIN];
+        float lon_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
+        float this_lon = dst_bounds.bound[XLEFT];
         this_lon += lon_scale * ((out_x + .5f) / out_width);
 
         cuproj::vec_2d<float> pos_wgs84{this_lat, this_lon};
         cuproj::vec_2d<float> pos_utm = d_proj.transform(pos_wgs84);
         pos_utm = d_proj.transform(pos_wgs84);
 
-        float rel_pos_src_x = (pos_utm.x - src_bounds.bound[XMIN]) /
-                              (src_bounds.bound[XMAX] - src_bounds.bound[XMIN]);
-        float rel_pos_src_y = (pos_utm.y - src_bounds.bound[YMIN]) /
-                              (src_bounds.bound[YMAX] - src_bounds.bound[YMIN]);
+        float rel_pos_src_x = (pos_utm.x - src_bounds.bound[XLEFT]) /
+                              (src_bounds.bound[XRIGHT] - src_bounds.bound[XLEFT]);
+        float rel_pos_src_y = (pos_utm.y - src_bounds.bound[YBOTTOM]) /
+                              (src_bounds.bound[YTOP] - src_bounds.bound[YBOTTOM]);
+        rel_pos_src_y = 1 - rel_pos_src_y;
 
         // if (x  == 0 && y == 0) {
                 // printf("%f %f\n\n", in.x, in.y);
@@ -139,6 +140,11 @@ static __global__ void kernel_to_wgs84(device_projection const d_proj,
             rel_pos_src_y < 0 || rel_pos_src_y > 1) {
                 d_out[out_x + out_y * out_width] = 0;
                 return;
+        }
+        if (out_y == 0) {
+                printf("%f\n", dst_bounds.bound[YBOTTOM]);
+                printf("HERE! %d %f %f %f %f\n" , out_x, this_lat, this_lon, pos_utm.x, pos_utm.y);
+                printf("%f %f\n" , rel_pos_src_x, rel_pos_src_y);
         }
 
         // if (out_x == out_width / 2 && out_y == out_height / 2) {
@@ -167,23 +173,23 @@ static struct owned_image *to_epsg_4326(struct rotate_utm_state *s,
                                         const struct dec_image *in)
 {
         // test(); return nullptr;
-        double src_ratio = (in->bounds[XMAX] - in->bounds[XMIN]) /
-                           (in->bounds[YMAX] - in->bounds[YMIN]);
+        double src_ratio = (in->bounds[XRIGHT] - in->bounds[XLEFT]) /
+                           (in->bounds[YTOP] - in->bounds[YBOTTOM]);
         double lat_top = max(in->coords[ULEFT].latitude, in->coords[URIGHT].latitude);
         double lat_bot = min(in->coords[BLEFT].latitude, in->coords[BRIGHT].latitude);
         double lon_left = min(in->coords[ULEFT].longitude, in->coords[BLEFT].longitude);
         double lon_right = max(in->coords[URIGHT].longitude, in->coords[BRIGHT].longitude);
         double dst_ratio = (lon_right - lon_left) / (lat_top - lat_bot);
         struct bounds dst_bounds;
-        dst_bounds.bound[XMIN] = lon_left;
-        dst_bounds.bound[YMAX] = lat_top;
-        dst_bounds.bound[XMAX] = lon_right;
-        dst_bounds.bound[YMIN] = lat_bot;
+        dst_bounds.bound[XLEFT] = lon_left;
+        dst_bounds.bound[YTOP] = lat_top;
+        dst_bounds.bound[XRIGHT] = lon_right;
+        dst_bounds.bound[YBOTTOM] = lat_bot;
         struct bounds src_bounds;
-        src_bounds.bound[XMIN] = in->bounds[XMIN];
-        src_bounds.bound[YMAX] = in->bounds[YMAX];
-        src_bounds.bound[XMAX] = in->bounds[XMAX];
-        src_bounds.bound[YMIN] = in->bounds[YMIN];
+        src_bounds.bound[XLEFT] = in->bounds[XLEFT];
+        src_bounds.bound[YTOP] = in->bounds[YTOP];
+        src_bounds.bound[XRIGHT] = in->bounds[XRIGHT];
+        src_bounds.bound[YBOTTOM] = in->bounds[YBOTTOM];
         struct dec_image dst_desc = *in;
         if (dst_ratio >= src_ratio) {
                 dst_desc.width = (int)(in->height * dst_ratio);
@@ -223,12 +229,12 @@ static __global__ void kernel_to_web_mercator(
                 return;
         }
 
-        float y_scale = dst_bounds.bound[YMAX] - dst_bounds.bound[YMIN];
-        float this_y = dst_bounds.bound[YMIN];
+        float y_scale = dst_bounds.bound[YTOP] - dst_bounds.bound[YBOTTOM];
+        float this_y = dst_bounds.bound[YBOTTOM];
         this_y += y_scale * ((out_y + .5f) / out_height);
 
-        float x_scale = dst_bounds.bound[XMAX] - dst_bounds.bound[XMIN];
-        float this_x = dst_bounds.bound[XMIN];
+        float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
+        float this_x = dst_bounds.bound[XLEFT];
         this_x += x_scale * ((out_x + .5f) / out_width);
 
         // transformace
@@ -237,8 +243,8 @@ static __global__ void kernel_to_web_mercator(
         float fi_rad = 2 * atanf(powf(M_E, t)) - (M_PI / 2);
         float pos_wgs84_lat = fi_rad * 180. / M_PI;
 
-        float rel_pos_src_x = (pos_wgs84_lon - src_bounds.bound[XMIN]) / (src_bounds.bound[XMAX] - src_bounds.bound[XMIN]);
-        float rel_pos_src_y = (pos_wgs84_lat - src_bounds.bound[YMIN]) / (src_bounds.bound[YMAX] - src_bounds.bound[YMIN]);
+        float rel_pos_src_x = (pos_wgs84_lon - src_bounds.bound[XLEFT]) / (src_bounds.bound[XRIGHT] - src_bounds.bound[XLEFT]);
+        float rel_pos_src_y = (pos_wgs84_lat - src_bounds.bound[YBOTTOM]) / (src_bounds.bound[YTOP] - src_bounds.bound[YBOTTOM]);
 
         if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
             rel_pos_src_y < 0 || rel_pos_src_y > 1) {
@@ -266,8 +272,8 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
 {
         const double src_ratio = (double) orig_width / orig_height;
 
-        double lat_rad_top = in->bounds[YMAX] / 180. * M_PI;
-        double lat_rad_bottom = in->bounds[YMIN] / 180. * M_PI;
+        double lat_rad_top = in->bounds[YTOP] / 180. * M_PI;
+        double lat_rad_bottom = in->bounds[YBOTTOM] / 180. * M_PI;
         double lat_merc_top = (M_PI -
                                log(tan((M_PI / 4.) + (lat_rad_top / 2.)))) /
                               (2. * M_PI);
@@ -275,8 +281,8 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
                                                  (lat_rad_bottom / 2.)))) /
                                  (2. * M_PI);
         double dst_height = lat_merc_top - lat_merc_bottom;
-        double lon_rad_left = in->bounds[XMIN] / 180. * M_PI;
-        double lon_rad_right = in->bounds[XMAX] / 180. * M_PI;
+        double lon_rad_left = in->bounds[XLEFT] / 180. * M_PI;
+        double lon_rad_right = in->bounds[XRIGHT] / 180. * M_PI;
         double lon_merc_left  = (M_PI + lon_rad_left) / (2. * M_PI);
         double lon_merc_right  = (M_PI + lon_rad_right) / (2. * M_PI);
         double dst_width = lon_merc_left - lon_merc_right;
@@ -287,10 +293,10 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
                 src_bounds.bound[i] = (float) in->bounds[i];
         }
         struct bounds dst_bounds{};
-        dst_bounds.bound[XMIN] = (float) lon_merc_left;
-        dst_bounds.bound[YMAX] = (float) lat_merc_bottom;
-        dst_bounds.bound[XMAX] = (float) lon_merc_right;
-        dst_bounds.bound[YMIN] = (float) lat_merc_top;
+        dst_bounds.bound[XLEFT] = (float) lon_merc_left;
+        dst_bounds.bound[YTOP] = (float) lat_merc_bottom;
+        dst_bounds.bound[XRIGHT] = (float) lon_merc_right;
+        dst_bounds.bound[YBOTTOM] = (float) lat_merc_top;
         // struct dec_image dst_desc = *in;
 
         struct dec_image dst_desc = *in;

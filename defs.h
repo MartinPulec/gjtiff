@@ -28,7 +28,7 @@ struct coordinate {
 };
 
 enum { ULEFT, URIGHT, BRIGHT, BLEFT, };
-enum { XMIN, YMAX, XMAX, YMIN, };
+enum { XLEFT, YTOP, XRIGHT, YBOTTOM, };
 
 struct dec_image {
         enum rc rc; ///< defined only if data=nullptr
