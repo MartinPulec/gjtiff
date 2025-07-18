@@ -195,7 +195,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         }
 
         if (strlen(in->authority) != 0)  {
-                struct ownded_image *ret = rotate_utm(s->rotate_utm, in);
+                struct owned_image *ret = rotate_utm(s->rotate_utm, in);
                 if (ret != NULL) {
                         return ret;
                 }

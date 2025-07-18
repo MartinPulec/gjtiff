@@ -27,8 +27,8 @@ struct coordinate {
         double longitude;
 };
 
-enum { ULEFT, URIGHT, BRIGHT, BLEFT, };
-enum { XLEFT, YTOP, XRIGHT, YBOTTOM, };
+enum coord_indices { ULEFT, URIGHT, BRIGHT, BLEFT, };
+enum bound_indices { XLEFT, YTOP, XRIGHT, YBOTTOM, };
 
 struct dec_image {
         enum rc rc; ///< defined only if data=nullptr

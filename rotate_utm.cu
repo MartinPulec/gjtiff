@@ -141,11 +141,11 @@ static __global__ void kernel_to_wgs84(device_projection const d_proj,
                 d_out[out_x + out_y * out_width] = 0;
                 return;
         }
-        if (out_y == 0) {
-                printf("%f\n", dst_bounds.bound[YBOTTOM]);
-                printf("HERE! %d %f %f %f %f\n" , out_x, this_lat, this_lon, pos_utm.x, pos_utm.y);
-                printf("%f %f\n" , rel_pos_src_x, rel_pos_src_y);
-        }
+        // if (out_y == 0) {
+        //         printf("%f\n", dst_bounds.bound[YBOTTOM]);
+        //         printf("HERE! %d %f %f %f %f\n" , out_x, this_lat, this_lon, pos_utm.x, pos_utm.y);
+        //         printf("%f %f\n" , rel_pos_src_x, rel_pos_src_y);
+        // }
 
         // if (out_x == out_width / 2 && out_y == out_height / 2) {
                 // printf("%f %f\n\n", pos_wgs84.x, pos_wgs84.y);
@@ -229,8 +229,8 @@ static __global__ void kernel_to_web_mercator(
                 return;
         }
 
-        float y_scale = dst_bounds.bound[YTOP] - dst_bounds.bound[YBOTTOM];
-        float this_y = dst_bounds.bound[YBOTTOM];
+        float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
+        float this_y = dst_bounds.bound[YTOP];
         this_y += y_scale * ((out_y + .5f) / out_height);
 
         float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
@@ -243,8 +243,12 @@ static __global__ void kernel_to_web_mercator(
         float fi_rad = 2 * atanf(powf(M_E, t)) - (M_PI / 2);
         float pos_wgs84_lat = fi_rad * 180. / M_PI;
 
-        float rel_pos_src_x = (pos_wgs84_lon - src_bounds.bound[XLEFT]) / (src_bounds.bound[XRIGHT] - src_bounds.bound[XLEFT]);
-        float rel_pos_src_y = (pos_wgs84_lat - src_bounds.bound[YBOTTOM]) / (src_bounds.bound[YTOP] - src_bounds.bound[YBOTTOM]);
+        float rel_pos_src_x = (pos_wgs84_lon - src_bounds.bound[XLEFT]) /
+                              (src_bounds.bound[XRIGHT] -
+                               src_bounds.bound[XLEFT]);
+        float rel_pos_src_y = (pos_wgs84_lat - src_bounds.bound[YBOTTOM]) /
+                              (src_bounds.bound[YTOP] -
+                               src_bounds.bound[YBOTTOM]);
 
         if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
             rel_pos_src_y < 0 || rel_pos_src_y > 1) {
@@ -294,9 +298,9 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
         }
         struct bounds dst_bounds{};
         dst_bounds.bound[XLEFT] = (float) lon_merc_left;
-        dst_bounds.bound[YTOP] = (float) lat_merc_bottom;
+        dst_bounds.bound[YTOP] = (float) lat_merc_top;
         dst_bounds.bound[XRIGHT] = (float) lon_merc_right;
-        dst_bounds.bound[YBOTTOM] = (float) lat_merc_top;
+        dst_bounds.bound[YBOTTOM] = (float) lat_merc_bottom;
         // struct dec_image dst_desc = *in;
 
         struct dec_image dst_desc = *in;
