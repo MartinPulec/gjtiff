@@ -194,12 +194,14 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 return take_ownership(in);
         }
 
-        if (strlen(in->authority) != 0)  {
+        if (strncmp(in->authority, "ESPG:", strlen("ESPG:")) != 0) {
                 struct owned_image *ret = rotate_utm(s->rotate_utm, in);
                 if (ret != NULL) {
                         return ret;
                 }
                 WARN_MSG("rotate_utm returned nullptr!\n");
+        } else if (strlen(in->authority) > 0) {
+                WARN_MSG("Unsupported authority: %s!\n", in->authority);
         }
 
 #ifndef NPP_NEW_API
