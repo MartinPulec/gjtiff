@@ -62,7 +62,7 @@ void rotate_utm_destroy(struct rotate_utm_state *s)
 // Device function: bilinear sample at (x, y) in [0..W) × [0..H)
 __device__ uint8_t bilinearSample(
     const uint8_t* src,
-    int W, int H,
+    int W, int w_stride, int H,
     float x, float y)
 {
     // Compute integer bounds
@@ -78,10 +78,10 @@ __device__ uint8_t bilinearSample(
     // y1 = max(0, min(y1, H - 1));
 
     // Fetch four neighbors
-    float I00 = src[y0 * W + x0];
-    float I10 = src[y0 * W + x1];
-    float I01 = src[y1 * W + x0];
-    float I11 = src[y1 * W + x1];
+    float I00 = src[w_stride * (y0 * W + x0)];
+    float I10 = src[w_stride * (y0 * W + x1)];
+    float I01 = src[w_stride * (y1 * W + x0)];
+    float I11 = src[w_stride * (y1 * W + x1)];
 
     // fractional part
     float dx = x - float(x0);
@@ -328,6 +328,7 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
 
 #else
 
+template<int components>
 static __global__ void kernel_utm_to_web_mercator(device_projection const d_proj,
                               const uint8_t *d_in, uint8_t *d_out, int in_width,
                               int in_height, int out_width, int out_height,
@@ -366,7 +367,9 @@ static __global__ void kernel_utm_to_web_mercator(device_projection const d_proj
 
         if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
             rel_pos_src_y < 0 || rel_pos_src_y > 1) {
-                d_out[out_x + out_y * out_width] = 0;
+                for (int i = 0; i < components; ++i) {
+                        d_out[components * (out_x + out_y * out_width) + i] = 0;
+                }
                 return;
         }
         // if (out_y == 0) {
@@ -376,7 +379,11 @@ static __global__ void kernel_utm_to_web_mercator(device_projection const d_proj
         float abs_pos_src_x = rel_pos_src_x * in_width;
         float abs_pos_src_y = rel_pos_src_y * in_height;
 
-        d_out[out_x + out_y * out_width] = bilinearSample(d_in, in_width, in_height, abs_pos_src_x, abs_pos_src_y);
+        for (int i = 0; i < components; ++i) {
+                d_out[components * (out_x + out_y * out_width) + i] =
+                    bilinearSample(d_in + i, in_width, components, in_height,
+                                   abs_pos_src_x, abs_pos_src_y);
+        }
 }
 
 static bool transform_to_float(double *x, double *y,
@@ -414,6 +421,10 @@ static bool adjust_dst_bounds(int x_loc, int y_loc,
 static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
                                         const struct dec_image *in)
 {
+        if (in->comp_count != 1 && in->comp_count != 3) {
+                ERROR_MSG("unsupporeted component count %d!", in->comp_count);
+                return nullptr;
+        }
         const double src_ratio = (double) in->width / in->height;
 
         struct bounds src_bounds{};
@@ -467,8 +478,15 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         int width = dst_desc.width;
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-        kernel_utm_to_web_mercator<<<grid, block, 0, s->stream>>>(d_proj,
-            in->data, ret->img.data, in->width, in->height, width, height, src_bounds, dst_bounds);
+        if (in->comp_count == 1) {
+                kernel_utm_to_web_mercator<1><<<grid, block, 0, s->stream>>>(
+                    d_proj, in->data, ret->img.data, in->width, in->height,
+                    width, height, src_bounds, dst_bounds);
+        } else {
+                kernel_utm_to_web_mercator<3><<<grid, block, 0, s->stream>>>(
+                    d_proj, in->data, ret->img.data, in->width, in->height,
+                    width, height, src_bounds, dst_bounds);
+        }
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);
@@ -481,13 +499,13 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
 
 struct owned_image *rotate_utm(struct rotate_utm_state *s, const struct dec_image *in)
 {
+#ifdef TWO_STEP_CONV
         if (in->comp_count > 1) {
                 WARN_MSG("TODO: implement more than 1 channel (have %d)!\n",
                          in->comp_count);
                 return nullptr;
         }
 
-#ifdef TWO_STEP_CONV
         struct owned_image *epsg4326 = to_epsg_4326(s, in);
         if (epsg4326 == nullptr) {
                 return nullptr;
