@@ -421,6 +421,8 @@ static bool adjust_dst_bounds(int x_loc, int y_loc,
 static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
                                         const struct dec_image *in)
 {
+        GPU_TIMER_START(utm_to_epsg_3857, LL_DEBUG, s->stream);
+
         if (in->comp_count != 1 && in->comp_count != 3) {
                 ERROR_MSG("unsupporeted component count %d!", in->comp_count);
                 return nullptr;
@@ -492,6 +494,8 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         OCTDestroyCoordinateTransformation(transform);
         OSRDestroySpatialReference(src_srs);
         OSRDestroySpatialReference(dst_srs);
+
+        GPU_TIMER_STOP(utm_to_epsg_3857);
 
         return ret;
 }
