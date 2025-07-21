@@ -82,6 +82,12 @@ extern cudaEvent_t cuda_event_stop;
         fprintf(stderr, __VA_ARGS__)
 #endif
 
+// DHR doesn't pass -QQ but just -Q so this is a workaround
+#ifdef INSIDE_DHR
+#undef WARN_MSG
+#define WARN_MSG(...)
+#endif
+
 #define INFO_MSG(...)                                                          \
         if (log_level >= LL_INFO)                                              \
         fprintf(stderr, __VA_ARGS__)
