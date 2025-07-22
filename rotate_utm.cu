@@ -465,13 +465,17 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         auto d_proj = proj->get_device_projection(cuproj::direction::FORWARD);
 
         struct dec_image dst_desc = *in;
-        /// @todo use GDALSuggestedWarpOutput for output resolution
-        dst_desc.width = in->width;
-        dst_desc.height = in->height;
-        if (dst_ratio >= src_ratio) {
-                dst_desc.width *= dst_ratio;
+        if (in->e3857_sug_w != 0 && in->e3857_sug_h != 0) {
+                dst_desc.width = in->e3857_sug_w;
+                dst_desc.height = in->e3857_sug_h;
         } else {
-                dst_desc.height /= dst_ratio;
+                dst_desc.width = in->width;
+                dst_desc.height = in->height;
+                if (dst_ratio >= src_ratio) {
+                        dst_desc.width *= dst_ratio;
+                } else {
+                        dst_desc.height /= dst_ratio;
+                }
         }
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:3857");

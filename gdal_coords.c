@@ -1,4 +1,5 @@
 #include <gdal.h>
+#include <gdal_alg.h>    // for GDALCreateGenImgProjTransformer
 #include <ogr_srs_api.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -95,6 +96,23 @@ void set_coords_from_gdal(const char *fname, struct dec_image *image)
 
         INFO_MSG("\t%s (%s): %.2f %.2f %.2f %.2f\n", image->authority, OSRGetName(src_srs), image->bounds[0],
                  image->bounds[1], image->bounds[2], image->bounds[3]);
+
+        OSRImportFromEPSG(dst_srs, 3857);
+        char *dst_wkt = NULL;
+        OSRExportToWkt(dst_srs, &dst_wkt);
+        void *hTransform = GDALCreateGenImgProjTransformer(
+            dataset, NULL, NULL, dst_wkt, TRUE, 0.0, 1);
+        int nDstPixels = 0; int nDstLines= 0;
+        CPLErr eErr = GDALSuggestedWarpOutput(dataset, GDALGenImgProjTransform,
+                                              hTransform, geoTransform,
+                                              &nDstPixels, &nDstLines);
+        if (eErr != CE_None) {
+                VERBOSE_MSG("GDALSuggestedWarpOutput() failed\n");
+        } else {
+                VERBOSE_MSG("\tRaster Size = %d x %d pixels\n", nDstPixels, nDstLines);
+                image->e3857_sug_w = nDstPixels;
+                image->e3857_sug_h = nDstLines;
+        }
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);

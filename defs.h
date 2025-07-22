@@ -44,6 +44,8 @@ struct dec_image {
 
         char authority[20]; // EPSG:xxxx or "" if not set
         double bounds[4]; // x_min, y_max (lwft top), x_max, y_min (right bottom)
+
+        int e3857_sug_w, e3857_sug_h; // ESPG:3857 suggested dimensions
 };
 
 struct owned_image {
@@ -51,7 +53,8 @@ struct owned_image {
         void (*free)(struct owned_image *img);
 };
 
-#define DEC_IMG_ERR(rc) {rc, 0, 0, 0, 0, {0.0, 0.0}, false, "", {0, 0, 0, 0}}
+#define DEC_IMG_ERR(rc)                                                        \
+        {rc, 0, 0, 0, 0, {0.0, 0.0}, false, "", {0, 0, 0, 0}, 0, 0}
 
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \
