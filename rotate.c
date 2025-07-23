@@ -88,7 +88,7 @@ void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
  * @return asoect ratio
  */
 static double normalize_coords(const struct coordinate src_coords[4],
-                               struct coordinate coords[4])
+                               struct coordinate coords[4], double bounds[4])
 {
         double lat_min = 0;
         double lat_max = 0;
@@ -108,15 +108,15 @@ static double normalize_coords(const struct coordinate src_coords[4],
         }
 
         for (unsigned i = 0; i < 4; ++i) {
-                double lat_rad = src_coords[i].latitude / 180. * M_PI;
-                coords[i].latitude = (M_PI -
-                                      log(tan((M_PI / 4.) + (lat_rad / 2.)))) /
-                                     (2. * M_PI);
-                double lon_rad = src_coords[i].longitude / 180. * M_PI;
-                coords[i].longitude = (M_PI + lon_rad) / (2. * M_PI);
+                gcs_to_webm(src_coords[i].latitude, src_coords[i].longitude,
+                            &coords[i].latitude, &coords[i].longitude);
         }
 
         get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
+        bounds[XLEFT] = lon_min;
+        bounds[YTOP] = lat_max;
+        bounds[XRIGHT] = lon_max;
+        bounds[YBOTTOM] = lat_min;
 
         double lat_range = lat_max - lat_min;
         double lon_range = lon_max - lon_min;
@@ -218,7 +218,8 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         };
 
         struct coordinate coords[4];
-        const double dst_aspect = normalize_coords(in->coords, coords);
+        double bounds[4];
+        const double dst_aspect = normalize_coords(in->coords, coords, bounds);
         if (dst_aspect == -1) {
                 DEBUG_MSG("Near North/South pole - not rotating\n");
                 return take_ownership(in);
@@ -240,6 +241,10 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         adjust_size(&dst_desc.width, &dst_desc.height, in->comp_count);
 
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
+        snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:4326");
+        for (unsigned i = 0; i < ARR_SIZE(bounds); ++i) {
+                ret->img.bounds[i] = bounds[i];
+        }
 
         const size_t req_size = (size_t)ret->img.width * ret->img.height *
                                 ret->img.comp_count;

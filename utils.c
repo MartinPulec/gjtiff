@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <cuda_runtime.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdlib.h>        // for abort
 #include <string.h>        // for memset
@@ -268,3 +269,13 @@ struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 //         ret->in_float = true;
 //         return ret;
 // }
+
+/// EPSG:4236 to EPSG:3857 (Web Mercator)
+void gcs_to_webm(double latitude, double longitude, double *y, double *x)
+{
+        double lat_rad = latitude / 180. * M_PI;
+        *y = (M_PI - log(tan((M_PI / 4.) + (lat_rad / 2.)))) / (2. * M_PI);
+        double lon_rad = longitude / 180. * M_PI;
+        *x = (M_PI + lon_rad) / (2. * M_PI);
+}
+

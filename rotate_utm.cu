@@ -1,7 +1,8 @@
 #include "rotate_utm.h"
 
 #include <algorithm>
-#include <assert.h>
+#include <cassert>
+#include <cmath>
 #include <cuda_runtime.h>
 
 #ifndef NDEBUG
@@ -15,7 +16,6 @@
 #endif
 #include <errno.h>
 #include <limits.h> // PATH_MAX
-#include <math.h>
 #include <npp.h>
 #include <ogr_srs_api.h>
 #include <stddef.h>
@@ -279,19 +279,14 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
 {
         const double src_ratio = (double) orig_width / orig_height;
 
-        double lat_rad_top = in->bounds[YTOP] / 180. * M_PI;
-        double lat_rad_bottom = in->bounds[YBOTTOM] / 180. * M_PI;
-        double lat_merc_top = (M_PI -
-                               log(tan((M_PI / 4.) + (lat_rad_top / 2.)))) /
-                              (2. * M_PI);
-        double lat_merc_bottom = (M_PI - log(tan((M_PI / 4.) +
-                                                 (lat_rad_bottom / 2.)))) /
-                                 (2. * M_PI);
-        double dst_height = lat_merc_top - lat_merc_bottom;
-        double lon_rad_left = in->bounds[XLEFT] / 180. * M_PI;
-        double lon_rad_right = in->bounds[XRIGHT] / 180. * M_PI;
-        double lon_merc_left  = (M_PI + lon_rad_left) / (2. * M_PI);
-        double lon_merc_right  = (M_PI + lon_rad_right) / (2. * M_PI);
+        double lat_merc_top = 0;
+        double lat_merc_bottom = 0;
+        double lon_merc_left = 0;
+        double lon_merc_right = 0;
+        gcs_to_webm(in->bounds[YTOP], in->bounds[XLEFT], &lat_merc_top,
+                    &lat_merc_left);
+        gcs_to_webm(in->bounds[YBOTTOM], in->bounds[XRIGHT], &lat_merc_bottom,
+                    &lat_merc_right);
         double dst_width = lon_merc_left - lon_merc_right;
         double dst_ratio = dst_width / dst_height;
 

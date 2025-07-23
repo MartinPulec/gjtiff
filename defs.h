@@ -43,7 +43,7 @@ struct dec_image {
         bool coords_set;
 
         char authority[20]; // EPSG:xxxx or "" if not set
-        double bounds[4]; // x_min, y_max (lwft top), x_max, y_min (right bottom)
+        double bounds[4]; // order - enum bound_indices
 
         int e3857_sug_w, e3857_sug_h; // ESPG:3857 suggested dimensions
 };

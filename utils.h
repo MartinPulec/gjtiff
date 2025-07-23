@@ -132,6 +132,8 @@ struct owned_image;
 struct owned_image *new_cuda_owned_image(const struct dec_image *in);
 // struct owned_image *new_cuda_owned_float_image(const struct dec_image *in);
 
+void gcs_to_webm(double latitude, double longitude, double *y, double *x);
+
 #ifdef __cplusplus
 }
 #endif // _cplusplus
