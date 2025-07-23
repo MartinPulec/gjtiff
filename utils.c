@@ -210,8 +210,8 @@ size_t get_cuda_dev_global_memory()
         struct cudaDeviceProp device_properties;
         CHECK_CUDA(cudaGetDeviceProperties(&device_properties, cur_device));
 
-        VERBOSE_MSG("CUDA device %d total memory %zd GB\n", cur_device,
-                    device_properties.totalGlobalMem);
+        VERBOSE_MSG("CUDA device %d total memory %f GiB\n", cur_device,
+                    device_properties.totalGlobalMem / (1024.0 * 1024 * 1024));
         return device_properties.totalGlobalMem;
 }
 
