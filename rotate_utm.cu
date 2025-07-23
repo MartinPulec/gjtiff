@@ -474,6 +474,9 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         }
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:3857");
+        for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
+                ret->img.bounds[i] = dst_bounds.bound[i];
+        }
 
         dim3 block(16, 16);
         int width = dst_desc.width;
