@@ -50,6 +50,8 @@
 #define PATH_MAX 4096
 #endif
 
+enum { MAX_ZOOM_COUNT = 20,};
+
 int log_level = 0;
 size_t gpu_memory = 0;
 cudaEvent_t cuda_event_start;
@@ -64,8 +66,8 @@ struct options {
         bool use_libtiff;
         bool norotate;
         bool write_uncompressed;
-        int zoom_level;
-#define OPTIONS_INIT {-1, 1, false, false, false, -1}
+        int zoom_levels[MAX_ZOOM_COUNT];
+#define OPTIONS_INIT {-1, 1, false, false, false, {-1}}
 };
 
 struct state_gjtiff {
@@ -350,7 +352,7 @@ static char *get_tile_ofdir(const char *prefix, const char *ifname, int zoom, in
         return ret;
 }
 
-static bool encode_tiles(struct state_gjtiff *s, int req_quality,
+static bool encode_tiles_z(struct state_gjtiff *s, int req_quality,
                    const struct ifiles *ifiles, const char *ifname,
                    const char *prefix, int zoom_level)
 {
@@ -382,20 +384,6 @@ static bool encode_tiles(struct state_gjtiff *s, int req_quality,
 
         struct dec_image tile = scaled->img;
         tile.width = tile.height = 256;
-        const char *delim = "";
-        printf("\t{\n");
-        s->first = false;
-        printf("\t\t\"infile\": \"%s\",\n", ifname);
-        printf("\t\t\"processed_tiles\": [");
-        char whole[PATH_MAX];
-        snprintf(whole, sizeof whole, "%s", prefix);
-        get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole), ".jpg", nullptr);
-        if (encode_jpeg(s, req_quality, scaled->img, 0, whole, false) != 0) {
-                printf("%s\"%s\"", delim, whole);
-                delim = ", ";
-        } else {
-                ret = false;
-        }
         for (int x = x_first; x <= x_last; ++x) {
                 char *path = get_tile_ofdir(prefix, ifname, zoom_level, x);
                 char *end = path + strlen(path);
@@ -408,18 +396,42 @@ static bool encode_tiles(struct state_gjtiff *s, int req_quality,
                                     xpitch - 256 * uncomp->comp_count, path,
                                     false);
                         if (len != 0) {
-                                printf("%s\"%s\"", delim, path);
-                                delim = ", ";
+                                printf(", \"%s\"", path);
                         } else {
                                 ret = false;
                         }
                 }
                 free(path);
         }
+        scaled->free(scaled);
+        return ret;
+}
+
+static bool encode_tiles(struct state_gjtiff *s, int req_quality,
+                   const struct ifiles *ifiles, const char *ifname,
+                   const char *prefix, int *zoom_levels)
+{
+        bool ret = true;
+        struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
+        char whole[PATH_MAX];
+        snprintf(whole, sizeof whole, "%s", prefix);
+        get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole), ".jpg", nullptr);
+        if (encode_jpeg(s, req_quality, *uncomp, 0, whole, false) == 0) {
+                return false;
+        }
+        printf("\t{\n");
+        s->first = false;
+        printf("\t\t\"infile\": \"%s\",\n", ifname);
+        printf("\t\t\"processed_tiles\": [");
+        printf("\"%s\"", whole);
+        while (*zoom_levels != -1) {
+                ret &= encode_tiles_z(s, req_quality, ifiles, ifname, prefix,
+                                      *zoom_levels);
+                zoom_levels++;
+        }
         printf("],\n");
         print_bbox(uncomp->coords);
         printf("\t}");
-        scaled->free(scaled);
         INFO_MSG("%s encoded %ssuccessfully\n", whole,
                (ret ? "" : "un"));
         return ret;
@@ -543,6 +555,19 @@ static ifiles parse_ifiles(const char *ifnames)
         return ret;
 }
 
+
+static void parse_zoom_levels(int *zoom_levels, char *optarg) {
+        char *item = nullptr;
+        char *save_ptr = nullptr;
+        int idx = 0;
+        while ((item = strtok_r(optarg, ",", &save_ptr)) != nullptr) {
+                optarg = nullptr;
+                assert(idx < MAX_ZOOM_COUNT - 1);
+                zoom_levels[idx++] = (int)strtol(item, nullptr, 0);
+        }
+        zoom_levels[idx++] = -1;
+}
+
 const char *fg_bold = "";
 const char *fg_red = "";
 const char *fg_yellow = "";
@@ -605,7 +630,7 @@ int main(int argc, char **argv)
                         log_level += 1;
                         break;
                 case 'z':
-                        global_opts.zoom_level = (int)strtol(optarg, nullptr, 0);
+                        parse_zoom_levels(global_opts.zoom_levels, optarg);
                         break;
                 default: /* '?' */
                         show_help(argv[0]);
@@ -663,7 +688,7 @@ int main(int argc, char **argv)
                         assert(ifiles.ifiles[i].img != nullptr);
                 }
                 if (!err) {
-                        if (global_opts.zoom_level == -1) {
+                        if (global_opts.zoom_levels[0] == -1) {
                                 get_ofname(
                                     ifiles.ifiles[0].ifname, ofdir + d_pref_len,
                                     sizeof ofdir - d_pref_len,
@@ -675,7 +700,7 @@ int main(int argc, char **argv)
                                 ret = encode_tiles(&state,
                                                    opts.req_gpujpeg_quality,
                                                    &ifiles, ifname, ofdir,
-                                                   global_opts.zoom_level)
+                                                   global_opts.zoom_levels)
                                           ? ret
                                           : ERR_SOME_FILES_NOT_TRANSCODED;
                         }
