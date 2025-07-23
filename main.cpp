@@ -23,6 +23,7 @@
 #include <algorithm>      // for std::min
 #include <cassert>
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -32,6 +33,7 @@
 #include <libgpujpeg/gpujpeg_type.h>
 #include <libgpujpeg/gpujpeg_version.h>
 #include <linux/limits.h>
+#include <sys/stat.h> // for mkdir
 #include <unistd.h>
 
 #include "defs.h"
@@ -62,7 +64,8 @@ struct options {
         bool use_libtiff;
         bool norotate;
         bool write_uncompressed;
-#define OPTIONS_INIT {-1, 1, false, false, false}
+        int zoom_level;
+#define OPTIONS_INIT {-1, 1, false, false, false, -1}
 };
 
 struct state_gjtiff {
@@ -173,8 +176,9 @@ struct ifiles {
         int count;
 };
 
-static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_image uncomp,
-                        const char *ofname, bool planar)
+static size_t encode_jpeg(struct state_gjtiff *s, int req_quality,
+                          struct dec_image uncomp, size_t width_padding,
+                          const char *ofname, bool planar)
 {
         gpujpeg_parameters param = gpujpeg_default_parameters();
         param.interleaved = 1;
@@ -193,6 +197,7 @@ static size_t encode_jpeg(struct state_gjtiff *s, int req_quality, struct dec_im
         gpujpeg_image_parameters param_image =
             gpujpeg_default_image_parameters();
         param_image.width = uncomp.width;
+        param_image.width_padding = width_padding;
         param_image.height = uncomp.height;
 #if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 25, 0)
         param_image.comp_count = comp_count;
@@ -281,7 +286,7 @@ static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifi
                 struct dec_image uncomp = ifiles->ifiles[0].img->img;
                 uncomp.comp_count = ifiles->count;
                 uncomp.data = d_data;
-                len = encode_jpeg(s, s->opts.req_gpujpeg_quality, uncomp,
+                len = encode_jpeg(s, s->opts.req_gpujpeg_quality, uncomp, 0,
                                   ofname, true);
         }
         CHECK_CUDA(cudaFree(d_data));
@@ -297,7 +302,7 @@ static void encode(struct state_gjtiff *s, int req_quality,
         if (ifiles->count > 1) {
                 len = encode_multi_jpeg(s, ifiles, ofname);
         } else if (s->gj_enc != nullptr) {
-                len = encode_jpeg(s, req_quality, *uncomp,
+                len = encode_jpeg(s, req_quality, *uncomp, 0,
                                   ofname,false);
         } else {
                 len = (size_t) uncomp->width * uncomp->height * uncomp->comp_count;
@@ -327,9 +332,102 @@ static void encode(struct state_gjtiff *s, int req_quality,
                (len == 0 ? "un" : ""));
 }
 
-static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpeg)
+static void get_ofname(const char *ifname, char *ofname, size_t buflen,
+                       const char *ext, char **endptr);
+
+static char *get_tile_ofdir(const char *prefix, const char *ifname, int zoom, int x) {
+        char *const ret = (char *) malloc(PATH_MAX);
+        char *start = ret;
+        char *const end = start + PATH_MAX;
+        int written = snprintf(ret, end - start, "%s", prefix);
+        start += written;
+        get_ofname(ifname, start, end -  start, "", &start);
+        mkdir(ret, 0755);
+        start += snprintf(start, end - start, "/%d", zoom);
+        mkdir(ret, 0755);
+        start += snprintf(start, end - start, "/%d", x);
+        mkdir(ret, 0755);
+        return ret;
+}
+
+static bool encode_tiles(struct state_gjtiff *s, int req_quality,
+                   const struct ifiles *ifiles, const char *ifname,
+                   const char *prefix, int zoom_level)
 {
-        const char *ext = jpeg ? "jpg" : "pnm";
+        bool ret = true;
+        struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
+        const int scale = 1<<zoom_level;
+        int x_first = floor(uncomp->bounds[XLEFT] * scale);
+        int x_last = ceil(uncomp->bounds[XRIGHT] * scale);
+        int xpitch = x_last - x_first + 1;
+        int y_first = floor(uncomp->bounds[YTOP] * scale);
+        int y_last = ceil(uncomp->bounds[YBOTTOM] * scale);
+        int dst_lines = y_last - y_first + 1;
+        xpitch *= 256 * uncomp->comp_count;
+        dst_lines *= 256;
+        /// @todo roundf below?
+        int x = ((uncomp->bounds[XLEFT] * scale) - x_first) * 256.;
+        int y = ((uncomp->bounds[YTOP] * scale) -
+                 floor(uncomp->bounds[YTOP] * scale)) *
+                256.;
+        int new_height = ((uncomp->bounds[YBOTTOM] * scale) -
+                          (uncomp->bounds[YTOP] * scale)) *
+                         256.;
+        int new_width = ((uncomp->bounds[XRIGHT] * scale) -
+                          (uncomp->bounds[XLEFT] * scale)) *
+                         256.;
+        struct owned_image *scaled = scale_pitch(
+            s->downscaler, new_width, x, xpitch, new_height, y,
+            dst_lines, ifiles->ifiles[0].img);
+
+        struct dec_image tile = scaled->img;
+        tile.width = tile.height = 256;
+        const char *delim = "";
+        printf("\t{\n");
+        s->first = false;
+        printf("\t\t\"infile\": \"%s\",\n", ifname);
+        printf("\t\t\"processed_tiles\": [");
+        char whole[PATH_MAX];
+        snprintf(whole, sizeof whole, "%s", prefix);
+        get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole), ".jpg", nullptr);
+        if (encode_jpeg(s, req_quality, scaled->img, 0, whole, false) != 0) {
+                printf("%s\"%s\"", delim, whole);
+                delim = ", ";
+        } else {
+                ret = false;
+        }
+        for (int x = x_first; x <= x_last; ++x) {
+                char *path = get_tile_ofdir(prefix, ifname, zoom_level, x);
+                char *end = path + strlen(path);
+                for (int y = y_first; y <= y_last; ++y) {
+                        snprintf(end, PATH_MAX - (end - path), "/%d.jpg", y);
+                        tile.data = scaled->img.data +
+                                    (ptrdiff_t)(y - y_first) * 256 * xpitch +
+                                    (x - x_first) * 256 * uncomp->comp_count;
+                        size_t len = encode_jpeg(s, req_quality, tile,
+                                    xpitch - 256 * uncomp->comp_count, path,
+                                    false);
+                        if (len != 0) {
+                                printf("%s\"%s\"", delim, path);
+                                delim = ", ";
+                        } else {
+                                ret = false;
+                        }
+                }
+                free(path);
+        }
+        printf("],\n");
+        print_bbox(uncomp->coords);
+        printf("\t}");
+        scaled->free(scaled);
+        INFO_MSG("%s encoded %ssuccessfully\n", whole,
+               (ret ? "" : "un"));
+        return ret;
+}
+
+static void get_ofname(const char *ifname, char *ofname, size_t buflen,
+                       const char *ext, char **endptr)
+{
         buflen = std::min<size_t>(buflen, NAME_MAX + 1);
 
         char *basename = nullptr;
@@ -342,7 +440,10 @@ static void set_ofname(const char *ifname, char *ofname, size_t buflen, bool jpe
         if (last_dot != nullptr) {
                 *last_dot = '\0';
         }
-        snprintf(ofname, buflen, "%s.%s", basename, ext);
+        int written = snprintf(ofname, buflen, "%s%s", basename, ext);
+        if (endptr != nullptr) {
+                *endptr = ofname + written;
+        }
         free(basename);
 }
 
@@ -363,6 +464,7 @@ static void show_help(const char *progname)
         INFO_MSG("\t-Q[Q]    - be quiet (do not print anything except produced files), double to suppress also warnings\n");
         INFO_MSG("\t-I <num> - downsampling interpolation idx (NppiInterpolationMode; default 8 /SUPER/)\n");
         INFO_MSG("\t-M <sz_GB>- GPUJPEG memory limit (in GB, floating point; default 1/2 of available VRAM)\n");
+        INFO_MSG("\t-z <zlevel>- zoom level\n");
         INFO_MSG("\n");
         INFO_MSG("Input must be in TIFF or JP2.\"\n");
         INFO_MSG("Output filename will be \"basename ${name%%.*}.jpg\"\n");
@@ -463,7 +565,7 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+I:M:Qdhnno:q:rs:v")) != -1) {
+        while ((opt = getopt(argc, argv, "+I:M:Qdhnno:q:rs:vz:")) != -1) {
                 switch (opt) {
                 case 'I':
                         interpolation = (int)strtol(optarg, nullptr, 0);
@@ -501,6 +603,9 @@ int main(int argc, char **argv)
                         break;
                 case 'v':
                         log_level += 1;
+                        break;
+                case 'z':
+                        global_opts.zoom_level = (int)strtol(optarg, nullptr, 0);
                         break;
                 default: /* '?' */
                         show_help(argv[0]);
@@ -558,11 +663,22 @@ int main(int argc, char **argv)
                         assert(ifiles.ifiles[i].img != nullptr);
                 }
                 if (!err) {
-                        set_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,
-                                   sizeof ofdir - d_pref_len,
-                                   state.gj_enc != nullptr);
-                        encode(&state, opts.req_gpujpeg_quality, &ifiles,
-                               ifname, ofdir);
+                        if (global_opts.zoom_level == -1) {
+                                get_ofname(
+                                    ifiles.ifiles[0].ifname, ofdir + d_pref_len,
+                                    sizeof ofdir - d_pref_len,
+                                    state.gj_enc != nullptr ? ".jpg" : ".pnm",
+                                    nullptr);
+                                encode(&state, opts.req_gpujpeg_quality,
+                                       &ifiles, ifname, ofdir);
+                        } else {
+                                ret = encode_tiles(&state,
+                                                   opts.req_gpujpeg_quality,
+                                                   &ifiles, ifname, ofdir,
+                                                   global_opts.zoom_level)
+                                          ? ret
+                                          : ERR_SOME_FILES_NOT_TRANSCODED;
+                        }
                 }
                 for (int i = 0; i < ifiles.count; ++i) {
                         ifiles.ifiles[i].img->free(ifiles.ifiles[i].img);
