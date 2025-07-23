@@ -42,8 +42,8 @@ struct downscaler_state *downscaler_init(cudaStream_t stream)
 }
 
 static void downscale_int(struct downscaler_state *s, int new_width,
-                          int new_height, const struct dec_image *in,
-                          uint8_t *d_output)
+                          size_t dstPitch, int new_height,
+                          const struct dec_image *in, uint8_t *d_output)
 {
         GPU_TIMER_START(downscale, LL_DEBUG, s->stream);
 #ifndef DOWNSCALE_NO_NPP
@@ -62,7 +62,6 @@ static void downscale_int(struct downscaler_state *s, int new_width,
 #endif
         NppiSize dstSize = {new_width, new_height};
         size_t srcPitch = (size_t)in->width * in->comp_count;
-        size_t dstPitch = (size_t)new_width * in->comp_count;
 
         assert(in->comp_count == 1 || in->comp_count == 3);
         const NppiInterpolationMode imode = interpolation > 0
@@ -114,18 +113,34 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                 s->output_allocated = required_size;
         }
         downscaled.data = s->output;
-        downscale_int(s, downscaled.width, downscaled.height, in, s->output);
+        const size_t dstPitch = (size_t)downscaled.width * in->comp_count;
+        downscale_int(s, downscaled.width, dstPitch, downscaled.height, in,
+                      s->output);
         return downscaled;
 }
 
-struct owned_image *scale(struct downscaler_state *state, int new_width, int new_height,
-                           const struct owned_image *old) {
+struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
+                                int x, size_t xpitch, int new_height,
+                                int y, size_t dst_lines,
+                                const struct owned_image *old)
+{
         struct dec_image new_desc = old->img;
-        new_desc.width = new_width;
-        new_desc.height = new_height;
+        new_desc.width = (int)xpitch;
+        new_desc.height = (int)dst_lines;
         struct owned_image *ret = new_cuda_owned_image(&new_desc);
-        downscale_int(state, new_width, new_height, &old->img, ret->img.data);
+        unsigned char *data = ret->img.data + ((ptrdiff_t)y * xpitch) +
+                              ((ptrdiff_t)x * old->img.comp_count);
+        downscale_int(state, new_width, xpitch, new_height, &old->img,
+                      data);
         return ret;
+}
+
+struct owned_image *scale(struct downscaler_state *state, int new_width,
+                          int new_height, const struct owned_image *old)
+{
+        const size_t dstPitch = (size_t)new_width * old->img.comp_count;
+        return scale_pitch(state, new_width, 0, dstPitch, new_height, 0,
+                           new_height, old);
 }
 
 void downscaler_destroy(struct downscaler_state *s) {

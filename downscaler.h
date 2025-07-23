@@ -19,6 +19,10 @@ void downscaler_destroy(struct downscaler_state *s);
 
 struct owned_image *scale(struct downscaler_state *state, int new_width, int new_height,
                            const struct owned_image *old);
+struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
+                                int x, size_t xpitch, int new_height,
+                                int y, size_t dst_lines,
+                                const struct owned_image *old);
 
 #ifdef __cplusplus
 } // extern "C"
