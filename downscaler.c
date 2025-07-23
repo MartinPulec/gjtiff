@@ -41,6 +41,63 @@ struct downscaler_state *downscaler_init(cudaStream_t stream)
         return s;
 }
 
+static void downscale_int(struct downscaler_state *s, int new_width,
+                          int new_height, const struct dec_image *in,
+                          uint8_t *d_output)
+{
+        GPU_TIMER_START(downscale, LL_DEBUG, s->stream);
+#ifndef DOWNSCALE_NO_NPP
+#ifndef NPP_NEW_API
+        if (nppGetStream() != s->stream) {
+                nppSetStream(s->stream);
+        }
+#endif
+        NppiSize srcSize = {in->width, in->height};
+        NppiRect srcROI = {0, 0, in->width, in->height};
+#if NPP_VERSION_MAJOR <= 8
+#error "no longer implemented"
+        double factor = 1.0 / downscale_factor;
+#else
+        NppiRect dstROI = {0, 0, new_width, new_height};
+#endif
+        NppiSize dstSize = {new_width, new_height};
+        size_t srcPitch = (size_t)in->width * in->comp_count;
+        size_t dstPitch = (size_t)new_width * in->comp_count;
+
+        assert(in->comp_count == 1 || in->comp_count == 3);
+        const NppiInterpolationMode imode = interpolation > 0
+                                                ? interpolation
+                                                : NPPI_INTER_SUPER;
+        if (in->comp_count == 1) {
+#if NPP_VERSION_MAJOR <= 8
+                CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, srcPitch, srcROI,
+                                            downscaled.data, dstPitch, dstSize,
+                                            factor, factor, imode));
+#else
+                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C1R)(in->data, srcPitch, srcSize, srcROI,
+                                            d_output, dstPitch, dstSize,
+                                            dstROI, imode CONTEXT));
+#endif
+        } else {
+#if NPP_VERSION_MAJOR <= 8
+                CHECK_NPP(nppiResize_8u_C3R(in->data, srcSize, srcPitch, srcROI,
+                                            downscaled.data, dstPitch, dstSize,
+                                            factor, factor, imode));
+#else
+                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C3R)(in->data, srcPitch, srcSize, srcROI,
+                                            d_output, dstPitch, dstSize,
+                                            dstROI, imode  CONTEXT));
+#endif
+        }
+#else
+#error "no longer implemented"
+        downscale_image_cuda(in->data, downscaled.data, in->comp_count,
+                             in->width, in->height, downscale_factor,
+                             s->stream);
+#endif
+        GPU_TIMER_STOP(downscale);
+}
+
 struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                            const struct dec_image *in)
 {
@@ -57,56 +114,18 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                 s->output_allocated = required_size;
         }
         downscaled.data = s->output;
-        GPU_TIMER_START(downscale, LL_DEBUG, s->stream);
-#ifndef DOWNSCALE_NO_NPP
-#ifndef NPP_NEW_API
-        if (nppGetStream() != s->stream) {
-                nppSetStream(s->stream);
-        }
-#endif
-        NppiSize srcSize = {in->width, in->height};
-        NppiRect srcROI = {0, 0, in->width, in->height};
-#if NPP_VERSION_MAJOR <= 8
-        double factor = 1.0 / downscale_factor;
-#else
-        NppiRect dstROI = {0, 0, downscaled.width, downscaled.height};
-#endif
-        NppiSize dstSize = {downscaled.width, downscaled.height};
-        size_t srcPitch = (size_t)in->width * in->comp_count;
-        size_t dstPitch = (size_t)downscaled.width * in->comp_count;
-
-        assert(in->comp_count == 1 || in->comp_count == 3);
-        const NppiInterpolationMode imode = interpolation > 0
-                                                ? interpolation
-                                                : NPPI_INTER_SUPER;
-        if (in->comp_count == 1) {
-#if NPP_VERSION_MAJOR <= 8
-                CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, srcPitch, srcROI,
-                                            downscaled.data, dstPitch, dstSize,
-                                            factor, factor, imode));
-#else
-                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C1R)(in->data, srcPitch, srcSize, srcROI,
-                                            downscaled.data, dstPitch, dstSize,
-                                            dstROI, imode CONTEXT));
-#endif
-        } else {
-#if NPP_VERSION_MAJOR <= 8
-                CHECK_NPP(nppiResize_8u_C3R(in->data, srcSize, srcPitch, srcROI,
-                                            downscaled.data, dstPitch, dstSize,
-                                            factor, factor, imode));
-#else
-                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C3R)(in->data, srcPitch, srcSize, srcROI,
-                                            downscaled.data, dstPitch, dstSize,
-                                            dstROI, imode  CONTEXT));
-#endif
-        }
-#else
-        downscale_image_cuda(in->data, downscaled.data, in->comp_count,
-                             in->width, in->height, downscale_factor,
-                             s->stream);
-#endif
-        GPU_TIMER_STOP(downscale);
+        downscale_int(s, downscaled.width, downscaled.height, in, s->output);
         return downscaled;
+}
+
+struct owned_image *scale(struct downscaler_state *state, int new_width, int new_height,
+                           const struct owned_image *old) {
+        struct dec_image new_desc = old->img;
+        new_desc.width = new_width;
+        new_desc.height = new_height;
+        struct owned_image *ret = new_cuda_owned_image(&new_desc);
+        downscale_int(state, new_width, new_height, &old->img, ret->img.data);
+        return ret;
 }
 
 void downscaler_destroy(struct downscaler_state *s) {
