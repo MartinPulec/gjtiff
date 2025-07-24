@@ -369,11 +369,11 @@ static bool encode_tiles_z(struct state_gjtiff *s, int req_quality,
         struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
         const int scale = 1<<zoom_level;
         int x_first = floor(uncomp->bounds[XLEFT] * scale);
-        int x_last = ceil(uncomp->bounds[XRIGHT] * scale);
-        int xpitch = x_last - x_first + 1;
+        int x_end = ceil(uncomp->bounds[XRIGHT] * scale);
+        int xpitch = x_end - x_first + 1;
         int y_first = floor(uncomp->bounds[YTOP] * scale);
-        int y_last = ceil(uncomp->bounds[YBOTTOM] * scale);
-        int dst_lines = y_last - y_first + 1;
+        int y_end = ceil(uncomp->bounds[YBOTTOM] * scale);
+        int dst_lines = y_end - y_first + 1;
         xpitch *= 256 * uncomp->comp_count;
         dst_lines *= 256;
         /// @todo roundf below?
@@ -393,10 +393,10 @@ static bool encode_tiles_z(struct state_gjtiff *s, int req_quality,
 
         struct dec_image tile = scaled->img;
         tile.width = tile.height = 256;
-        for (int x = x_first; x <= x_last; ++x) {
+        for (int x = x_first; x < x_end; ++x) {
                 char *path = get_tile_ofdir(prefix, ifname, zoom_level, x);
                 char *end = path + strlen(path);
-                for (int y = y_first; y <= y_last; ++y) {
+                for (int y = y_first; y < y_end; ++y) {
                         snprintf(end, PATH_MAX - (end - path), "/%d.jpg", y);
                         tile.data = scaled->img.data +
                                     (ptrdiff_t)(y - y_first) * 256 * xpitch +
