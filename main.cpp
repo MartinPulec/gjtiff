@@ -178,6 +178,15 @@ struct ifiles {
         int count;
 };
 
+static void ifiles_destroy(struct ifiles *ifiles) {
+        for (int i = 0; i < ifiles->count; ++i) {
+                if (ifiles->ifiles[i].img != nullptr) {
+                        ifiles->ifiles[i].img->free(ifiles->ifiles[i].img);
+                        ifiles->ifiles[i].img = nullptr;
+                }
+        }
+}
+
 static size_t encode_jpeg(struct state_gjtiff *s, int req_quality,
                           struct dec_image uncomp, size_t width_padding,
                           const char *ofname, bool planar)
@@ -705,9 +714,7 @@ int main(int argc, char **argv)
                                           : ERR_SOME_FILES_NOT_TRANSCODED;
                         }
                 }
-                for (int i = 0; i < ifiles.count; ++i) {
-                        ifiles.ifiles[i].img->free(ifiles.ifiles[i].img);
-                }
+                ifiles_destroy(&ifiles);
                 TIMER_STOP(transcode);
         }
 
