@@ -64,9 +64,13 @@ static void downscale_int(struct downscaler_state *s, int new_width,
         size_t srcPitch = (size_t)in->width * in->comp_count;
 
         assert(in->comp_count == 1 || in->comp_count == 3);
+        // was NPPI_INTER_SUPER but doesnt seem to work for all resolutions,
+        // namely upscaling doesn't (for some factor?) work. If used,
+        // NPP_RESIZE_FACTOR_ERROR should be perhaps handled with bilinear
+        // (or other) fallback
         const NppiInterpolationMode imode = interpolation > 0
                                                 ? interpolation
-                                                : NPPI_INTER_SUPER;
+                                                : NPPI_INTER_LINEAR;
         if (in->comp_count == 1) {
 #if NPP_VERSION_MAJOR <= 8
                 CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, srcPitch, srcROI,
