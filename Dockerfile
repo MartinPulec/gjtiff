@@ -13,5 +13,5 @@ RUN git clone https://github.com/rapidsai/cuspatial.git && \
 RUN curl -LO https://github.com/CESNET/GPUJPEG/releases/download/continuous/\
 GPUJPEG-Linux-all.tar.xz && tar xaf GPUJPEG*tar* && cp -r GPUJPEG/* /usr
 
-COPY *c *cpp *h *hpp *cu Makefile gjtiff/
+COPY *c *cpp *h *hpp *cu *cuh Makefile gjtiff/
 RUN cd gjtiff && CFLAGS=-DINSIDE_DHR CXXFLAGS=$CFLAGS make -j $(nproc) install
