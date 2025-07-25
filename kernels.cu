@@ -6,6 +6,7 @@
 #include <nppi_statistics_functions.h>
 #include <type_traits>
 
+#include "cuda_common.cuh"
 #include "defs.h"
 #include "utils.h"
 
@@ -331,6 +332,49 @@ void downscale_image_cuda(const uint8_t *in, uint8_t *out, int comp_count,
                 }
         CHECK_CUDA(cudaGetLastError());
 }
+
+static __global__ void kernel_combine(struct dec_image out,
+                                      struct dec_image in1,
+                                      struct dec_image in2,
+                                      struct dec_image in3)
+{
+        int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
+        int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
+
+        if (out_x >= out.width|| out_y >= out.height) {
+                return;
+        }
+
+        float rel_pos_src_x = (out_x + 0.5) / out.width;
+        float rel_pos_src_y = (out_y + 0.5) / out.height;
+
+        float abs_pos_src_x = rel_pos_src_x * in1.width;
+        float abs_pos_src_y = rel_pos_src_y * in1.height;
+        out.data[3 * (out_x + out_y * out.width)] = bilinearSample(
+            in1.data, in1.width, 1, in1.height, abs_pos_src_x, abs_pos_src_y);
+        abs_pos_src_x = rel_pos_src_x * in2.width;
+        abs_pos_src_y = rel_pos_src_y * in2.height;
+        out.data[3 * (out_x + out_y * out.width) + 1] = bilinearSample(
+            in2.data, in2.width, 1, in2.height, abs_pos_src_x, abs_pos_src_y);
+        abs_pos_src_x = rel_pos_src_x * in3.width;
+        abs_pos_src_y = rel_pos_src_y * in3.height;
+        out.data[3 * (out_x + out_y * out.width) + 2] = bilinearSample(
+            in3.data, in3.width, 1, in3.height, abs_pos_src_x, abs_pos_src_y);
+}
+
+void combine_images_cuda(struct dec_image *out, const struct dec_image *in1,
+                    const struct dec_image *in2, const struct dec_image *in3,
+                    cudaStream_t stream)
+{
+        dim3 block(16, 16);
+        int width = out->width;
+        int height = out->height;
+        dim3 grid((width + block.x - 1) / block.x,
+                  (height + block.y - 1) / block.y);
+        kernel_combine<<<grid, block, 0, stream>>>(*out, *in1, *in2, *in3);
+        CHECK_CUDA(cudaGetLastError());
+}
+
 
 void cleanup_cuda_kernels()
 {

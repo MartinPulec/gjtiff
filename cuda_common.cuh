@@ -1,11 +1,11 @@
 #ifndef CUDA_COMMON_CUH_5CD7C953_A39A_4612_BBA3_4E47A0E7F659
 #define CUDA_COMMON_CUH_5CD7C953_A39A_4612_BBA3_4E47A0E7F659
 
-#include <math.h>
-
 // Device function: bilinear sample at (x, y) in [0..W) × [0..H)
-__device__ uint8_t bilinearSample(const uint8_t *src, int W, int w_stride,
-                                  int H, float x, float y)
+static __device__ __forceinline__ uint8_t bilinearSample(const uint8_t *src,
+                                                         int W, int w_stride,
+                                                         int H, float x,
+                                                         float y)
 {
         // Compute integer bounds
         int x0 = int(floorf(x));

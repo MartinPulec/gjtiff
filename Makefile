@@ -34,7 +34,7 @@ $(BUILD_DIR)/%.o: %.cpp $(wildcard *.h *.hpp)
 $(BUILD_DIR)/%.o: %.c $(wildcard *.h)
 	$(CC) $(CFLAGS) $< -c -o $@
 
-$(BUILD_DIR)/%.o: %.cu %.h $(wildcard *.h *.hpp)
+$(BUILD_DIR)/%.o: %.cu %.h $(wildcard *.cuh *.h *.hpp)
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 $(BUILD_DIR)/gjtiff: \

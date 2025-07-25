@@ -254,54 +254,18 @@ static void print_bbox(struct coordinate coords[4]) {
                lat_max);
 }
 
-static size_t encode_multi_jpeg(struct state_gjtiff *s, const struct ifiles *ifiles,
-                        const char *ofname)
+static struct owned_image *combine_images(const struct ifiles *ifiles,
+                                   cudaStream_t stream)
 {
         assert(ifiles->count == 3);
-        if (s->gj_enc == nullptr) {
-                ERROR_MSG("Uncompressed write not supported for combination now!\n");
-                return 0;
-        }
-        const size_t plane_lenght = (size_t)ifiles->ifiles[0].img->img.width *
-                                    ifiles->ifiles[0].img->img.height;
-        uint8_t *d_data = nullptr;
-        CHECK_CUDA(cudaMallocAsync(
-            &d_data, (size_t)ifiles->count * plane_lenght, s->stream));
-        bool err = false;
-        for (int i = 0; i < ifiles->count; ++i) {
-                const struct dec_image *first = &ifiles->ifiles[0].img->img;
-                const struct dec_image *cur = &ifiles->ifiles[i].img->img;
-                // safety checks
-                err = true;
-                if (cur->width != first->width) {
-                        ERROR_MSG("Incompatible width %d vs %d!\n", cur->width,
-                                  first->width);
-                        break;
-                }
-                if (cur->height != first->height) {
-                        ERROR_MSG("Incompatible height %d vs %d!\n", cur->height,
-                                  first->height);
-                        break;
-                }
-                if (cur->comp_count != 1) {
-                        ERROR_MSG("Cannot combine image with %d channels!!\n",
-                                  cur->comp_count);
-                        break;
-                }
-                CHECK_CUDA(cudaMemcpyAsync(d_data + (i * plane_lenght), cur->data,
-                                plane_lenght, cudaMemcpyDefault, s->stream));
-                err = false;
-        }
-        size_t len = 0;
-        if (!err) {
-                struct dec_image uncomp = ifiles->ifiles[0].img->img;
-                uncomp.comp_count = ifiles->count;
-                uncomp.data = d_data;
-                len = encode_jpeg(s, s->opts.req_gpujpeg_quality, uncomp, 0,
-                                  ofname, true);
-        }
-        CHECK_CUDA(cudaFree(d_data));
-        return len;
+        struct dec_image dst_desc = ifiles->ifiles[0].img->img;
+        dst_desc.comp_count = 3;
+        struct owned_image *ret = new_cuda_owned_image(&dst_desc);
+        combine_images_cuda(&ret->img, &ifiles->ifiles[0].img->img,
+                            &ifiles->ifiles[1].img->img,
+                            &ifiles->ifiles[2].img->img, stream);
+
+        return ret;
 }
 
 static void encode(struct state_gjtiff *s, int req_quality,
@@ -310,9 +274,7 @@ static void encode(struct state_gjtiff *s, int req_quality,
 {
         struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
         size_t len = 0;
-        if (ifiles->count > 1) {
-                len = encode_multi_jpeg(s, ifiles, ofname);
-        } else if (s->gj_enc != nullptr) {
+        if (s->gj_enc != nullptr) {
                 len = encode_jpeg(s, req_quality, *uncomp, 0,
                                   ofname,false);
         } else {
@@ -697,6 +659,14 @@ int main(int argc, char **argv)
                         assert(ifiles.ifiles[i].img != nullptr);
                 }
                 if (!err) {
+                        if (ifiles.count > 1) {
+                                struct owned_image *combined = combine_images(
+                                    &ifiles, state.stream);
+                                ifiles_destroy(&ifiles);
+                                ifiles.ifiles[0].img = combined;
+                                ifiles.count = 1;
+                        }
+
                         if (global_opts.zoom_levels[0] == -1) {
                                 get_ofname(
                                     ifiles.ifiles[0].ifname, ofdir + d_pref_len,
