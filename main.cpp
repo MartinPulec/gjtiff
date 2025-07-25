@@ -254,8 +254,12 @@ static void print_bbox(struct coordinate coords[4]) {
                lat_max);
 }
 
+static void get_ofname(const char *ifname, char *ofname, size_t buflen,
+                       const char *ext, char **endptr);
+
 static struct owned_image *combine_images(const struct ifiles *ifiles,
-                                   cudaStream_t stream)
+                                          char *combined_ifname,
+                                          cudaStream_t stream)
 {
         assert(ifiles->count == 3);
         struct dec_image dst_desc = ifiles->ifiles[0].img->img;
@@ -264,6 +268,18 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         combine_images_cuda(&ret->img, &ifiles->ifiles[0].img->img,
                             &ifiles->ifiles[1].img->img,
                             &ifiles->ifiles[2].img->img, stream);
+
+        // set new ifname
+        combined_ifname[0] = '\0';
+        char *const end = combined_ifname + PATH_MAX;
+        get_ofname(ifiles->ifiles[0].ifname, combined_ifname,
+                   end - combined_ifname, "", &combined_ifname);
+        for (int i = 1; i < 3; ++i) {
+                combined_ifname += snprintf(combined_ifname,
+                                            end - combined_ifname, "-COMMA-");
+                get_ofname(ifiles->ifiles[i].ifname, combined_ifname,
+                           end - combined_ifname, "", &combined_ifname);
+        }
 
         return ret;
 }
@@ -304,9 +320,6 @@ static void encode(struct state_gjtiff *s, int req_quality,
                format_number_with_delim(len, buf, sizeof buf),
                (len == 0 ? "un" : ""));
 }
-
-static void get_ofname(const char *ifname, char *ofname, size_t buflen,
-                       const char *ext, char **endptr);
 
 static char *get_tile_ofdir(const char *prefix, const char *ifname, int zoom, int x) {
         char *const ret = (char *) malloc(PATH_MAX);
@@ -660,10 +673,14 @@ int main(int argc, char **argv)
                 }
                 if (!err) {
                         if (ifiles.count > 1) {
+                                char combined_ifname[PATH_MAX];
                                 struct owned_image *combined = combine_images(
-                                    &ifiles, state.stream);
+                                    &ifiles, combined_ifname, state.stream);
                                 ifiles_destroy(&ifiles);
                                 ifiles.ifiles[0].img = combined;
+                                snprintf(ifiles.ifiles[0].ifname,
+                                         sizeof ifiles.ifiles[0].ifname, "%s",
+                                         combined_ifname);
                                 ifiles.count = 1;
                         }
 
@@ -676,10 +693,10 @@ int main(int argc, char **argv)
                                 encode(&state, opts.req_gpujpeg_quality,
                                        &ifiles, ifname, ofdir);
                         } else {
-                                ret = encode_tiles(&state,
-                                                   opts.req_gpujpeg_quality,
-                                                   &ifiles, ifname, ofdir,
-                                                   global_opts.zoom_levels)
+                                ret = encode_tiles(
+                                          &state, opts.req_gpujpeg_quality,
+                                          &ifiles, ifiles.ifiles[0].ifname,
+                                          ofdir, global_opts.zoom_levels)
                                           ? ret
                                           : ERR_SOME_FILES_NOT_TRANSCODED;
                         }
