@@ -284,7 +284,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         return ret;
 }
 
-static void encode(struct state_gjtiff *s, int req_quality,
+static bool encode(struct state_gjtiff *s, int req_quality,
                    const struct ifiles *ifiles, const char *ifname,
                    const char *ofname)
 {
@@ -319,6 +319,7 @@ static void encode(struct state_gjtiff *s, int req_quality,
                uncomp->width, uncomp->height,
                format_number_with_delim(len, buf, sizeof buf),
                (len == 0 ? "un" : ""));
+        return len != 0;
 }
 
 static char *get_tile_ofdir(const char *prefix, const char *ifname, int zoom, int x) {
@@ -690,8 +691,10 @@ int main(int argc, char **argv)
                                     sizeof ofdir - d_pref_len,
                                     state.gj_enc != nullptr ? ".jpg" : ".pnm",
                                     nullptr);
-                                encode(&state, opts.req_gpujpeg_quality,
-                                       &ifiles, ifname, ofdir);
+                                ret = encode(&state, opts.req_gpujpeg_quality,
+                                             &ifiles, ifname, ofdir)
+                                          ? ret
+                                          : ERR_SOME_FILES_NOT_TRANSCODED;
                         } else {
                                 ret = encode_tiles(
                                           &state, opts.req_gpujpeg_quality,
