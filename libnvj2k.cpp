@@ -32,6 +32,7 @@ struct nvj2k_state {
 #ifdef TILED_DECODE
         nvjpeg2kDecodeState_t decode_states[PIPELINE_STAGES];
         cudaStream_t          decode_streams[PIPELINE_STAGES];
+        cudaEvent_t           pipeline_events[PIPELINE_STAGES];
 #else
         nvjpeg2kDecodeState_t decode_state;
 #endif
@@ -82,6 +83,9 @@ struct nvj2k_state *nvj2k_init(cudaStream_t stream) {
                                return nullptr);
                 CHECK_CUDA(cudaStreamCreateWithFlags(&s->decode_streams[p],
                                                      cudaStreamNonBlocking));
+                CHECK_CUDA(cudaEventCreate(&s->pipeline_events[p]));
+                CHECK_CUDA(cudaEventRecord(s->pipeline_events[p],
+                                           s->decode_streams[p]));
         }
 #else
         CHECK_NVJPEG2K(
@@ -257,13 +261,6 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
 
         GPU_TIMER_START(nvjpeg2kDecode, LL_DEBUG, s->cuda_stream);
 #if defined TILED_DECODE
-        cudaEvent_t pipeline_events[PIPELINE_STAGES];
-
-        for (int p = 0; p < PIPELINE_STAGES; p++) {
-                CHECK_CUDA(cudaEventCreate(&pipeline_events[p]));
-                CHECK_CUDA(cudaEventRecord(pipeline_events[p], s->decode_streams[p]));
-        }
-
         int buffer_index = 0;
         uint32_t tile_id = 0;
         for (uint32_t tile_y0 = 0; tile_y0 < image_info.image_height;
@@ -273,7 +270,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                         // make sure that the previous stage are done before
                         // reusing
                         CHECK_CUDA(cudaEventSynchronize(
-                            pipeline_events[buffer_index]));
+                            s->pipeline_events[buffer_index]));
 
                         nvjpeg2kImage_t nvjpeg2k_out = output_image;
                         void *pixel_data =
@@ -292,7 +289,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                                        return {});
 
                         CHECK_CUDA(
-                            cudaEventRecord(pipeline_events[buffer_index],
+                            cudaEventRecord(s->pipeline_events[buffer_index],
                                             s->decode_streams[buffer_index]));
 
                         buffer_index = (buffer_index + 1) % PIPELINE_STAGES;
@@ -300,10 +297,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 }
         }
         for (int p = 0; p < PIPELINE_STAGES; p++) {
-                CHECK_CUDA(cudaEventSynchronize(pipeline_events[p]));
-        }
-        for (int p = 0; p < PIPELINE_STAGES; p++) {
-                CHECK_CUDA(cudaEventDestroy(pipeline_events[p]));
+                CHECK_CUDA(cudaEventSynchronize(s->pipeline_events[p]));
         }
 #else
         status = nvjpeg2kDecodeImage(s->nvjpeg2k_handle, s->decode_state,
@@ -370,6 +364,7 @@ void nvj2k_destroy(struct nvj2k_state *s) {
         for(int p = 0; p < PIPELINE_STAGES; p++) {
                 CHECK_NVJPEG2K(nvjpeg2kDecodeStateDestroy(s->decode_states[p]), );
                 CHECK_CUDA(cudaStreamDestroy(s->decode_streams[p]));
+                CHECK_CUDA(cudaEventDestroy(s->pipeline_events[p]));
         }
 #else
         CHECK_NVJPEG2K(nvjpeg2kDecodeStateDestroy(s->decode_state), );
