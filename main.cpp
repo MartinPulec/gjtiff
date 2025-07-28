@@ -92,7 +92,7 @@ struct state_gjtiff {
 state_gjtiff::state_gjtiff(struct options opts)
     : opts(opts)
 {
-        CHECK_CUDA(cudaStreamCreate(&stream));
+        CHECK_CUDA(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
         CHECK_CUDA(cudaEventCreate(&cuda_event_start));
         CHECK_CUDA(cudaEventCreate(&cuda_event_stop));
 
