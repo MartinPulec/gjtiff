@@ -8,10 +8,14 @@ CUDAFLAGS ?=
 INSTALL = install
 LDFLAGS += -fopenmp -L$(NVCC_DIR)/../lib64
 LIBS += $(shell pkg-config --libs gdal)
+# -lrmm must be linked for cuspatial=25.08 (for some cuda_stream_view
+# instance) but unavail in 25.04; 25.04 is the final release in the end
+# (cuspatial was archived), so this is not required if not selecting 25.08
+RMM_LIB != echo 'int main() {}' | gcc -xc - -lrmm -o /dev/null </dev/null 2>/dev/null && echo -lrmm
 LIBS += -lcudart -lgpujpeg -lm \
 	-lnppc -lnppig -lnpps -lnppist \
 	-lnvjpeg2k -lnvtiff \
-	-lproj -lrmm \
+	-lproj $(RMM_LIB) \
 	-ltiff
 	# -lgrok
 BUILD_DIR ?= .
