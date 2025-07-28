@@ -19,13 +19,22 @@
 
 enum {
         MAX_COMPONENTS = 3,
+        PIPELINE_STAGES = 10,
 };
+
+#define TILED_DECODE
 
 struct nvj2k_state {
         nvjpeg2kHandle_t nvjpeg2k_handle;
         nvjpeg2kStream_t nvjpeg2k_stream;
         nvjpeg2kDecodeParams_t decode_params;
+
+#ifdef TILED_DECODE
+        nvjpeg2kDecodeState_t decode_states[PIPELINE_STAGES];
+        cudaStream_t          decode_streams[PIPELINE_STAGES];
+#else
         nvjpeg2kDecodeState_t decode_state;
+#endif
 
         cudaStream_t cuda_stream;
 
@@ -65,10 +74,21 @@ struct nvj2k_state *nvj2k_init(cudaStream_t stream) {
         struct nvj2k_state *s = (struct nvj2k_state *) calloc(1, sizeof *s);
 
         nvjpeg2kCreateSimple(&s->nvjpeg2k_handle);
+#ifdef TILED_DECODE
+        for (int p = 0; p < PIPELINE_STAGES; p++) {
+                CHECK_NVJPEG2K(nvjpeg2kDecodeStateCreate(s->nvjpeg2k_handle,
+                                                         &s->decode_states[p]),
+                               nvj2k_destroy(s);
+                               return nullptr);
+                CHECK_CUDA(cudaStreamCreateWithFlags(&s->decode_streams[p],
+                                                     cudaStreamNonBlocking));
+        }
+#else
         CHECK_NVJPEG2K(
             nvjpeg2kDecodeStateCreate(s->nvjpeg2k_handle, &s->decode_state),
             nvj2k_destroy(s);
             return nullptr);
+#endif
         nvjpeg2kStreamCreate(&s->nvjpeg2k_stream);
         nvjpeg2kDecodeParamsCreate(&s->decode_params);
         nvjpeg2kDecodeParamsSetOutputFormat(s->decode_params, NVJPEG2K_FORMAT_INTERLEAVED);
@@ -236,9 +256,60 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         output_image.pitch_in_bytes = &s->pitch_in_bytes;
 
         GPU_TIMER_START(nvjpeg2kDecode, LL_DEBUG, s->cuda_stream);
+#if defined TILED_DECODE
+        cudaEvent_t pipeline_events[PIPELINE_STAGES];
+
+        for (int p = 0; p < PIPELINE_STAGES; p++) {
+                CHECK_CUDA(cudaEventCreate(&pipeline_events[p]));
+                CHECK_CUDA(cudaEventRecord(pipeline_events[p], s->decode_streams[p]));
+        }
+
+        int buffer_index = 0;
+        uint32_t tile_id = 0;
+        for (uint32_t tile_y0 = 0; tile_y0 < image_info.image_height;
+             tile_y0 += image_info.tile_height) {
+                for (uint32_t tile_x0 = 0; tile_x0 < image_info.image_width;
+                     tile_x0 += image_info.tile_width) {
+                        // make sure that the previous stage are done before
+                        // reusing
+                        CHECK_CUDA(cudaEventSynchronize(
+                            pipeline_events[buffer_index]));
+
+                        nvjpeg2kImage_t nvjpeg2k_out = output_image;
+                        void *pixel_data =
+                            (uint8_t *)output_image.pixel_data[0] +
+                            ((ptrdiff_t)tile_y0 * s->pitch_in_bytes) +
+                            ((ptrdiff_t)tile_x0 * bps *
+                             output_image.num_components);
+                        nvjpeg2k_out.pixel_data = &pixel_data;
+
+                        CHECK_NVJPEG2K(nvjpeg2kDecodeTile(
+                                           s->nvjpeg2k_handle,
+                                           s->decode_states[buffer_index],
+                                           s->nvjpeg2k_stream, s->decode_params,
+                                           tile_id, 0, &nvjpeg2k_out,
+                                           s->decode_streams[buffer_index]),
+                                       return {});
+
+                        CHECK_CUDA(
+                            cudaEventRecord(pipeline_events[buffer_index],
+                                            s->decode_streams[buffer_index]));
+
+                        buffer_index = (buffer_index + 1) % PIPELINE_STAGES;
+                        tile_id++;
+                }
+        }
+        for (int p = 0; p < PIPELINE_STAGES; p++) {
+                CHECK_CUDA(cudaEventSynchronize(pipeline_events[p]));
+        }
+        for (int p = 0; p < PIPELINE_STAGES; p++) {
+                CHECK_CUDA(cudaEventDestroy(pipeline_events[p]));
+        }
+#else
         status = nvjpeg2kDecodeImage(s->nvjpeg2k_handle, s->decode_state,
                                      s->nvjpeg2k_stream, s->decode_params,
                                      &output_image, s->cuda_stream);
+#endif
         GPU_TIMER_STOP(nvjpeg2kDecode);
         if (status != NVJPEG2K_STATUS_SUCCESS) {
                 ERROR_MSG("Unable to decode J2K file %s: %d (%s)\n", fname,
@@ -295,7 +366,14 @@ void nvj2k_destroy(struct nvj2k_state *s) {
         CHECK_CUDA(cudaFree(s->converted));
         CHECK_NVJPEG2K(nvjpeg2kDecodeParamsDestroy(s->decode_params), );
         CHECK_NVJPEG2K(nvjpeg2kStreamDestroy(s->nvjpeg2k_stream), );
+#ifdef TILED_DECODE
+        for(int p = 0; p < PIPELINE_STAGES; p++) {
+                CHECK_NVJPEG2K(nvjpeg2kDecodeStateDestroy(s->decode_states[p]), );
+                CHECK_CUDA(cudaStreamDestroy(s->decode_streams[p]));
+        }
+#else
         CHECK_NVJPEG2K(nvjpeg2kDecodeStateDestroy(s->decode_state), );
+#endif
         CHECK_NVJPEG2K(nvjpeg2kDestroy(s->nvjpeg2k_handle), );
         free(s);
 }
