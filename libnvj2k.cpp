@@ -83,7 +83,9 @@ struct nvj2k_state *nvj2k_init(cudaStream_t stream) {
                                return nullptr);
                 CHECK_CUDA(cudaStreamCreateWithFlags(&s->decode_streams[p],
                                                      cudaStreamNonBlocking));
-                CHECK_CUDA(cudaEventCreate(&s->pipeline_events[p]));
+                CHECK_CUDA(cudaEventCreateWithFlags(&s->pipeline_events[p],
+                                                    cudaEventDisableTiming |
+                                                        cudaEventBlockingSync));
                 CHECK_CUDA(cudaEventRecord(s->pipeline_events[p],
                                            s->decode_streams[p]));
         }
