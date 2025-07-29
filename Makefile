@@ -16,7 +16,8 @@ LIBS += -lcudart -lgpujpeg -lm \
 	-lnppc -lnppig -lnpps -lnppist \
 	-lnvjpeg2k -lnvtiff \
 	-lproj $(RMM_LIB) \
-	-ltiff
+	-ltiff \
+	-lwebp
 	# -lgrok
 BUILD_DIR ?= .
 ## build for all supported CUDA architectures
@@ -53,7 +54,8 @@ $(BUILD_DIR)/gjtiff: \
 	$(BUILD_DIR)/pam.o \
 	$(BUILD_DIR)/rotate.o \
 	$(BUILD_DIR)/rotate_utm.o \
-	$(BUILD_DIR)/utils.o
+	$(BUILD_DIR)/utils.o \
+	$(BUILD_DIR)/webp.o
 	$(CXX) $(LDFLAGS) $^ $(LIBS) -o $@
 
 clean:

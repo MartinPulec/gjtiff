@@ -45,6 +45,7 @@
 #include "pam.h"
 #include "rotate.h"
 #include "utils.h"
+#include "webp.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -60,14 +61,16 @@ cudaEvent_t cuda_event_stop;
 int interpolation = 0;
 long long mem_limit = 0;
 
+enum out_format { OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
+
 struct options {
         int req_gpujpeg_quality;
         int downscale_factor;
         bool use_libtiff;
         bool norotate;
-        bool write_uncompressed;
+        enum out_format output_format;
         int zoom_levels[MAX_ZOOM_COUNT];
-#define OPTIONS_INIT {-1, 1, false, false, false, {-1}}
+#define OPTIONS_INIT {-1, 1, false, false, OUTF_JPEG, {-1}}
 };
 
 struct state_gjtiff {
@@ -81,6 +84,7 @@ struct state_gjtiff {
         struct libtiff_state *state_libtiff;
         // GPUJPEG
         struct gpujpeg_encoder *gj_enc{};
+        struct webp_encoder *webp_enc{};
         // downscaler
         struct downscaler_state *downscaler = NULL;
         // rotate
@@ -91,7 +95,15 @@ struct state_gjtiff {
 
 static const char *get_ext(struct state_gjtiff *s)
 {
-        return s->gj_enc != nullptr ? ".jpg" : ".pnm";
+        switch (s->opts.output_format) {
+        case OUTF_JPEG:
+                return ".jpg";
+        case OUTF_WEBP:
+                return ".webp";
+        case OUTF_RAW:
+                return ".pnm";
+        }
+        abort();
 }
 
 state_gjtiff::state_gjtiff(struct options opts)
@@ -106,9 +118,13 @@ state_gjtiff::state_gjtiff(struct options opts)
         assert(state_nvj2k != nullptr);
         state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
-        if (!opts.write_uncompressed) {
+        if (opts.output_format == OUTF_JPEG) {
                 gj_enc = gpujpeg_encoder_create(stream);
                 assert(gj_enc != nullptr);
+        }
+        if (opts.output_format == OUTF_WEBP) {
+                webp_enc = webp_encoder_create(stream);
+                assert(webp_enc != nullptr);
         }
         downscaler = downscaler_init(stream);
         assert(downscaler != nullptr);
@@ -123,6 +139,7 @@ state_gjtiff::~state_gjtiff()
         if (gj_enc != NULL) {
                 gpujpeg_encoder_destroy(gj_enc);
         }
+        webp_encoder_destroy(webp_enc);
         nvj2k_destroy(state_nvj2k);
         nvtiff_destroy(state_nvtiff);
         libtiff_destroy(state_libtiff);
@@ -290,12 +307,18 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
 static size_t encode_file(struct state_gjtiff *s, struct dec_image *uncomp,
                           size_t width_padding, const char *ofname)
 {
-        if (s->gj_enc != nullptr) {
+        switch (s->opts.output_format) {
+        case OUTF_JPEG:
                 return encode_jpeg(s, *uncomp, width_padding, ofname);
+        case OUTF_WEBP:
+                return encode_webp(s->webp_enc, uncomp, width_padding, ofname);
+        case OUTF_RAW:
+                break; // handled further
         }
         size_t linesize = (size_t)uncomp->width * uncomp->comp_count;
         size_t len = linesize * uncomp->height;
         unsigned char *data = new unsigned char[len];
+        CHECK_CUDA(cudaStreamSynchronize(s->stream));
         if (width_padding == 0) {
                 CHECK_CUDA(
                     cudaMemcpy(data, uncomp->data, len, cudaMemcpyDefault));
@@ -469,6 +492,7 @@ static void show_help(const char *progname)
         INFO_MSG("\t-l       - use libtiff if nvCOMP not available\n");
         INFO_MSG("\t-n       - do not adjust to natural rotation/prooprotion\n");
         INFO_MSG("\t-r       - write raw PNM instead of JPEG\n");
+        INFO_MSG("\t-w       - WebP encode\n");
         INFO_MSG("\t-o <dir> - output JPEG directory\n");
         INFO_MSG("\t-q <q>   - JPEG quality\n");
         INFO_MSG("\t-s <d>   - downscale factor\n");
@@ -590,7 +614,7 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+I:M:Qdhnno:q:rs:vz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+I:M:Qdhnno:q:rs:vwz:")) != -1) {
                 switch (opt) {
                 case 'I':
                         interpolation = (int)strtol(optarg, nullptr, 0);
@@ -620,7 +644,7 @@ int main(int argc, char **argv)
                             optarg, nullptr, 10);
                         break;
                 case 'r':
-                        global_opts.write_uncompressed = true;
+                        global_opts.output_format = OUTF_RAW;
                         break;
                 case 's':
                         global_opts.downscale_factor = (int)strtol(optarg,
@@ -628,6 +652,9 @@ int main(int argc, char **argv)
                         break;
                 case 'v':
                         log_level += 1;
+                        break;
+                case 'w':
+                        global_opts.output_format = OUTF_WEBP;
                         break;
                 case 'z':
                         parse_zoom_levels(global_opts.zoom_levels, optarg);
