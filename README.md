@@ -9,6 +9,11 @@ DEFLATE decompress.
 If nvTIFF isn't capable to decompress the picture _libtiff_ is used
 instead.
 
+# NEWS
+
+- 29th Jun '25 - jpeg2000 decode performance improved through
+parallel tile decoding
+
 # Requirements
 
 ## Software
