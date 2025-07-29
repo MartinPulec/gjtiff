@@ -189,7 +189,7 @@ static void ifiles_destroy(struct ifiles *ifiles) {
 
 static size_t encode_jpeg(struct state_gjtiff *s, int req_quality,
                           struct dec_image uncomp, size_t width_padding,
-                          const char *ofname, bool planar)
+                          const char *ofname)
 {
         gpujpeg_parameters param = gpujpeg_default_parameters();
         param.interleaved = 1;
@@ -217,8 +217,7 @@ static size_t encode_jpeg(struct state_gjtiff *s, int req_quality,
             uncomp.comp_count == 1 ? GPUJPEG_YCBCR_JPEG : GPUJPEG_RGB;
         param_image.pixel_format = uncomp.comp_count == 1
                                        ? GPUJPEG_U8
-                                       : (planar ? GPUJPEG_444_U8_P0P1P2
-                                                 : GPUJPEG_444_U8_P012);
+                                       : GPUJPEG_444_U8_P012;
         gpujpeg_encoder_input encoder_input = gpujpeg_encoder_input_gpu_image(
             uncomp.data);
         uint8_t *out = nullptr;
@@ -292,7 +291,7 @@ static bool encode(struct state_gjtiff *s, int req_quality,
         size_t len = 0;
         if (s->gj_enc != nullptr) {
                 len = encode_jpeg(s, req_quality, *uncomp, 0,
-                                  ofname,false);
+                                  ofname);
         } else {
                 len = (size_t) uncomp->width * uncomp->height * uncomp->comp_count;
                 unsigned char *data = new unsigned char[len];
@@ -378,8 +377,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, int req_quality,
                                     (ptrdiff_t)(y - y_first) * 256 * xpitch +
                                     (x - x_first) * 256 * uncomp->comp_count;
                         size_t len = encode_jpeg(s, req_quality, tile,
-                                    xpitch - 256 * uncomp->comp_count, path,
-                                    false);
+                                    xpitch - 256 * uncomp->comp_count, path);
                         if (len != 0) {
                                 // printf(", \"%s\"", path);
                         } else {
@@ -401,7 +399,7 @@ static bool encode_tiles(struct state_gjtiff *s, int req_quality,
         char whole[PATH_MAX];
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole), ".jpg", nullptr);
-        if (encode_jpeg(s, req_quality, *uncomp, 0, whole, false) == 0) {
+        if (encode_jpeg(s, req_quality, *uncomp, 0, whole) == 0) {
                 return false;
         }
         printf("\t{\n");
