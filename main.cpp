@@ -714,37 +714,36 @@ int main(int argc, char **argv)
                         ifiles.ifiles[i].img = rotate(state.rotate, &dec);
                         assert(ifiles.ifiles[i].img != nullptr);
                 }
-                if (!err) {
-                        if (ifiles.count > 1) {
-                                char combined_ifname[PATH_MAX];
-                                struct owned_image *combined = combine_images(
-                                    &ifiles, combined_ifname, state.stream);
-                                ifiles_destroy(&ifiles);
-                                ifiles.ifiles[0].img = combined;
-                                snprintf(ifiles.ifiles[0].ifname,
-                                         sizeof ifiles.ifiles[0].ifname, "%s",
-                                         combined_ifname);
-                                ifiles.count = 1;
-                        }
-
-                        if (global_opts.zoom_levels[0] == -1) {
-                                get_ofname(ifiles.ifiles[0].ifname,
-                                           ofdir + d_pref_len,
-                                           sizeof ofdir - d_pref_len,
-                                           get_ext(&state), nullptr);
-                                ret = encode_single(&state, &ifiles, ifname,
-                                                    ofdir)
-                                          ? ret
-                                          : ERR_SOME_FILES_NOT_TRANSCODED;
-                        } else {
-                                ret = encode_tiles(&state, &ifiles,
-                                                   ifiles.ifiles[0].ifname,
-                                                   ofdir,
-                                                   global_opts.zoom_levels)
-                                          ? ret
-                                          : ERR_SOME_FILES_NOT_TRANSCODED;
-                        }
+                if (err) {
+                        goto skip;
                 }
+                if (ifiles.count > 1) {
+                        char combined_ifname[PATH_MAX];
+                        struct owned_image *combined = combine_images(
+                            &ifiles, combined_ifname, state.stream);
+                        ifiles_destroy(&ifiles);
+                        ifiles.ifiles[0].img = combined;
+                        snprintf(ifiles.ifiles[0].ifname,
+                                 sizeof ifiles.ifiles[0].ifname, "%s",
+                                 combined_ifname);
+                        ifiles.count = 1;
+                }
+
+                if (global_opts.zoom_levels[0] == -1) {
+                        get_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,
+                                   sizeof ofdir - d_pref_len, get_ext(&state),
+                                   nullptr);
+                        ret = encode_single(&state, &ifiles, ifname, ofdir)
+                                  ? ret
+                                  : ERR_SOME_FILES_NOT_TRANSCODED;
+                } else {
+                        ret = encode_tiles(&state, &ifiles,
+                                           ifiles.ifiles[0].ifname, ofdir,
+                                           global_opts.zoom_levels)
+                                  ? ret
+                                  : ERR_SOME_FILES_NOT_TRANSCODED;
+                }
+        skip:
                 ifiles_destroy(&ifiles);
                 TIMER_STOP(transcode);
         }
