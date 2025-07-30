@@ -327,8 +327,8 @@ static size_t encode_file(struct state_gjtiff *s, struct dec_image *uncomp,
                                         linesize + width_padding, linesize,
                                         uncomp->height, cudaMemcpyDefault));
         }
-        pam_write(ofname, uncomp->width, uncomp->height, uncomp->comp_count,
-                  255, data, true);
+        pam_write(ofname, uncomp->width, uncomp->width, uncomp->height,
+                  uncomp->comp_count, 255, data, true);
         delete[] data;
         return len;
 }
