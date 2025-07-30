@@ -7,7 +7,7 @@ extern "C" {
 
 struct webp_encoder;
 struct dec_image;
-struct webp_encoder *webp_encoder_create(void *cuda_stream);
+struct webp_encoder *webp_encoder_create();
 unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                           unsigned long width_padding, const char *ofname);
 void webp_encoder_destroy(struct webp_encoder *enc);

@@ -248,6 +248,12 @@ static void release_owned_cuda_image(struct owned_image *img)
         free(img);
 }
 
+static void release_owned_host_image(struct owned_image *img)
+{
+        free(img->img.data);
+        free(img);
+}
+
 static struct owned_image *new_cuda_owned_image_int(const struct dec_image *in, int bpp)
 {
         struct owned_image *ret = malloc(sizeof *ret);
@@ -269,6 +275,20 @@ struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 //         ret->in_float = true;
 //         return ret;
 // }
+
+struct owned_image *copy_img_from_device(const struct dec_image *in,
+                                         cudaStream_t stream)
+{
+        struct owned_image *ret = malloc(sizeof *ret);
+        memcpy(&ret->img, in, sizeof *in);
+        const size_t size = (size_t)in->width * in->height * in->comp_count;
+        ret->img.data = malloc(size);
+        ret->free = release_owned_host_image;
+        CHECK_CUDA(cudaStreamSynchronize(stream));
+        CHECK_CUDA(
+            cudaMemcpy(ret->img.data, in->data, size, cudaMemcpyDefault));
+        return ret;
+}
 
 /// EPSG:4236 to EPSG:3857 (Web Mercator)
 void gcs_to_webm(double latitude, double longitude, double *y, double *x)

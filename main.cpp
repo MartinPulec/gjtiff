@@ -123,7 +123,7 @@ state_gjtiff::state_gjtiff(struct options opts)
                 assert(gj_enc != nullptr);
         }
         if (opts.output_format == OUTF_WEBP) {
-                webp_enc = webp_encoder_create(stream);
+                webp_enc = webp_encoder_create();
                 assert(webp_enc != nullptr);
         }
         downscaler = downscaler_init(stream);
@@ -259,7 +259,7 @@ static size_t encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
         return len;
 }
 
-static void print_bbox(struct coordinate coords[4]) {
+static void print_bbox(const struct coordinate coords[4]) {
         double lon_min = 0;
         double lon_max = 0;
         double lat_min = 0;
@@ -304,8 +304,10 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         return ret;
 }
 
-static size_t encode_file(struct state_gjtiff *s, struct dec_image *uncomp,
-                          size_t width_padding, const char *ofname)
+/// uncomp->data must reside in device for JPEG, in RAM otherwise
+static size_t encode_file(struct state_gjtiff *s,
+                          const struct dec_image *uncomp, size_t width_padding,
+                          const char *ofname)
 {
         switch (s->opts.output_format) {
         case OUTF_JPEG:
@@ -313,32 +315,38 @@ static size_t encode_file(struct state_gjtiff *s, struct dec_image *uncomp,
         case OUTF_WEBP:
                 return encode_webp(s->webp_enc, uncomp, width_padding, ofname);
         case OUTF_RAW:
-                break; // handled further
+                return pam_write(ofname, uncomp->width,
+                                 uncomp->width + width_padding, uncomp->height,
+                                 uncomp->comp_count, 255, uncomp->data, true)
+                           ? (size_t)uncomp->width * uncomp->comp_count *
+                                 uncomp->height
+                           : 0;
         }
-        size_t linesize = (size_t)uncomp->width * uncomp->comp_count;
-        size_t len = linesize * uncomp->height;
-        unsigned char *data = new unsigned char[len];
-        CHECK_CUDA(cudaStreamSynchronize(s->stream));
-        if (width_padding == 0) {
-                CHECK_CUDA(
-                    cudaMemcpy(data, uncomp->data, len, cudaMemcpyDefault));
-        } else {
-                CHECK_CUDA(cudaMemcpy2D(data, linesize, uncomp->data,
-                                        linesize + width_padding, linesize,
-                                        uncomp->height, cudaMemcpyDefault));
+        abort();
+}
+
+///< encodes file in GPU memory
+static size_t encode_gpu(struct state_gjtiff *s,
+                   const struct dec_image *uncomp,
+                   const char *ofname)
+{
+        struct owned_image *in_ram = nullptr;
+        if (s->opts.output_format != OUTF_JPEG) {
+                in_ram = copy_img_from_device(uncomp, s->stream);
+                uncomp = &in_ram->img;
         }
-        pam_write(ofname, uncomp->width, uncomp->width, uncomp->height,
-                  uncomp->comp_count, 255, data, true);
-        delete[] data;
+        const size_t len = encode_file(s, uncomp, 0, ofname);
+        if (in_ram != nullptr) {
+                in_ram->free(in_ram);
+        }
         return len;
 }
 
 static bool encode_single(struct state_gjtiff *s,
-                   const struct ifiles *ifiles, const char *ifname,
+                   const struct dec_image *uncomp, const char *ifname,
                    const char *ofname)
 {
-        struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
-        const size_t len = encode_file(s, uncomp, 0, ofname);
+        const size_t len = encode_gpu(s, uncomp, ofname);
         char buf[UINT64_ASCII_LEN + 1];
         char fullpath[PATH_MAX + 1];
         realpath(ofname, fullpath);
@@ -380,7 +388,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                            int zoom_level)
 {
         bool ret = true;
-        struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
+        struct dec_image *const uncomp = &ifiles->ifiles[0].img->img;
         const int scale = 1<<zoom_level;
         int x_first = floor(uncomp->bounds[XLEFT] * scale);
         int x_end = ceil(uncomp->bounds[XRIGHT] * scale);
@@ -404,8 +412,14 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
         struct owned_image *scaled = scale_pitch(
             s->downscaler, new_width, x, xpitch, new_height, y,
             dst_lines, ifiles->ifiles[0].img);
+        const struct dec_image *src= &scaled->img;
+        struct owned_image *in_ram = nullptr;
+        if (s->opts.output_format != OUTF_JPEG) {
+                in_ram = copy_img_from_device(&scaled->img, s->stream);
+                src = &in_ram->img;
+        }
 
-        struct dec_image tile = scaled->img;
+        struct dec_image tile = scaled->img; // copy metadata
         tile.width = tile.height = 256;
         for (int x = x_first; x < x_end; ++x) {
                 char *path = get_tile_ofdir(prefix, ifname, zoom_level, x);
@@ -413,7 +427,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                 for (int y = y_first; y < y_end; ++y) {
                         snprintf(end, PATH_MAX - (end - path), "/%d%s", y,
                                  get_ext(s));
-                        tile.data = scaled->img.data +
+                        tile.data = src->data +
                                     (ptrdiff_t)(y - y_first) * 256 * xpitch +
                                     (x - x_first) * 256 * uncomp->comp_count;
                         size_t len = encode_file(s, &tile,
@@ -427,6 +441,9 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                 free(path);
         }
         scaled->free(scaled);
+        if (in_ram != nullptr) {
+                in_ram->free(in_ram);
+        }
         return ret;
 }
 
@@ -440,7 +457,7 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
                    get_ext(s), nullptr);
-        if (encode_file(s, uncomp, 0, whole) == 0) {
+        if (encode_gpu(s, uncomp, whole) == 0) {
                 return false;
         }
         printf("\t{\n");
@@ -728,12 +745,12 @@ int main(int argc, char **argv)
                                  combined_ifname);
                         ifiles.count = 1;
                 }
-
                 if (global_opts.zoom_levels[0] == -1) {
                         get_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,
                                    sizeof ofdir - d_pref_len, get_ext(&state),
                                    nullptr);
-                        ret = encode_single(&state, &ifiles, ifname, ofdir)
+                        ret = encode_single(&state, &ifiles.ifiles[0].img->img,
+                                            ifname, ofdir)
                                   ? ret
                                   : ERR_SOME_FILES_NOT_TRANSCODED;
                 } else {

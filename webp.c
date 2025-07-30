@@ -1,6 +1,5 @@
 #include "webp.h"
 
-#include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,11 +26,10 @@ static int my_write(const uint8_t *data, size_t data_size,
         return fwrite(data, data_size, 1, enc->outfile) == 1;
 }
 
-struct webp_encoder *webp_encoder_create(void *cuda_stream)
+struct webp_encoder *webp_encoder_create()
 {
         int ok = 0;
         struct webp_encoder *enc = calloc(1, sizeof *enc);
-        enc->cuda_stream = cuda_stream;
 
         ok = WebPConfigInit(&enc->webp_config);
         if (ok) {
@@ -65,9 +63,7 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         }
         unsigned long len = (unsigned long)img->width * img->height *
                             img->comp_count;
-        unsigned char *data = malloc(len);
-        CHECK_CUDA(cudaStreamSynchronize(enc->cuda_stream));
-        CHECK_CUDA(cudaMemcpy(data, img->data, len, cudaMemcpyDefault));
+        unsigned char *data = img->data;
         // for (int i = 0; i < img->height; ++i ) {
         //         memset(data + i * img->width, 255- (i * 255 / img->height), img->width);
         // }
