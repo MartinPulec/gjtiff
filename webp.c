@@ -63,11 +63,6 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         }
         unsigned long len = (unsigned long)img->width * img->height *
                             img->comp_count;
-        unsigned char *data = img->data;
-        // for (int i = 0; i < img->height; ++i ) {
-        //         memset(data + i * img->width, 255- (i * 255 / img->height), img->width);
-        // }
-        // memset(data, 128, len);
 
         const size_t req_chroma_len = (((size_t)img->width + 1) / 2) *
                                       (((size_t)img->height + 1) / 2);
@@ -78,8 +73,11 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                 enc->chroma_allocated = req_chroma_len;
         }
 
-        enc->webp_picture.y = data;
-        enc->webp_picture.y_stride = width_padding;
+        enc->webp_picture.use_argb  = 0;
+        enc->webp_picture.colorspace = WEBP_YUV420;
+        enc->webp_picture.y = img->data;
+        enc->webp_picture.y_stride = img->width + width_padding;
+        enc->webp_picture.uv_stride = (img->width + 1) / 2;
         enc->webp_picture.u = enc->chroma;
         enc->webp_picture.v = enc->chroma;
         enc->webp_picture.width = img->width;
@@ -101,7 +99,6 @@ retry:
         }
         fclose(enc->outfile);
 
-        free(data);
         return len;
 }
 void webp_encoder_destroy(struct webp_encoder *enc)
