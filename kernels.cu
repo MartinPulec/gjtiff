@@ -1,5 +1,6 @@
 #include "kernels.h"
 
+#include <cassert>
 #include <cstdio>
 #include <nppcore.h>
 #include <nppdefs.h>
@@ -38,6 +39,9 @@ static struct {
                 int len;
                 void *d_res;
         } stat[2];
+
+        uint8_t *d_yuv420;
+        size_t d_yuv420_allocated;
 } state;
 /// indices to state.scratch
 enum {
@@ -376,10 +380,95 @@ void combine_images_cuda(struct dec_image *out, const struct dec_image *in1,
 }
 
 
+static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in, int width, int height)
+{
+        enum {
+                YUV_FIX = 16,
+                YUV_HALF = 1 << (YUV_FIX - 1),
+        };
+        struct fns {
+                static __device__ int VP8ClipUV(int uv, int rounding)
+                {
+                        uv = (uv + rounding + (128 << (YUV_FIX + 2))) >> (YUV_FIX + 2);
+                        return ((uv & ~0xff) == 0) ? uv : (uv < 0) ? 0 : 255;
+                }
+
+                static __device__ int VP8RGBToY(int r, int g, int b, int rounding)
+                {
+                        const int luma = 16839 * r + 33059 * g + 6420 * b;
+                        return (luma + rounding + (16 << YUV_FIX)) >> YUV_FIX; // no need to
+                                                                               // clip
+                }
+
+                static __device__ int VP8RGBToU(int r, int g, int b, int rounding)
+                {
+                        const int u = -9719 * r - 19081 * g + 28800 * b;
+                        return VP8ClipUV(u, rounding);
+                }
+
+                static __device__ int VP8RGBToV(int r, int g, int b, int rounding)
+                {
+                        const int v = +28800 * r - 24116 * g - 4684 * b;
+                        return VP8ClipUV(v, rounding);
+                }
+        };
+        int x = 2 * (blockIdx.x * blockDim.x + threadIdx.x);
+        int y = 2 * (blockIdx.y * blockDim.y + threadIdx.y);
+        if (x >= width || y >= height) {
+                return;
+        }
+        int rr = 0;
+        int gg = 0;
+        int bb = 0;
+        for (int j = 0; j < 2; ++j) {
+                for (int i = 0; i < 2; ++i) {
+                        int position = MIN(x + j, width - 1) + MIN(y + i, width - 1) * width;
+                        int r = d_in[3 * position];
+                        int g = d_in[3 * position + 1];
+                        int b = d_in[3 * position + 2];
+                        const int luma = fns::VP8RGBToY(r, g, b, YUV_HALF);
+                        d_out[position] = luma;
+                        rr += r;
+                        gg += g;
+                        bb += b;
+                }
+        }
+        // VP8RGBToU/V expects four accumulated pixels.
+        const int u = fns::VP8RGBToU(rr, gg, bb, YUV_HALF << 2);
+        const int v = fns::VP8RGBToV(rr, gg, bb, YUV_HALF << 2);
+        d_out += width * height;
+        int uv_off = y / 2 * ((width + 1) / 2) + x / 2;
+        d_out[uv_off] = u;
+        d_out += ((width + 1) / 2) * ((height + 1) / 2);
+        d_out[uv_off] = v;
+}
+
+uint8_t *convert_rgb_to_yuv420(const struct dec_image *in, cudaStream_t stream)
+{
+        assert(in->comp_count == 3);
+        dim3 block(16, 16);
+        int width = (in->width + 1) / 2;
+        int height = (in->height + 1) / 2;
+        dim3 grid((width + block.x - 1) / block.x,
+                  (height + block.y - 1) / block.y);
+        size_t len = (in->width * in->height) +
+                     (2 * ((in->width + 1) / 2) * ((in->height + 1) / 2));
+        if (len > state.d_yuv420_allocated) {
+                CHECK_CUDA(cudaFree(state.d_yuv420));
+                CHECK_CUDA(cudaMalloc(&state.d_yuv420, len));
+                state.d_yuv420_allocated = len;
+        }
+        kernel_rgb_to_yuv<<<grid, block, 0, stream>>>(
+            state.d_yuv420, in->data, in->width, in->height);
+        CHECK_CUDA(cudaGetLastError());
+        return state.d_yuv420;
+}
+
 void cleanup_cuda_kernels()
 {
         for (unsigned i = 0; i < ARR_SIZE(state.stat); ++i) {
                 CHECK_CUDA(cudaFreeHost(state.stat[i].data));
                 CHECK_CUDA(cudaFree(state.stat[i].d_res));
         }
+        CHECK_CUDA(cudaFree(state.d_yuv420));
 }

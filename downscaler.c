@@ -123,13 +123,17 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         return downscaled;
 }
 
+/**
+ * @param new_width new ROI width
+ * @param xpitch    destination pitch in bytes
+ */
 struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
                                 int x, size_t xpitch, int new_height,
                                 int y, size_t dst_lines,
                                 const struct owned_image *old)
 {
         struct dec_image new_desc = old->img;
-        new_desc.width = (int)xpitch;
+        new_desc.width = (int)xpitch / old->img.comp_count;
         new_desc.height = (int)dst_lines;
         struct owned_image *ret = new_cuda_owned_image(&new_desc);
         unsigned char *data = ret->img.data + ((ptrdiff_t)y * xpitch) +

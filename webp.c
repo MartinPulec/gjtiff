@@ -33,7 +33,7 @@ struct webp_encoder *webp_encoder_create()
 
         ok = WebPConfigInit(&enc->webp_config);
         if (ok) {
-                enc->webp_config.quality = 50;
+                enc->webp_config.quality = 75;
                 enc->webp_config.method = 2;   // 0 = fast (fails for bigger imgs), 4 - default
                 enc->webp_config.segments = 1; // 4 - max
                 enc->webp_config.partitions = 3;
@@ -55,12 +55,9 @@ struct webp_encoder *webp_encoder_create()
 }
 
 unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
-                          unsigned long width_padding, const char *ofname)
+                          unsigned long width_padding, const char *ofname,
+                          const struct dec_image *orig_img)
 {
-        if (img->comp_count != 1) {
-                ERROR_MSG("Only 1 channel is supported as for now!\n");
-                return 0;
-        }
         unsigned long len = (unsigned long)img->width * img->height *
                             img->comp_count;
 
@@ -73,15 +70,38 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                 enc->chroma_allocated = req_chroma_len;
         }
 
-        enc->webp_picture.use_argb  = 0;
+        enc->webp_picture.use_argb = 0;
         enc->webp_picture.colorspace = WEBP_YUV420;
-        enc->webp_picture.y = img->data;
-        enc->webp_picture.y_stride = img->width + width_padding;
-        enc->webp_picture.uv_stride = (img->width + 1) / 2;
-        enc->webp_picture.u = enc->chroma;
-        enc->webp_picture.v = enc->chroma;
         enc->webp_picture.width = img->width;
         enc->webp_picture.height = img->height;
+        if (img->comp_count == 1) {
+                enc->webp_picture.y = img->data;
+                enc->webp_picture.y_stride = img->width + width_padding;
+                enc->webp_picture.uv_stride = (img->width + 1) / 2;
+                enc->webp_picture.u = enc->chroma;
+                enc->webp_picture.v = enc->chroma;
+        } else {
+                enc->webp_picture.y = orig_img->data;
+                enc->webp_picture.y_stride = orig_img->width;
+                enc->webp_picture.uv_stride = (orig_img->width + 1) / 2;
+                enc->webp_picture.u = orig_img->data +
+                                      enc->webp_picture.y_stride *
+                                          orig_img->height;
+                enc->webp_picture.v = enc->webp_picture.u +
+                                      enc->webp_picture.uv_stride *
+                                          ((orig_img->height + 1) / 2);
+
+                ptrdiff_t diff = img->data - orig_img->data;
+                diff /= 3; // not rgb
+                int x = diff % orig_img->width;
+                int y = diff / orig_img->width;
+                enc->webp_picture.y += x +
+                                       (y * enc->webp_picture.y_stride);
+                enc->webp_picture.u += x / 2 +
+                                       (y / 2 * enc->webp_picture.uv_stride);
+                enc->webp_picture.v += x / 2 +
+                                       (y / 2 * enc->webp_picture.uv_stride);
+        }
 
         enc->outfile = fopen(ofname, "wb");
 

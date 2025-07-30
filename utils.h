@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <ctime>
 #else
+#include <stdbool.h>
 #include <stdint.h>       // for uint64_t
 #include <stdio.h>
 #include <time.h>
@@ -132,7 +133,8 @@ struct owned_image;
 struct owned_image *new_cuda_owned_image(const struct dec_image *in);
 // struct owned_image *new_cuda_owned_float_image(const struct dec_image *in);
 struct owned_image *copy_img_from_device(const struct dec_image *in,
-                                         cudaStream_t stream);
+                                         cudaStream_t stream,
+                                         bool convert_to_yuv);
 
 void gcs_to_webm(double latitude, double longitude, double *y, double *x);
 

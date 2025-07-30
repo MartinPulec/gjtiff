@@ -307,13 +307,13 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
 /// uncomp->data must reside in device for JPEG, in RAM otherwise
 static size_t encode_file(struct state_gjtiff *s,
                           const struct dec_image *uncomp, size_t width_padding,
-                          const char *ofname)
+                          const char *ofname, const struct dec_image *orig_img)
 {
         switch (s->opts.output_format) {
         case OUTF_JPEG:
                 return encode_jpeg(s, *uncomp, width_padding, ofname);
         case OUTF_WEBP:
-                return encode_webp(s->webp_enc, uncomp, width_padding, ofname);
+                return encode_webp(s->webp_enc, uncomp, width_padding, ofname, orig_img);
         case OUTF_RAW:
                 return pam_write(ofname, uncomp->width,
                                  uncomp->width + width_padding, uncomp->height,
@@ -326,16 +326,16 @@ static size_t encode_file(struct state_gjtiff *s,
 }
 
 ///< encodes file in GPU memory
-static size_t encode_gpu(struct state_gjtiff *s,
-                   const struct dec_image *uncomp,
-                   const char *ofname)
+static size_t encode_gpu(struct state_gjtiff *s, const struct dec_image *uncomp,
+                         const char *ofname)
 {
         struct owned_image *in_ram = nullptr;
         if (s->opts.output_format != OUTF_JPEG) {
-                in_ram = copy_img_from_device(uncomp, s->stream);
+                in_ram = copy_img_from_device(
+                    uncomp, s->stream, s->opts.output_format == OUTF_WEBP);
                 uncomp = &in_ram->img;
         }
-        const size_t len = encode_file(s, uncomp, 0, ofname);
+        const size_t len = encode_file(s, uncomp, 0, ofname, uncomp);
         if (in_ram != nullptr) {
                 in_ram->free(in_ram);
         }
@@ -343,7 +343,7 @@ static size_t encode_gpu(struct state_gjtiff *s,
 }
 
 static bool encode_single(struct state_gjtiff *s,
-                   const struct dec_image *uncomp, const char *ifname,
+                   struct dec_image *uncomp, const char *ifname,
                    const char *ofname)
 {
         const size_t len = encode_gpu(s, uncomp, ofname);
@@ -415,7 +415,9 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
         const struct dec_image *src= &scaled->img;
         struct owned_image *in_ram = nullptr;
         if (s->opts.output_format != OUTF_JPEG) {
-                in_ram = copy_img_from_device(&scaled->img, s->stream);
+                in_ram = copy_img_from_device(&scaled->img, s->stream,
+                                              s->opts.output_format ==
+                                                  OUTF_WEBP);
                 src = &in_ram->img;
         }
 
@@ -430,8 +432,9 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                         tile.data = src->data +
                                     (ptrdiff_t)(y - y_first) * 256 * xpitch +
                                     (x - x_first) * 256 * uncomp->comp_count;
-                        size_t len = encode_file(s, &tile,
-                                    xpitch - 256 * uncomp->comp_count, path);
+                        size_t len = encode_file(
+                            s, &tile, xpitch - 256 * uncomp->comp_count, path,
+                            src);
                         if (len != 0) {
                                 // printf(", \"%s\"", path);
                         } else {

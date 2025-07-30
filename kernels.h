@@ -34,6 +34,8 @@ void downscale_image_cuda(const uint8_t *in, uint8_t *out, int comp_count,
 void combine_images_cuda(struct dec_image *out, const struct dec_image *in1,
                     const struct dec_image *in2, const struct dec_image *in3,
                     cudaStream_t stream);
+[[nodiscard]] uint8_t *convert_rgb_to_yuv420(const struct dec_image *in,
+                                             cudaStream_t stream);
 
 void cleanup_cuda_kernels(void);
 

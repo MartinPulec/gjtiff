@@ -8,6 +8,7 @@
 #include <string.h>        // for memset
 
 #include "defs.h" // for ARR_SIZE
+#include "kernels.h" // for convert_to_yuv
 
 #define STATUS_TO_NAME(x) {x,#x}
 
@@ -277,16 +278,27 @@ struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 // }
 
 struct owned_image *copy_img_from_device(const struct dec_image *in,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         bool convert_to_yuv)
 {
         struct owned_image *ret = malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
         const size_t size = (size_t)in->width * in->height * in->comp_count;
         ret->img.data = malloc(size);
         ret->free = release_owned_host_image;
-        CHECK_CUDA(cudaStreamSynchronize(stream));
-        CHECK_CUDA(
-            cudaMemcpy(ret->img.data, in->data, size, cudaMemcpyDefault));
+        if (in->comp_count >= 3 && convert_to_yuv) {
+                size_t len = (in->width * in->height) +
+                             (2 * ((in->width + 1) / 2) *
+                              ((in->height + 1) / 2));
+                uint8_t *d_buf= convert_rgb_to_yuv420(in, stream);
+                CHECK_CUDA(cudaStreamSynchronize(stream));
+                CHECK_CUDA(cudaMemcpy(ret->img.data, d_buf, len,
+                                      cudaMemcpyDefault));
+        } else {
+                CHECK_CUDA(cudaStreamSynchronize(stream));
+                CHECK_CUDA(cudaMemcpy(ret->img.data, in->data, size,
+                                      cudaMemcpyDefault));
+        }
         return ret;
 }
 
