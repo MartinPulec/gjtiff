@@ -2,7 +2,8 @@ FROM nvidia/cuda:12.9.1-devel-ubuntu22.04
 WORKDIR /build
 
 RUN apt -y update
-RUN apt -y install curl g++ gcc git libgdal-dev libtiff-dev make pkgconf wget
+RUN apt -y install curl g++ gcc git libgdal-dev libtiff-dev libwebp-dev \
+                   make pkgconf wget
 RUN apt -y install nvcomp-cuda-12 nvjpeg2k-cuda-12 nvtiff-cuda-12
 
 RUN curl -LO https://github.com/Kitware/CMake/releases/download/v4.1.0-rc2/\

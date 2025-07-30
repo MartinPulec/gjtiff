@@ -6,7 +6,8 @@ RUN echo "nvidia-legacy-check nvidia-driver/check-for-unsupported-gpu boolean fa
 RUN sed -i 's/^Components:.*/Components: main contrib non-free non-free-firmware/' \
   /etc/apt/sources.list.d/debian.sources
 RUN apt -y update
-RUN apt -y install curl g++ gcc git libgdal-dev libtiff-dev make pkgconf wget xz-utils
+RUN apt -y install curl g++ gcc git libgdal-dev libtiff-dev libwebp-dev \
+                   make pkgconf wget xz-utils
 RUN apt -y --no-install-recommends install nvidia-cuda-toolkit
 
 RUN wget https://developer.download.nvidia.com/compute/cuda/repos/\
