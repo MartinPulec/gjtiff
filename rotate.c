@@ -139,11 +139,13 @@ void adjust_size(int *width, int *height, int comp_count) {
         enum {
                 GB1 = 1LL * 1000 * 1000 * 1000,
                 GJ_PER_BYTE_REQ = 20,
+                MAX_GPU_MEM_FRAC_DEN = 3,
+                MIN_FREE_GB = 2,
         };
         ssize_t threshold = mem_limit;
         if (threshold == 0) {
-                threshold = MIN((ssize_t)gpu_memory / 2,
-                                (ssize_t)gpu_memory - 2 * GB1);
+                threshold = MIN((ssize_t)gpu_memory / MAX_GPU_MEM_FRAC_DEN,
+                                (ssize_t)gpu_memory - MIN_FREE_GB * GB1);
                 assert(threshold >= (ssize_t)2 * GB1);
         }
         ssize_t gj_gram_needed = (ssize_t)*width * *height * comp_count *
