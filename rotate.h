@@ -23,6 +23,9 @@ void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
 void gcs_to_wgs(const struct coordinate src_coords[4],
                 struct coordinate coords[4]);
 
+/// fullfill GPUJPEG mem requirements
+void adjust_size(int *width, int *height, int comp_count);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

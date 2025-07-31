@@ -135,9 +135,7 @@ static double normalize_coords(const struct coordinate src_coords[4],
         return lon_range / lat_range;
 }
 
-/// fullfill GPUJPEG mem requirements
-static void adjust_size(int *width, int *height, int comp_count) {
-
+void adjust_size(int *width, int *height, int comp_count) {
         enum {
                 GB1 = 1LL * 1000 * 1000 * 1000,
                 GJ_PER_BYTE_REQ = 20,

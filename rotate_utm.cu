@@ -436,6 +436,10 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
                         dst_desc.height /= dst_ratio;
                 }
         }
+
+        // decrease size for GPUJPEG
+        adjust_size(&dst_desc.width, &dst_desc.height, dst_desc.comp_count);
+
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:3857");
         for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
