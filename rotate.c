@@ -144,8 +144,9 @@ void adjust_size(int *width, int *height, int comp_count) {
         };
         ssize_t threshold = mem_limit;
         if (threshold == 0) {
-                threshold = MIN((ssize_t)gpu_memory / MAX_GPU_MEM_FRAC_DEN,
-                                (ssize_t)gpu_memory - MIN_FREE_GB * GB1);
+                const long gpu_mem_sig = (ssize_t)gpu_memory;
+                threshold = MIN(gpu_mem_sig / MAX_GPU_MEM_FRAC_DEN,
+                                (gpu_mem_sig - ((long)MIN_FREE_GB * GB1)));
                 assert(threshold >= (ssize_t)2 * GB1);
         }
         ssize_t gj_gram_needed = (ssize_t)*width * *height * comp_count *
