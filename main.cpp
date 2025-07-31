@@ -381,7 +381,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, int req_quality,
                                     xpitch - 256 * uncomp->comp_count, path,
                                     false);
                         if (len != 0) {
-                                printf(", \"%s\"", path);
+                                // printf(", \"%s\"", path);
                         } else {
                                 ret = false;
                         }
@@ -406,16 +406,16 @@ static bool encode_tiles(struct state_gjtiff *s, int req_quality,
         }
         printf("\t{\n");
         s->first = false;
-        printf("\t\t\"infile\": \"%s\",\n", ifname);
-        printf("\t\t\"processed_tiles\": [");
+        printf("\t\t\"infile\":\"%s\",\n", ifname);
+        printf("\t\t\"outfile\":");
         printf("\"%s\"", whole);
         while (*zoom_levels != -1) {
                 ret &= encode_tiles_z(s, req_quality, ifiles, ifname, prefix,
                                       *zoom_levels);
                 zoom_levels++;
         }
-        printf("],\n");
-        print_bbox(uncomp->coords);
+        printf(",\n");
+        // print_bbox(uncomp->coords);
         printf("\t}");
         INFO_MSG("%s encoded %ssuccessfully\n", whole,
                (ret ? "" : "un"));
