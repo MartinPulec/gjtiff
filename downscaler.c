@@ -71,27 +71,20 @@ static void downscale_int(struct downscaler_state *s, int new_width,
         const NppiInterpolationMode imode = interpolation > 0
                                                 ? interpolation
                                                 : NPPI_INTER_LINEAR;
+
+        NppStatus (*npp_resize)(const Npp8u *pSrc, int nSrcStep,
+                                NppiSize oSrcSize, NppiRect oSrcRectROI,
+                                Npp8u *pDst, int nDstStep, NppiSize oDstSize,
+                                NppiRect oDstRectROI, int eInterpolation,
+                                NppStreamContext nppStreamCtx) = NULL;
         if (in->comp_count == 1) {
-#if NPP_VERSION_MAJOR <= 8
-                CHECK_NPP(nppiResize_8u_C1R(in->data, srcSize, srcPitch, srcROI,
-                                            downscaled.data, dstPitch, dstSize,
-                                            factor, factor, imode));
-#else
-                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C1R)(in->data, srcPitch, srcSize, srcROI,
-                                            d_output, dstPitch, dstSize,
-                                            dstROI, imode CONTEXT));
-#endif
+                npp_resize = nppiResize_8u_C1R_Ctx;
         } else {
-#if NPP_VERSION_MAJOR <= 8
-                CHECK_NPP(nppiResize_8u_C3R(in->data, srcSize, srcPitch, srcROI,
-                                            downscaled.data, dstPitch, dstSize,
-                                            factor, factor, imode));
-#else
-                CHECK_NPP(NPP_CONTEXTIZE(nppiResize_8u_C3R)(in->data, srcPitch, srcSize, srcROI,
-                                            d_output, dstPitch, dstSize,
-                                            dstROI, imode  CONTEXT));
-#endif
+                npp_resize = nppiResize_8u_C3R_Ctx;
         }
+        CHECK_NPP(npp_resize(in->data, srcPitch, srcSize, srcROI, d_output,
+                             dstPitch, dstSize, dstROI, imode,
+                             s->nppStreamCtx));
 #else
 #error "no longer implemented"
         downscale_image_cuda(in->data, downscaled.data, in->comp_count,
