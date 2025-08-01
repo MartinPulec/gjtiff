@@ -54,6 +54,34 @@ struct webp_encoder *webp_encoder_create()
         return enc;
 }
 
+#define STATUS_TO_NAME(x) {x, #x}
+static const struct {
+        enum WebPEncodingError rc;
+        const char *str;
+} webp_err_map[] = {
+    STATUS_TO_NAME(VP8_ENC_OK),
+    STATUS_TO_NAME(VP8_ENC_ERROR_OUT_OF_MEMORY),
+    STATUS_TO_NAME(VP8_ENC_ERROR_BITSTREAM_OUT_OF_MEMORY),
+    STATUS_TO_NAME(VP8_ENC_ERROR_NULL_PARAMETER),
+    STATUS_TO_NAME(VP8_ENC_ERROR_INVALID_CONFIGURATION),
+    STATUS_TO_NAME(VP8_ENC_ERROR_BAD_DIMENSION),
+    STATUS_TO_NAME(VP8_ENC_ERROR_PARTITION0_OVERFLOW),
+    STATUS_TO_NAME(VP8_ENC_ERROR_PARTITION_OVERFLOW),
+    STATUS_TO_NAME(VP8_ENC_ERROR_BAD_WRITE),
+    STATUS_TO_NAME(VP8_ENC_ERROR_FILE_TOO_BIG),
+    STATUS_TO_NAME(VP8_ENC_ERROR_USER_ABORT),
+};
+
+const char *err_to_name(enum WebPEncodingError rc)
+{
+        for (unsigned i = 0; i < ARR_SIZE(webp_err_map); ++i) {
+                if (webp_err_map[i].rc == rc) {
+                        return webp_err_map[i].str;
+                }
+        }
+        return "(unknown)";
+}
+
 unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                           unsigned long width_padding, const char *ofname,
                           const struct dec_image *orig_img)
@@ -120,8 +148,9 @@ retry:
                 goto retry;
         }
         if (enc->webp_picture.error_code != VP8_ENC_OK) {
-                ERROR_MSG("[webp] Encode failed: %d!\n",
-                          enc->webp_picture.error_code);
+                ERROR_MSG("[webp] Encode failed: %s (%d)!\n",
+                          err_to_name(enc->webp_picture.error_code),
+                          (int)enc->webp_picture.error_code);
                 len = 0;
         }
         fclose(enc->outfile);
