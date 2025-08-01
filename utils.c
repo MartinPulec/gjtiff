@@ -246,25 +246,32 @@ void init_npp_context(NppStreamContext *nppStreamCtx,
 static void release_owned_cuda_image(struct owned_image *img)
 {
         CHECK_CUDA(cudaFree(img->img.data));
+        CHECK_CUDA(cudaFree(img->img.alpha));
         free(img);
 }
 
 static void release_owned_host_image(struct owned_image *img)
 {
         free(img->img.data);
+        free(img->img.alpha);
         free(img);
 }
 
 static struct owned_image *new_cuda_owned_image_int(const struct dec_image *in, int bpp)
 {
-        struct owned_image *ret = malloc(sizeof *ret);
+        struct owned_image *ret = calloc(1, sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
         const size_t size = (size_t) in->width * in->height * in->comp_count * bpp;
         CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
+        if (in->alpha != NULL) {
+                CHECK_CUDA(cudaMalloc((void **)&ret->img.alpha,
+                                      size / in->comp_count));
+        }
         ret->free = release_owned_cuda_image;
         return ret;
 }
 
+/// creates owned_image from @ref in template (DOESN'T copy data!)
 struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 {
         return new_cuda_owned_image_int(in, sizeof(uint8_t));
@@ -285,6 +292,7 @@ struct owned_image *copy_img_from_device(const struct dec_image *in,
         memcpy(&ret->img, in, sizeof *in);
         const size_t size = (size_t)in->width * in->height * in->comp_count;
         ret->img.data = malloc(size);
+        ret->img.alpha = NULL;
         ret->free = release_owned_host_image;
         if (in->comp_count >= 3 && convert_to_yuv) {
                 size_t len = (in->width * in->height) +

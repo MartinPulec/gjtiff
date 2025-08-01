@@ -287,12 +287,12 @@ epsg_4326_to_epsg_3857(cudaStream_t stream, const struct dec_image *in,
 
 #else
 
-template<int components>
-static __global__ void kernel_utm_to_web_mercator(device_projection const d_proj,
-                              const uint8_t *d_in, uint8_t *d_out, int in_width,
-                              int in_height, int out_width, int out_height,
-                              struct bounds src_bounds,
-                              struct bounds dst_bounds)
+template <int components, bool alpha>
+static __global__ void
+kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
+                           uint8_t *d_out, uint8_t *d_out_alpha, int in_width,
+                           int in_height, int out_width, int out_height,
+                           struct bounds src_bounds, struct bounds dst_bounds)
 {
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
@@ -329,7 +329,13 @@ static __global__ void kernel_utm_to_web_mercator(device_projection const d_proj
                 for (int i = 0; i < components; ++i) {
                         d_out[components * (out_x + out_y * out_width) + i] = 0;
                 }
+                if (alpha) {
+                        d_out_alpha[out_x + (out_y * out_width)] = 0;
+                }
                 return;
+        }
+        if (alpha) {
+                d_out_alpha[out_x + (out_y * out_width)] = 255;
         }
         // if (out_y == 0) {
         //         printf("%f %f\n" , rel_pos_src_x, rel_pos_src_y);
@@ -440,6 +446,7 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         // decrease size for GPUJPEG
         adjust_size(&dst_desc.width, &dst_desc.height, dst_desc.comp_count);
 
+        dst_desc.alpha = use_alpha ? (unsigned char *) !NULL : NULL;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:3857");
         for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
@@ -450,15 +457,23 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         int width = dst_desc.width;
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-        if (in->comp_count == 1) {
-                kernel_utm_to_web_mercator<1><<<grid, block, 0, s->stream>>>(
-                    d_proj, in->data, ret->img.data, in->width, in->height,
-                    width, height, src_bounds, dst_bounds);
+        decltype(kernel_utm_to_web_mercator<1, true>) *kernel = nullptr;
+        if (use_alpha) {
+                if (in->comp_count == 1) {
+                        kernel = kernel_utm_to_web_mercator<1, true>;
+                } else {
+                        kernel = kernel_utm_to_web_mercator<3, true>;
+                }
         } else {
-                kernel_utm_to_web_mercator<3><<<grid, block, 0, s->stream>>>(
-                    d_proj, in->data, ret->img.data, in->width, in->height,
-                    width, height, src_bounds, dst_bounds);
+                if (in->comp_count == 1) {
+                        kernel = kernel_utm_to_web_mercator<1, false>;
+                } else {
+                        kernel = kernel_utm_to_web_mercator<3, false>;
+                }
         }
+        kernel<<<grid, block, 0, s->stream>>>(
+            d_proj, in->data, ret->img.data, ret->img.alpha, in->width,
+            in->height, width, height, src_bounds, dst_bounds);
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);

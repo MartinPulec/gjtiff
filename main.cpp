@@ -53,8 +53,10 @@
 
 enum { MAX_ZOOM_COUNT = 20,};
 
+// declared in defs.h
 int log_level = 0;
 size_t gpu_memory = 0;
+bool use_alpha = false;
 cudaEvent_t cuda_event_start;
 cudaEvent_t cuda_event_stop;
 
@@ -675,6 +677,7 @@ int main(int argc, char **argv)
                         break;
                 case 'w':
                         global_opts.output_format = OUTF_WEBP;
+                        use_alpha = true;
                         break;
                 case 'z':
                         parse_zoom_levels(global_opts.zoom_levels, optarg);

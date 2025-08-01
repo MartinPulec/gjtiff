@@ -42,8 +42,9 @@ struct downscaler_state *downscaler_init(cudaStream_t stream)
 }
 
 static void downscale_int(struct downscaler_state *s, int new_width,
-                          size_t dstPitch, int new_height,
-                          const struct dec_image *in, uint8_t *d_output)
+                          size_t dstPitch, int new_height, const uint8_t *d_in,
+                          int in_width, int in_height, int comp_count,
+                          uint8_t *d_output)
 {
         GPU_TIMER_START(downscale, LL_DEBUG, s->stream);
 #ifndef DOWNSCALE_NO_NPP
@@ -52,8 +53,8 @@ static void downscale_int(struct downscaler_state *s, int new_width,
                 nppSetStream(s->stream);
         }
 #endif
-        NppiSize srcSize = {in->width, in->height};
-        NppiRect srcROI = {0, 0, in->width, in->height};
+        NppiSize srcSize = {in_width, in_height};
+        NppiRect srcROI = {0, 0, in_width, in_height};
 #if NPP_VERSION_MAJOR <= 8
 #error "no longer implemented"
         double factor = 1.0 / downscale_factor;
@@ -61,9 +62,9 @@ static void downscale_int(struct downscaler_state *s, int new_width,
         NppiRect dstROI = {0, 0, new_width, new_height};
 #endif
         NppiSize dstSize = {new_width, new_height};
-        size_t srcPitch = (size_t)in->width * in->comp_count;
+        size_t srcPitch = (size_t)in_width * comp_count;
 
-        assert(in->comp_count == 1 || in->comp_count == 3);
+        assert(comp_count == 1 || comp_count == 3);
         // was NPPI_INTER_SUPER but doesnt seem to work for all resolutions,
         // namely upscaling doesn't (for some factor?) work. If used,
         // NPP_RESIZE_FACTOR_ERROR should be perhaps handled with bilinear
@@ -77,12 +78,12 @@ static void downscale_int(struct downscaler_state *s, int new_width,
                                 Npp8u *pDst, int nDstStep, NppiSize oDstSize,
                                 NppiRect oDstRectROI, int eInterpolation,
                                 NppStreamContext nppStreamCtx) = NULL;
-        if (in->comp_count == 1) {
+        if (comp_count == 1) {
                 npp_resize = nppiResize_8u_C1R_Ctx;
         } else {
                 npp_resize = nppiResize_8u_C3R_Ctx;
         }
-        CHECK_NPP(npp_resize(in->data, srcPitch, srcSize, srcROI, d_output,
+        CHECK_NPP(npp_resize(d_in, srcPitch, srcSize, srcROI, d_output,
                              dstPitch, dstSize, dstROI, imode,
                              s->nppStreamCtx));
 #else
@@ -103,6 +104,9 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         downscaled.height = in->height / downscale_factor;
         size_t required_size = (size_t)downscaled.comp_count *
                                downscaled.width * downscaled.height;
+        if (in->alpha != NULL) {
+                required_size += downscaled.width * downscaled.height;
+        }
         if (required_size > s->output_allocated) {
                 CHECK_CUDA(cudaFreeAsync(s->output, s->stream));
                 CHECK_CUDA(cudaMallocAsync((void **)&s->output, required_size,
@@ -111,8 +115,17 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         }
         downscaled.data = s->output;
         const size_t dstPitch = (size_t)downscaled.width * in->comp_count;
-        downscale_int(s, downscaled.width, dstPitch, downscaled.height, in,
+        downscale_int(s, downscaled.width, dstPitch, downscaled.height,
+                      in->data, in->width, in->height, in->comp_count,
                       s->output);
+        if (in->alpha != NULL) {
+                downscaled.alpha = s->output + (size_t)downscaled.comp_count *
+                                                   downscaled.width *
+                                                   downscaled.height;
+                downscale_int(s, downscaled.width, dstPitch, downscaled.height,
+                              in->alpha, in->width, in->height, 1,
+                              downscaled.alpha);
+        }
         return downscaled;
 }
 
@@ -131,8 +144,18 @@ struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
         struct owned_image *ret = new_cuda_owned_image(&new_desc);
         unsigned char *data = ret->img.data + ((ptrdiff_t)y * xpitch) +
                               ((ptrdiff_t)x * old->img.comp_count);
-        downscale_int(state, new_width, xpitch, new_height, &old->img,
+        downscale_int(state, new_width, xpitch, new_height, old->img.data,
+                      old->img.width, old->img.height, old->img.comp_count,
                       data);
+        if (ret->img.alpha != NULL) {
+                size_t apitch = xpitch / old->img.comp_count;
+                unsigned char *a_ptr = ret->img.alpha +
+                                       ((ptrdiff_t)y * apitch) +
+                                       ((ptrdiff_t)x * old->img.comp_count);
+                downscale_int(state, new_width, apitch,
+                              new_height, old->img.alpha, old->img.width,
+                              old->img.height, 1, a_ptr);
+        }
         return ret;
 }
 

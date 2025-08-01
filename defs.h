@@ -16,6 +16,7 @@ enum {
 };
 extern int log_level;
 extern size_t gpu_memory;
+extern bool use_alpha;
 
 enum rc {
         ERR_SOME_FILES_NOT_TRANSCODED = 2,
@@ -36,6 +37,7 @@ struct dec_image {
         int height;
         int comp_count;
         unsigned char *data;
+        unsigned char *alpha;
 
         /// order: uppper left, upper right, lower right, lower left
         /// (@sa coord_pos_name)
@@ -54,7 +56,7 @@ struct owned_image {
 };
 
 #define DEC_IMG_ERR(rc)                                                        \
-        {rc, 0, 0, 0, 0, {0.0, 0.0}, false, "", {0, 0, 0, 0}, 0, 0}
+        {rc, 0, 0, 0, NULL, NULL, {0.0, 0.0}, false, "", {0, 0, 0, 0}, 0, 0}
 
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \
