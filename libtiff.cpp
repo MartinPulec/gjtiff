@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cuda_runtime.h>  // for cudaFree, cudaMallocManaged
 #include <tiff.h>
+#include <omp.h> // for omp_set_num_threads, omp_get_max_threads
 #include <tiffio.h>
 
 #include "defs.h"
@@ -186,6 +187,7 @@ libtiff_state::decode_tiled(TIFF *tif, struct tiff_info *tiffinfo)
         TIMER_START(TIFFReadEncodedTile, LL_DEBUG);
         bool error = false;
         const char *tiff_name = TIFFFileName(tif);
+        omp_set_num_threads(omp_get_max_threads());
         #pragma omp parallel for
         for (tstrip_t tile = 0; tile < numberOfTiles; ++tile) {
                 size_t offset = tile * tiffinfo->strip_tile_size;

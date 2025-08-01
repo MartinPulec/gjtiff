@@ -33,6 +33,7 @@
 #include <libgpujpeg/gpujpeg_type.h>
 #include <libgpujpeg/gpujpeg_version.h>
 #include <linux/limits.h>
+#include <omp.h>
 #include <sys/stat.h> // for mkdir
 #include <unistd.h>
 
@@ -424,9 +425,13 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
         tile.width = tile.height = 256;
         for (int x = x_first; x < x_end; ++x) {
                 char *path = get_tile_ofdir(prefix, ifname, zoom_level, x);
-                char *end = path + strlen(path);
+                const size_t path_len = strlen(path);
+                omp_set_num_threads(output_format == OUTF_JPEG  ? 1 : omp_get_max_threads());
+                #pragma omp parallel for
                 for (int y = y_first; y < y_end; ++y) {
-                        snprintf(end, PATH_MAX - (end - path), "/%d%s", y,
+                        char *fpath = strdup(path);
+                        char *end = fpath + path_len;
+                        snprintf(end, PATH_MAX - (end - fpath), "/%d%s", y,
                                  get_ext());
                         size_t off = ((ptrdiff_t)(y - y_first) * 256 * xpitch) +
                                     ((x - x_first) * 256 * uncomp->comp_count);
@@ -436,13 +441,14 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                                             off / uncomp->comp_count;
                         }
                         size_t len = encode_file(
-                            s, &tile, xpitch - 256 * uncomp->comp_count, path,
+                            s, &tile, xpitch - 256 * uncomp->comp_count, fpath,
                             src);
                         if (len != 0) {
                                 // printf(", \"%s\"", path);
                         } else {
                                 ret = false;
                         }
+                        free(fpath);
                 }
                 free(path);
         }
