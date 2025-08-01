@@ -136,6 +136,9 @@ static double normalize_coords(const struct coordinate src_coords[4],
 }
 
 void adjust_size(int *width, int *height, int comp_count) {
+        if (output_format != OUTF_JPEG) {
+                return;
+        }
         enum {
                 GB1 = 1LL * 1000 * 1000 * 1000,
                 GJ_PER_BYTE_REQ = 20,
