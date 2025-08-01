@@ -62,7 +62,8 @@ cudaEvent_t cuda_event_stop;
 
 int interpolation = 0;
 long long mem_limit = 0;
-enum out_format output_format = OUTF_JPEG;;
+enum out_format output_format = OUTF_JPEG;
+bool no_whole_image = false;
 
 struct options {
         int req_gpujpeg_quality;
@@ -464,13 +465,15 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
                          int *zoom_levels)
 {
         bool ret = true;
-        struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
         char whole[PATH_MAX];
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
                    get_ext(), nullptr);
-        if (encode_gpu(s, uncomp, whole) == 0) {
-                return false;
+        if (!no_whole_image) {
+                struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
+                if (encode_gpu(s, uncomp, whole) == 0) {
+                        return false;
+                }
         }
         printf("\t{\n");
         s->first = false;
@@ -643,7 +646,7 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+I:M:Qdhnno:q:rs:vwz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+I:M:NQdhnno:q:rs:vwz:")) != -1) {
                 switch (opt) {
                 case 'I':
                         interpolation = (int)strtol(optarg, nullptr, 0);
@@ -664,6 +667,9 @@ int main(int argc, char **argv)
                         break;
                 case 'n':
                         global_opts.norotate = true;
+                        break;
+                case 'N':
+                        no_whole_image = true;
                         break;
                 case 'o':
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);

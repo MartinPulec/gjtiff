@@ -19,6 +19,7 @@ enum out_format { OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
 extern int log_level;
 extern size_t gpu_memory;
 extern enum out_format output_format;
+extern bool no_whole_image;
 
 enum rc {
         ERR_SOME_FILES_NOT_TRANSCODED = 2,

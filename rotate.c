@@ -136,7 +136,7 @@ static double normalize_coords(const struct coordinate src_coords[4],
 }
 
 void adjust_size(int *width, int *height, int comp_count) {
-        if (output_format != OUTF_JPEG) {
+        if (output_format != OUTF_JPEG || no_whole_image) {
                 return;
         }
         enum {
