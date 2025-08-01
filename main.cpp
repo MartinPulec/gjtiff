@@ -56,23 +56,20 @@ enum { MAX_ZOOM_COUNT = 20,};
 // declared in defs.h
 int log_level = 0;
 size_t gpu_memory = 0;
-bool use_alpha = false;
 cudaEvent_t cuda_event_start;
 cudaEvent_t cuda_event_stop;
 
 int interpolation = 0;
 long long mem_limit = 0;
-
-enum out_format { OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
+enum out_format output_format = OUTF_JPEG;;
 
 struct options {
         int req_gpujpeg_quality;
         int downscale_factor;
         bool use_libtiff;
         bool norotate;
-        enum out_format output_format;
         int zoom_levels[MAX_ZOOM_COUNT];
-#define OPTIONS_INIT {-1, 1, false, false, OUTF_JPEG, {-1}}
+#define OPTIONS_INIT {-1, 1, false, false, {-1}}
 };
 
 struct state_gjtiff {
@@ -95,9 +92,9 @@ struct state_gjtiff {
         bool first = true;
 };
 
-static const char *get_ext(struct state_gjtiff *s)
+static const char *get_ext()
 {
-        switch (s->opts.output_format) {
+        switch (output_format) {
         case OUTF_JPEG:
                 return ".jpg";
         case OUTF_WEBP:
@@ -120,11 +117,11 @@ state_gjtiff::state_gjtiff(struct options opts)
         assert(state_nvj2k != nullptr);
         state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
-        if (opts.output_format == OUTF_JPEG) {
+        if (output_format == OUTF_JPEG) {
                 gj_enc = gpujpeg_encoder_create(stream);
                 assert(gj_enc != nullptr);
         }
-        if (opts.output_format == OUTF_WEBP) {
+        if (output_format == OUTF_WEBP) {
                 webp_enc = webp_encoder_create();
                 assert(webp_enc != nullptr);
         }
@@ -311,7 +308,7 @@ static size_t encode_file(struct state_gjtiff *s,
                           const struct dec_image *uncomp, size_t width_padding,
                           const char *ofname, const struct dec_image *orig_img)
 {
-        switch (s->opts.output_format) {
+        switch (output_format) {
         case OUTF_JPEG:
                 return encode_jpeg(s, *uncomp, width_padding, ofname);
         case OUTF_WEBP:
@@ -332,9 +329,9 @@ static size_t encode_gpu(struct state_gjtiff *s, const struct dec_image *uncomp,
                          const char *ofname)
 {
         struct owned_image *in_ram = nullptr;
-        if (s->opts.output_format != OUTF_JPEG) {
+        if (output_format != OUTF_JPEG) {
                 in_ram = copy_img_from_device(
-                    uncomp, s->stream, s->opts.output_format == OUTF_WEBP);
+                    uncomp, s->stream, output_format == OUTF_WEBP);
                 uncomp = &in_ram->img;
         }
         const size_t len = encode_file(s, uncomp, 0, ofname, uncomp);
@@ -416,9 +413,9 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
             dst_lines, ifiles->ifiles[0].img);
         const struct dec_image *src= &scaled->img;
         struct owned_image *in_ram = nullptr;
-        if (s->opts.output_format != OUTF_JPEG) {
+        if (output_format != OUTF_JPEG) {
                 in_ram = copy_img_from_device(&scaled->img, s->stream,
-                                              s->opts.output_format ==
+                                              output_format ==
                                                   OUTF_WEBP);
                 src = &in_ram->img;
         }
@@ -430,7 +427,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                 char *end = path + strlen(path);
                 for (int y = y_first; y < y_end; ++y) {
                         snprintf(end, PATH_MAX - (end - path), "/%d%s", y,
-                                 get_ext(s));
+                                 get_ext());
                         size_t off = ((ptrdiff_t)(y - y_first) * 256 * xpitch) +
                                     ((x - x_first) * 256 * uncomp->comp_count);
                         tile.data = src->data + off;
@@ -465,7 +462,7 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
         char whole[PATH_MAX];
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
-                   get_ext(s), nullptr);
+                   get_ext(), nullptr);
         if (encode_gpu(s, uncomp, whole) == 0) {
                 return false;
         }
@@ -670,7 +667,7 @@ int main(int argc, char **argv)
                             optarg, nullptr, 10);
                         break;
                 case 'r':
-                        global_opts.output_format = OUTF_RAW;
+                        output_format = OUTF_RAW;
                         break;
                 case 's':
                         global_opts.downscale_factor = (int)strtol(optarg,
@@ -680,8 +677,7 @@ int main(int argc, char **argv)
                         log_level += 1;
                         break;
                 case 'w':
-                        global_opts.output_format = OUTF_WEBP;
-                        use_alpha = true;
+                        output_format = OUTF_WEBP;
                         break;
                 case 'z':
                         parse_zoom_levels(global_opts.zoom_levels, optarg);
@@ -758,7 +754,7 @@ int main(int argc, char **argv)
                 }
                 if (global_opts.zoom_levels[0] == -1) {
                         get_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,
-                                   sizeof ofdir - d_pref_len, get_ext(&state),
+                                   sizeof ofdir - d_pref_len, get_ext(),
                                    nullptr);
                         ret = encode_single(&state, &ifiles.ifiles[0].img->img,
                                             ifname, ofdir)

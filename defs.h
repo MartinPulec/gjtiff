@@ -14,9 +14,11 @@ enum {
         LL_VERBOSE = 1,
         LL_DEBUG = 2,
 };
+enum out_format { OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
+
 extern int log_level;
 extern size_t gpu_memory;
-extern bool use_alpha;
+extern enum out_format output_format;
 
 enum rc {
         ERR_SOME_FILES_NOT_TRANSCODED = 2,

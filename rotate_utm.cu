@@ -446,7 +446,8 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         // decrease size for GPUJPEG
         adjust_size(&dst_desc.width, &dst_desc.height, dst_desc.comp_count);
 
-        dst_desc.alpha = use_alpha ? (unsigned char *) !NULL : NULL;
+        dst_desc.alpha = output_format == OUTF_WEBP ? (unsigned char *)!NULL
+                                                    : NULL;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:3857");
         for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
@@ -458,7 +459,7 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
         decltype(kernel_utm_to_web_mercator<1, true>) *kernel = nullptr;
-        if (use_alpha) {
+        if (output_format == OUTF_WEBP) {
                 if (in->comp_count == 1) {
                         kernel = kernel_utm_to_web_mercator<1, true>;
                 } else {
