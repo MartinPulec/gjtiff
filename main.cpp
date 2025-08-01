@@ -431,9 +431,13 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                 for (int y = y_first; y < y_end; ++y) {
                         snprintf(end, PATH_MAX - (end - path), "/%d%s", y,
                                  get_ext(s));
-                        tile.data = src->data +
-                                    (ptrdiff_t)(y - y_first) * 256 * xpitch +
-                                    (x - x_first) * 256 * uncomp->comp_count;
+                        size_t off = ((ptrdiff_t)(y - y_first) * 256 * xpitch) +
+                                    ((x - x_first) * 256 * uncomp->comp_count);
+                        tile.data = src->data + off;
+                        if (src->alpha != nullptr) {
+                                tile.alpha = src->alpha +
+                                            off / uncomp->comp_count;
+                        }
                         size_t len = encode_file(
                             s, &tile, xpitch - 256 * uncomp->comp_count, path,
                             src);

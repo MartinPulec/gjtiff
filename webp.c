@@ -71,17 +71,21 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         }
 
         enc->webp_picture.use_argb = 0;
-        enc->webp_picture.colorspace = WEBP_YUV420;
+        enc->webp_picture.colorspace = img->alpha != NULL ? WEBP_YUV420A
+                                                          : WEBP_YUV420;
         enc->webp_picture.width = img->width;
         enc->webp_picture.height = img->height;
+
         if (img->comp_count == 1) {
                 enc->webp_picture.y = img->data;
+                enc->webp_picture.a = img->alpha;
                 enc->webp_picture.y_stride = img->width + width_padding;
                 enc->webp_picture.uv_stride = (img->width + 1) / 2;
                 enc->webp_picture.u = enc->chroma;
                 enc->webp_picture.v = enc->chroma;
         } else {
                 enc->webp_picture.y = orig_img->data;
+                enc->webp_picture.a = orig_img->alpha;
                 enc->webp_picture.y_stride = orig_img->width;
                 enc->webp_picture.uv_stride = (orig_img->width + 1) / 2;
                 enc->webp_picture.u = orig_img->data +
@@ -101,7 +105,10 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                                        (y / 2 * enc->webp_picture.uv_stride);
                 enc->webp_picture.v += x / 2 +
                                        (y / 2 * enc->webp_picture.uv_stride);
+                enc->webp_picture.a += x +
+                                       (y * enc->webp_picture.y_stride);
         }
+        enc->webp_picture.a_stride = enc->webp_picture.y_stride;
 
         enc->outfile = fopen(ofname, "wb");
 

@@ -292,8 +292,13 @@ struct owned_image *copy_img_from_device(const struct dec_image *in,
         memcpy(&ret->img, in, sizeof *in);
         const size_t size = (size_t)in->width * in->height * in->comp_count;
         ret->img.data = malloc(size);
-        ret->img.alpha = NULL;
         ret->free = release_owned_host_image;
+        if (ret->img.alpha != NULL) {
+                size_t asize = size / in->comp_count;
+                ret->img.alpha = malloc(asize);
+                CHECK_CUDA(cudaMemcpyAsync(ret->img.alpha, in->alpha, asize,
+                                      cudaMemcpyDefault, stream));
+        }
         if (in->comp_count >= 3 && convert_to_yuv) {
                 size_t len = (in->width * in->height) +
                              (2 * ((in->width + 1) / 2) *

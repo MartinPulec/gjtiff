@@ -105,6 +105,8 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
         size_t required_size = (size_t)downscaled.comp_count *
                                downscaled.width * downscaled.height;
         if (in->alpha != NULL) {
+                /// @todo alpha untested - perhaps this fn is not
+                /// supposed to be called with alpha plane set
                 required_size += downscaled.width * downscaled.height;
         }
         if (required_size > s->output_allocated) {
@@ -122,7 +124,8 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                 downscaled.alpha = s->output + (size_t)downscaled.comp_count *
                                                    downscaled.width *
                                                    downscaled.height;
-                downscale_int(s, downscaled.width, dstPitch, downscaled.height,
+                int apitch = downscaled.width;
+                downscale_int(s, downscaled.width, apitch, downscaled.height,
                               in->alpha, in->width, in->height, 1,
                               downscaled.alpha);
         }
@@ -149,12 +152,10 @@ struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
                       data);
         if (ret->img.alpha != NULL) {
                 size_t apitch = xpitch / old->img.comp_count;
-                unsigned char *a_ptr = ret->img.alpha +
-                                       ((ptrdiff_t)y * apitch) +
-                                       ((ptrdiff_t)x * old->img.comp_count);
-                downscale_int(state, new_width, apitch,
-                              new_height, old->img.alpha, old->img.width,
-                              old->img.height, 1, a_ptr);
+                unsigned char *a_ptr = ret->img.alpha + ((ptrdiff_t)y * apitch) + x;
+                downscale_int(state, new_width, apitch, new_height,
+                              old->img.alpha, old->img.width, old->img.height,
+                              1, a_ptr);
         }
         return ret;
 }
