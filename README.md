@@ -11,6 +11,8 @@ instead.
 
 # NEWS
 
+- 1st Aug '25 - added -w to generate WebP (including alpha); added -N
+to suppress generating whole image (in tiled mode) - performance reasons
 - 29th Jun '25 - jpeg2000 decode performance improved through
 parallel tile decoding
 
