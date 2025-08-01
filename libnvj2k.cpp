@@ -322,7 +322,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                 s->converted_allocated = conv_size;
         }
 
-        struct dec_image ret;
+        struct dec_image ret{};
         ret.width = (int)image_comp_info[0].component_width;
         ret.height = (int)image_comp_info[0].component_height;
         ret.comp_count = (int) image_info.num_components;

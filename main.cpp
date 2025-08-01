@@ -734,6 +734,7 @@ int main(int argc, char **argv)
                                 dec = downscale(state.downscaler,
                                                 opts.downscale_factor, &dec);
                         }
+                        dec.alpha = nullptr;
                         ifiles.ifiles[i].img = rotate(state.rotate, &dec);
                         assert(ifiles.ifiles[i].img != nullptr);
                 }

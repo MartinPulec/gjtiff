@@ -56,7 +56,7 @@ struct owned_image {
 };
 
 #define DEC_IMG_ERR(rc)                                                        \
-        {rc, 0, 0, 0, NULL, NULL, {0.0, 0.0}, false, "", {0, 0, 0, 0}, 0, 0}
+        {rc, 0, 0, 0, NULL, NULL, {{0.0, 0.0}}, false, "", {0, 0, 0, 0}, 0, 0}
 
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \
