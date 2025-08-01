@@ -464,6 +464,32 @@ uint8_t *convert_rgb_to_yuv420(const struct dec_image *in, cudaStream_t stream)
         return state.d_yuv420;
 }
 
+static __global__ void kernel_y(const uint8_t *d_in, uint8_t *d_out, size_t count)
+{
+        int pos = blockIdx.x * blockDim.x + threadIdx.x;
+        if (pos >= count) {
+                return;
+        }
+        int val  = d_in[pos];
+        d_out[pos] = 16 + val * 220 / 256;
+}
+uint8_t *convert_y_full_to_limited(const struct dec_image *in,
+                                   cudaStream_t stream)
+{
+        assert(in->comp_count == 1);
+        dim3 block(256, 1);
+        size_t count = in->width * in->height;
+        if (count > state.d_yuv420_allocated) {
+                CHECK_CUDA(cudaFree(state.d_yuv420));
+                CHECK_CUDA(cudaMalloc(&state.d_yuv420, count));
+                state.d_yuv420_allocated = count;
+        }
+        dim3 grid((count + block.x - 1) / block.x, 1);
+        kernel_y<<<grid, block, 0, stream>>>(in->data, state.d_yuv420, count);
+        CHECK_CUDA(cudaGetLastError());
+        return state.d_yuv420;
+}
+
 void cleanup_cuda_kernels()
 {
         for (unsigned i = 0; i < ARR_SIZE(state.stat); ++i) {

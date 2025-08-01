@@ -36,6 +36,8 @@ void combine_images_cuda(struct dec_image *out, const struct dec_image *in1,
                     cudaStream_t stream);
 [[nodiscard]] uint8_t *convert_rgb_to_yuv420(const struct dec_image *in,
                                              cudaStream_t stream);
+[[nodiscard]] uint8_t *convert_y_full_to_limited(const struct dec_image *in,
+                                                 cudaStream_t stream);
 
 void cleanup_cuda_kernels(void);
 

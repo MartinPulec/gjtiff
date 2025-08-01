@@ -332,8 +332,7 @@ static size_t encode_gpu(struct state_gjtiff *s, const struct dec_image *uncomp,
 {
         struct owned_image *in_ram = nullptr;
         if (output_format != OUTF_JPEG) {
-                in_ram = copy_img_from_device(
-                    uncomp, s->stream, output_format == OUTF_WEBP);
+                in_ram = copy_img_from_device(uncomp, s->stream);
                 uncomp = &in_ram->img;
         }
         const size_t len = encode_file(s, uncomp, 0, ofname, uncomp);
@@ -416,9 +415,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
         const struct dec_image *src= &scaled->img;
         struct owned_image *in_ram = nullptr;
         if (output_format != OUTF_JPEG) {
-                in_ram = copy_img_from_device(&scaled->img, s->stream,
-                                              output_format ==
-                                                  OUTF_WEBP);
+                in_ram = copy_img_from_device(&scaled->img, s->stream);
                 src = &in_ram->img;
         }
 

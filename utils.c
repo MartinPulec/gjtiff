@@ -285,8 +285,7 @@ struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 // }
 
 struct owned_image *copy_img_from_device(const struct dec_image *in,
-                                         cudaStream_t stream,
-                                         bool convert_to_yuv)
+                                         cudaStream_t stream)
 {
         struct owned_image *ret = malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
@@ -299,7 +298,7 @@ struct owned_image *copy_img_from_device(const struct dec_image *in,
                 CHECK_CUDA(cudaMemcpyAsync(ret->img.alpha, in->alpha, asize,
                                       cudaMemcpyDefault, stream));
         }
-        if (in->comp_count >= 3 && convert_to_yuv) {
+        if (in->comp_count == 3 && output_format == OUTF_WEBP) {
                 size_t len = (in->width * in->height) +
                              (2 * ((in->width + 1) / 2) *
                               ((in->height + 1) / 2));
@@ -307,11 +306,15 @@ struct owned_image *copy_img_from_device(const struct dec_image *in,
                 CHECK_CUDA(cudaStreamSynchronize(stream));
                 CHECK_CUDA(cudaMemcpy(ret->img.data, d_buf, len,
                                       cudaMemcpyDefault));
-        } else {
-                CHECK_CUDA(cudaStreamSynchronize(stream));
-                CHECK_CUDA(cudaMemcpy(ret->img.data, in->data, size,
-                                      cudaMemcpyDefault));
+                return ret;
         }
+        uint8_t *d_data = ret->img.data;
+        if (output_format == OUTF_WEBP) {
+                assert(in->comp_count == 1);
+                d_data = convert_y_full_to_limited(in, stream);
+        }
+        CHECK_CUDA(cudaStreamSynchronize(stream));
+        CHECK_CUDA(cudaMemcpy(ret->img.data, d_data, size, cudaMemcpyDefault));
         return ret;
 }
 
