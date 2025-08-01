@@ -1,5 +1,6 @@
 #include "webp.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,19 +12,16 @@
 struct webp_encoder {
         cudaStream_t cuda_stream;
         struct WebPConfig webp_config;
-        struct WebPPicture webp_picture;
 
         unsigned char *chroma;
         size_t chroma_allocated;
-
-        FILE *outfile;
 };
 
 static int my_write(const uint8_t *data, size_t data_size,
                     const WebPPicture *picture)
 {
-        struct webp_encoder *enc= picture->custom_ptr;
-        return fwrite(data, data_size, 1, enc->outfile) == 1;
+        FILE *outfile = picture->custom_ptr;
+        return fwrite(data, data_size, 1, outfile) == 1;
 }
 
 struct webp_encoder *webp_encoder_create()
@@ -39,12 +37,6 @@ struct webp_encoder *webp_encoder_create()
                 enc->webp_config.partitions = 3;
                 enc->webp_config.thread_level = 1;
                 ok = WebPValidateConfig(&enc->webp_config);
-        }
-
-        if (ok) {
-                ok = WebPPictureInit(&enc->webp_picture);
-                enc->webp_picture.writer = my_write;
-                enc->webp_picture.custom_ptr = enc;
         }
 
         if (!ok) {
@@ -98,62 +90,69 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                 enc->chroma_allocated = req_chroma_len;
         }
 
-        enc->webp_picture.use_argb = 0;
-        enc->webp_picture.colorspace = img->alpha != NULL ? WEBP_YUV420A
-                                                          : WEBP_YUV420;
-        enc->webp_picture.width = img->width;
-        enc->webp_picture.height = img->height;
+        struct WebPPicture webp_picture;
+        int ok = WebPPictureInit(&webp_picture);
+        assert(ok);
+        webp_picture.writer = my_write;
+        webp_picture.custom_ptr = enc;
+
+        webp_picture.use_argb = 0;
+        webp_picture.colorspace = img->alpha != NULL ? WEBP_YUV420A
+                                                     : WEBP_YUV420;
+        webp_picture.width = img->width;
+        webp_picture.height = img->height;
 
         if (img->comp_count == 1) {
-                enc->webp_picture.y = img->data;
-                enc->webp_picture.a = img->alpha;
-                enc->webp_picture.y_stride = img->width + width_padding;
-                enc->webp_picture.uv_stride = (img->width + 1) / 2;
-                enc->webp_picture.u = enc->chroma;
-                enc->webp_picture.v = enc->chroma;
+                webp_picture.y = img->data;
+                webp_picture.a = img->alpha;
+                webp_picture.y_stride = img->width + width_padding;
+                webp_picture.uv_stride = (img->width + 1) / 2;
+                webp_picture.u = enc->chroma;
+                webp_picture.v = enc->chroma;
         } else {
-                enc->webp_picture.y = orig_img->data;
-                enc->webp_picture.a = orig_img->alpha;
-                enc->webp_picture.y_stride = orig_img->width;
-                enc->webp_picture.uv_stride = (orig_img->width + 1) / 2;
-                enc->webp_picture.u = orig_img->data +
-                                      enc->webp_picture.y_stride *
+                webp_picture.y = orig_img->data;
+                webp_picture.a = orig_img->alpha;
+                webp_picture.y_stride = orig_img->width;
+                webp_picture.uv_stride = (orig_img->width + 1) / 2;
+                webp_picture.u = orig_img->data +
+                                      webp_picture.y_stride *
                                           orig_img->height;
-                enc->webp_picture.v = enc->webp_picture.u +
-                                      enc->webp_picture.uv_stride *
+                webp_picture.v = webp_picture.u +
+                                      webp_picture.uv_stride *
                                           ((orig_img->height + 1) / 2);
 
                 ptrdiff_t diff = img->data - orig_img->data;
                 diff /= 3; // not rgb
                 int x = diff % orig_img->width;
                 int y = diff / orig_img->width;
-                enc->webp_picture.y += x +
-                                       (y * enc->webp_picture.y_stride);
-                enc->webp_picture.u += x / 2 +
-                                       (y / 2 * enc->webp_picture.uv_stride);
-                enc->webp_picture.v += x / 2 +
-                                       (y / 2 * enc->webp_picture.uv_stride);
-                enc->webp_picture.a += x +
-                                       (y * enc->webp_picture.y_stride);
+                webp_picture.y += x + (y * webp_picture.y_stride);
+                webp_picture.u += x / 2 + (y / 2 * webp_picture.uv_stride);
+                webp_picture.v += x / 2 + (y / 2 * webp_picture.uv_stride);
+                webp_picture.a += x + (y * webp_picture.y_stride);
         }
-        enc->webp_picture.a_stride = enc->webp_picture.y_stride;
+        webp_picture.a_stride = webp_picture.y_stride;
 
-        enc->outfile = fopen(ofname, "wb");
+        FILE *outfile = fopen(ofname, "wb");
+        if (outfile == NULL) {
+                ERROR_MSG( "[webp] cannot create %s!\n", ofname);
+                return 0;
+        }
+        webp_picture.custom_ptr = outfile;
 
 retry:
-        WebPEncode(&enc->webp_config, &enc->webp_picture);
-        if (enc->webp_picture.error_code == VP8_ENC_ERROR_PARTITION0_OVERFLOW &&
+        WebPEncode(&enc->webp_config, &webp_picture);
+        if (webp_picture.error_code == VP8_ENC_ERROR_PARTITION0_OVERFLOW &&
             enc->webp_config.method < 4) {
                 enc->webp_config.method += 1;
                 goto retry;
         }
-        if (enc->webp_picture.error_code != VP8_ENC_OK) {
+        if (webp_picture.error_code != VP8_ENC_OK) {
                 ERROR_MSG("[webp] Encode failed: %s (%d)!\n",
-                          err_to_name(enc->webp_picture.error_code),
-                          (int)enc->webp_picture.error_code);
+                          err_to_name(webp_picture.error_code),
+                          (int)webp_picture.error_code);
                 len = 0;
         }
-        fclose(enc->outfile);
+        fclose(outfile);
 
         return len;
 }
