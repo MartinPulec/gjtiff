@@ -10,9 +10,6 @@
 #include "utils.h"
 
 struct webp_encoder {
-        cudaStream_t cuda_stream;
-        struct WebPConfig webp_config;
-
         unsigned char *chroma;
         size_t chroma_allocated;
 };
@@ -26,23 +23,7 @@ static int my_write(const uint8_t *data, size_t data_size,
 
 struct webp_encoder *webp_encoder_create()
 {
-        int ok = 0;
         struct webp_encoder *enc = calloc(1, sizeof *enc);
-
-        ok = WebPConfigInit(&enc->webp_config);
-        if (ok) {
-                enc->webp_config.quality = 75;
-                enc->webp_config.method = 2;   // 0 = fast (fails for bigger imgs), 4 - default
-                enc->webp_config.segments = 1; // 4 - max
-                enc->webp_config.partitions = 3;
-                enc->webp_config.thread_level = 1;
-                ok = WebPValidateConfig(&enc->webp_config);
-        }
-
-        if (!ok) {
-                ERROR_MSG( "[webp] not OK!\n");
-                return NULL;
-        }
         return enc;
 }
 
@@ -78,6 +59,23 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                           unsigned long width_padding, const char *ofname,
                           const struct dec_image *orig_img)
 {
+        struct WebPConfig webp_config;
+
+        int ok = WebPConfigInit(&webp_config);
+        if (ok) {
+                webp_config.quality = 75;
+                webp_config.method = 2;   // 0 = fast (fails for bigger imgs), 4 - default
+                webp_config.segments = 1; // 4 - max
+                webp_config.partitions = 3;
+                webp_config.thread_level = 1;
+                ok = WebPValidateConfig(&webp_config);
+        }
+
+        if (!ok) {
+                ERROR_MSG( "[webp] not OK!\n");
+                return 0;
+        }
+
         unsigned long len = (unsigned long)img->width * img->height *
                             img->comp_count;
 
@@ -91,7 +89,7 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         }
 
         struct WebPPicture webp_picture;
-        int ok = WebPPictureInit(&webp_picture);
+        ok = WebPPictureInit(&webp_picture);
         assert(ok);
         webp_picture.writer = my_write;
         webp_picture.custom_ptr = enc;
@@ -140,10 +138,10 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         webp_picture.custom_ptr = outfile;
 
 retry:
-        WebPEncode(&enc->webp_config, &webp_picture);
+        WebPEncode(&webp_config, &webp_picture);
         if (webp_picture.error_code == VP8_ENC_ERROR_PARTITION0_OVERFLOW &&
-            enc->webp_config.method < 4) {
-                enc->webp_config.method += 1;
+            webp_config.method < 4) {
+                webp_config.method += 1;
                 goto retry;
         }
         if (webp_picture.error_code != VP8_ENC_OK) {

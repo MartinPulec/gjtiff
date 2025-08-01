@@ -421,14 +421,14 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                 src = &in_ram->img;
         }
 
-        struct dec_image tile = scaled->img; // copy metadata
-        tile.width = tile.height = 256;
         for (int x = x_first; x < x_end; ++x) {
                 char *path = get_tile_ofdir(prefix, ifname, zoom_level, x);
                 const size_t path_len = strlen(path);
                 omp_set_num_threads(output_format == OUTF_JPEG  ? 1 : omp_get_max_threads());
                 #pragma omp parallel for
                 for (int y = y_first; y < y_end; ++y) {
+                        struct dec_image tile = scaled->img; // copy metadata
+                        tile.width = tile.height = 256;
                         char *fpath = strdup(path);
                         char *end = fpath + path_len;
                         snprintf(end, PATH_MAX - (end - fpath), "/%d%s", y,
