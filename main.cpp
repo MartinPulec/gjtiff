@@ -489,6 +489,9 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
                         return false;
                 }
         }
+        if (!s->first) {
+                printf(",\n");
+        }
         printf("\t{\n");
         s->first = false;
         printf("\t\t\"infile\":\"%s\",\n", ifname);
