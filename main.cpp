@@ -263,10 +263,8 @@ static size_t encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
                 FILE *outf = fopen(ofname, "wb");
                 if (outf == nullptr) {
                         char buf[256];
-                        if (strerror_r(errno, buf, sizeof buf) != 0) {
-                                buf[0] = '\0';
-                        }
-                        ERROR_MSG("fopen %s: %s (%d)\n", ofname, buf, errno);
+                        ERROR_MSG("fopen %s: %s\n", ofname,
+                                  strerror_r(errno, buf, sizeof buf));
                 } else {
                         fwrite(out, len, 1, outf);
                         fclose(outf);
