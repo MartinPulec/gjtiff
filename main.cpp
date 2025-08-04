@@ -427,7 +427,8 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                 for (int y = y_first; y < y_end; ++y) {
                         struct dec_image tile = scaled->img; // copy metadata
                         tile.width = tile.height = 256;
-                        char *fpath = strdup(path);
+                        auto *fpath = (char *)malloc(PATH_MAX);
+                        snprintf(fpath, PATH_MAX, "%s", path);
                         char *end = fpath + path_len;
                         snprintf(end, PATH_MAX - (end - fpath), "/%d%s", y,
                                  get_ext());
