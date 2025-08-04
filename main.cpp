@@ -66,7 +66,7 @@ enum out_format output_format = OUTF_JPEG;
 bool no_whole_image = false;
 
 struct options {
-        int req_gpujpeg_quality;
+        int req_quality;      ///< 0-100; -1 default
         int downscale_factor;
         bool use_libtiff;
         bool norotate;
@@ -124,7 +124,7 @@ state_gjtiff::state_gjtiff(struct options opts)
                 assert(gj_enc != nullptr);
         }
         if (output_format == OUTF_WEBP) {
-                webp_enc = webp_encoder_create();
+                webp_enc = webp_encoder_create(opts.req_quality);
                 assert(webp_enc != nullptr);
         }
         downscaler = downscaler_init(stream);
@@ -215,8 +215,8 @@ static size_t encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
 {
         gpujpeg_parameters param = gpujpeg_default_parameters();
         param.interleaved = 1;
-        if (s->opts.req_gpujpeg_quality != -1) {
-                param.quality = s->opts.req_gpujpeg_quality;
+        if (s->opts.req_quality != -1) {
+                param.quality = s->opts.req_quality;
         }
         if (log_level == LL_QUIET) {
                 param.verbose = GPUJPEG_LL_QUIET;
@@ -572,7 +572,7 @@ static char *parse_fname_opts(char *buf, struct options *opts)
         char *item = nullptr;
         while ((item = strtok_r(nullptr, ":", &save_ptr)) != nullptr) {
                 if (strstr(item, "q=") == item) {
-                        opts->req_gpujpeg_quality = (int)strtol(
+                        opts->req_quality = (int)strtol(
                             strchr(item, '=') + 1, nullptr, 10);
                 } else if (strstr(item, "s=") == item) {
                         opts->downscale_factor = (int)strtol(
@@ -691,7 +691,7 @@ int main(int argc, char **argv)
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);
                         break;
                 case 'q':
-                        global_opts.req_gpujpeg_quality = (int)strtol(
+                        global_opts.req_quality = (int)strtol(
                             optarg, nullptr, 10);
                         break;
                 case 'r':

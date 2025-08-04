@@ -9,7 +9,12 @@
 #include "defs.h" // dec_image
 #include "utils.h"
 
+enum {
+        DEFAULT_WEBP_QUALITY = 75, ///< equals GJ default
+};
+
 struct webp_encoder {
+        int quality;
         unsigned char *chroma;
         size_t chroma_allocated;
 };
@@ -21,9 +26,10 @@ static int my_write(const uint8_t *data, size_t data_size,
         return fwrite(data, data_size, 1, outfile) == 1;
 }
 
-struct webp_encoder *webp_encoder_create()
+struct webp_encoder *webp_encoder_create(int quality)
 {
         struct webp_encoder *enc = calloc(1, sizeof *enc);
+        enc->quality = quality == -1 ? DEFAULT_WEBP_QUALITY : quality;
         return enc;
 }
 
@@ -63,7 +69,7 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
 
         int ok = WebPConfigInit(&webp_config);
         if (ok) {
-                webp_config.quality = 75;
+                webp_config.quality = enc->quality;
                 webp_config.method = 2;   // 0 = fast (fails for bigger imgs), 4 - default
                 webp_config.segments = 1; // 4 - max
                 webp_config.partitions = 3;
