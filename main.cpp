@@ -481,8 +481,8 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
                 ret &= encode_tiles_z(s, ifiles, ifname, prefix, *zoom_levels);
                 zoom_levels++;
         }
-        printf(",\n");
-        // print_bbox(uncomp->coords);
+        printf("\n");
+        // printf(",\n"); print_bbox(uncomp->coords);
         printf("\t}");
         INFO_MSG("%s encoded %ssuccessfully\n", whole,
                (ret ? "" : "un"));
