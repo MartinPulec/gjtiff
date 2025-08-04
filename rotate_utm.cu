@@ -483,6 +483,8 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
 
         GPU_TIMER_STOP(utm_to_epsg_3857);
 
+        delete proj;
+
         return ret;
 }
 #endif
