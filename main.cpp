@@ -411,7 +411,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                          256.;
         struct owned_image *scaled = scale_pitch(
             s->downscaler, new_width, x, xpitch, new_height, y,
-            dst_lines, ifiles->ifiles[0].img);
+            dst_lines, &ifiles->ifiles[0].img->img);
         const struct dec_image *src= &scaled->img;
         struct owned_image *in_ram = nullptr;
         if (output_format != OUTF_JPEG) {

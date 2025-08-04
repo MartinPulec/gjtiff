@@ -137,35 +137,33 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
  * @param xpitch    destination pitch in bytes
  */
 struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
-                                int x, size_t xpitch, int new_height,
-                                int y, size_t dst_lines,
-                                const struct owned_image *old)
+                                int x, size_t xpitch, int new_height, int y,
+                                size_t dst_lines, const struct dec_image *src)
 {
-        struct dec_image new_desc = old->img;
-        new_desc.width = (int)xpitch / old->img.comp_count;
+        struct dec_image new_desc = *src;
+        new_desc.width = (int)xpitch / src->comp_count;
         new_desc.height = (int)dst_lines;
         struct owned_image *ret = new_cuda_owned_image(&new_desc);
         unsigned char *data = ret->img.data + ((ptrdiff_t)y * xpitch) +
-                              ((ptrdiff_t)x * old->img.comp_count);
-        downscale_int(state, new_width, xpitch, new_height, old->img.data,
-                      old->img.width, old->img.height, old->img.comp_count,
-                      data);
+                              ((ptrdiff_t)x * src->comp_count);
+        downscale_int(state, new_width, xpitch, new_height, src->data,
+                      src->width, src->height, src->comp_count, data);
         if (ret->img.alpha != NULL) {
-                size_t apitch = xpitch / old->img.comp_count;
-                unsigned char *a_ptr = ret->img.alpha + ((ptrdiff_t)y * apitch) + x;
-                downscale_int(state, new_width, apitch, new_height,
-                              old->img.alpha, old->img.width, old->img.height,
-                              1, a_ptr);
+                size_t apitch = xpitch / src->comp_count;
+                unsigned char *a_ptr = ret->img.alpha +
+                                       ((ptrdiff_t)y * apitch) + x;
+                downscale_int(state, new_width, apitch, new_height, src->alpha,
+                              src->width, src->height, 1, a_ptr);
         }
         return ret;
 }
 
 struct owned_image *scale(struct downscaler_state *state, int new_width,
-                          int new_height, const struct owned_image *old)
+                          int new_height, const struct dec_image *src)
 {
-        const size_t dstPitch = (size_t)new_width * old->img.comp_count;
+        const size_t dstPitch = (size_t)new_width * src->comp_count;
         return scale_pitch(state, new_width, 0, dstPitch, new_height, 0,
-                           new_height, old);
+                           new_height, src);
 }
 
 void downscaler_destroy(struct downscaler_state *s) {
