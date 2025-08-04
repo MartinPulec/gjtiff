@@ -137,6 +137,8 @@ struct owned_image *copy_img_from_device(const struct dec_image *in,
 
 void gcs_to_webm(double latitude, double longitude, double *y, double *x);
 
+bool gj_adjust_size(int *width, int *height, int comp_count);
+
 #ifdef __cplusplus
 }
 #endif // _cplusplus

@@ -24,8 +24,6 @@
 #define CONTEXT
 #endif
 
-extern long long mem_limit; // defined in main.c
-
 struct rotate_state {
         cudaStream_t stream;
 #ifdef NPP_NEW_API
@@ -135,42 +133,6 @@ static double normalize_coords(const struct coordinate src_coords[4],
         return lon_range / lat_range;
 }
 
-void adjust_size(int *width, int *height, int comp_count) {
-        if (output_format != OUTF_JPEG || no_whole_image) {
-                return;
-        }
-        enum {
-                GB1 = 1LL * 1000 * 1000 * 1000,
-                GJ_PER_BYTE_REQ = 20,
-                MAX_GPU_MEM_FRAC_DEN = 3,
-                MIN_FREE_GB = 2,
-        };
-        ssize_t threshold = mem_limit;
-        if (threshold == 0) {
-                const long gpu_mem_sig = (ssize_t)gpu_memory;
-                threshold = MIN(gpu_mem_sig / MAX_GPU_MEM_FRAC_DEN,
-                                (gpu_mem_sig - ((long)MIN_FREE_GB * GB1)));
-                assert(threshold >= (ssize_t)2 * GB1);
-        }
-        ssize_t gj_gram_needed = (ssize_t)*width * *height * comp_count *
-                                 GJ_PER_BYTE_REQ;
-        if (gj_gram_needed < threshold) {
-                return;
-        }
-        WARN_MSG(
-            "[rotate] Encoding of %dx%d image would require %.2f GB GRAM (>=%g "
-            "GB), downsizing ",
-            *width, *height, (double)gj_gram_needed / GB1,
-            (double)threshold / GB1);
-        while (gj_gram_needed > threshold) {
-                *width /= 2;
-                *height /= 2;
-                gj_gram_needed /= 4;
-        }
-        WARN_MSG("rotated to %.2f GB (%dx%d).\n", (double)gj_gram_needed / GB1,
-                 *width, *height);
-}
-
 static void release_owned_image(struct owned_image *img) {
         CHECK_CUDA(cudaFree(img->img.data));
         free(img);
@@ -242,7 +204,6 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         } else {
                 dst_desc.height = (int)(dst_desc.width / dst_aspect);
         }
-        adjust_size(&dst_desc.width, &dst_desc.height, in->comp_count);
 
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:4326");

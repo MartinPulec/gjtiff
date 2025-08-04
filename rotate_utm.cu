@@ -443,9 +443,6 @@ static struct owned_image *utm_to_epsg_3857(struct rotate_utm_state *s,
                 }
         }
 
-        // decrease size for GPUJPEG
-        adjust_size(&dst_desc.width, &dst_desc.height, dst_desc.comp_count);
-
         dst_desc.alpha = output_format == OUTF_WEBP ? (unsigned char *)!NULL
                                                     : NULL;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);

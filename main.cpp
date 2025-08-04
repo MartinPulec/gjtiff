@@ -227,6 +227,16 @@ static size_t encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
                 param.perf_stats = 1;
         }
 
+        int scaled_width = uncomp.width;
+        int scaled_height = uncomp.height;
+        struct owned_image *scaled = nullptr;
+        if (gj_adjust_size(&scaled_width, &scaled_height, uncomp.comp_count)) {
+                assert(width_padding == 0);
+                scaled = scale(s->downscaler, scaled_width, scaled_height,
+                               &uncomp);
+                uncomp = scaled->img;
+        }
+
         gpujpeg_image_parameters param_image =
             gpujpeg_default_image_parameters();
         param_image.width = uncomp.width;
@@ -247,16 +257,24 @@ static size_t encode_jpeg(struct state_gjtiff *s, struct dec_image uncomp,
         if (gpujpeg_encoder_encode(s->gj_enc, &param, &param_image, &encoder_input,
                                &out, &len) != 0) {
                 ERROR_MSG("Failed to encode %s!\n", ofname);
-                return 0;
         }
 
-        FILE *outf = fopen(ofname, "wb");
-        if (outf == nullptr) {
-                ERROR_MSG("fopen %s: %s\n", ofname, strerror(errno));
-                return 0;
+        if (len != 0) {
+                FILE *outf = fopen(ofname, "wb");
+                if (outf == nullptr) {
+                        char buf[256];
+                        if (strerror_r(errno, buf, sizeof buf) != 0) {
+                                buf[0] = '\0';
+                        }
+                        ERROR_MSG("fopen %s: %s (%d)\n", ofname, buf, errno);
+                } else {
+                        fwrite(out, len, 1, outf);
+                        fclose(outf);
+                }
         }
-        fwrite(out, len, 1, outf);
-        fclose(outf);
+        if (scaled != nullptr) {
+                scaled->free(scaled);
+        }
         return len;
 }
 

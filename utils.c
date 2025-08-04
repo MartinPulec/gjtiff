@@ -327,3 +327,40 @@ void gcs_to_webm(double latitude, double longitude, double *y, double *x)
         *x = (M_PI + lon_rad) / (2. * M_PI);
 }
 
+/**
+ * fullfill GPUJPEG mem requirements
+ * @returns whether image should be resized
+ */
+bool gj_adjust_size(int *width, int *height, int comp_count)
+{
+        enum {
+                GB1 = 1LL * 1000 * 1000 * 1000,
+                GJ_PER_BYTE_REQ = 20,
+                MAX_GPU_MEM_FRAC_DEN = 3,
+                MIN_FREE_GB = 2,
+        };
+        ssize_t threshold = mem_limit;
+        if (threshold == 0) {
+                const long gpu_mem_sig = (ssize_t)gpu_memory;
+                threshold = MIN(gpu_mem_sig / MAX_GPU_MEM_FRAC_DEN,
+                                (gpu_mem_sig - ((long)MIN_FREE_GB * GB1)));
+                assert(threshold >= (ssize_t)2 * GB1);
+        }
+        ssize_t gj_gram_needed = (ssize_t)*width * *height * comp_count *
+                                 GJ_PER_BYTE_REQ;
+        if (gj_gram_needed < threshold) {
+                return false;
+        }
+        WARN_MSG("Encoding of %dx%d image would require %.2f GB GRAM (>=%g "
+                 "GB), downsizing ",
+                 *width, *height, (double)gj_gram_needed / GB1,
+                 (double)threshold / GB1);
+        while (gj_gram_needed > threshold) {
+                *width /= 2;
+                *height /= 2;
+                gj_gram_needed /= 4;
+        }
+        WARN_MSG(" to %.2f GB (%dx%d).\n", (double)gj_gram_needed / GB1, *width,
+                 *height);
+        return true;
+}
