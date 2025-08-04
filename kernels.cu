@@ -379,39 +379,38 @@ void combine_images_cuda(struct dec_image *out, const struct dec_image *in1,
         CHECK_CUDA(cudaGetLastError());
 }
 
-
-static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in, int width, int height)
+enum {
+        YUV_FIX = 16,
+        YUV_HALF = 1 << (YUV_FIX - 1),
+};
+static __device__ int VP8ClipUV(int uv, int rounding)
 {
-        enum {
-                YUV_FIX = 16,
-                YUV_HALF = 1 << (YUV_FIX - 1),
-        };
-        struct fns {
-                static __device__ int VP8ClipUV(int uv, int rounding)
-                {
-                        uv = (uv + rounding + (128 << (YUV_FIX + 2))) >> (YUV_FIX + 2);
-                        return ((uv & ~0xff) == 0) ? uv : (uv < 0) ? 0 : 255;
-                }
+        uv = (uv + rounding + (128 << (YUV_FIX + 2))) >> (YUV_FIX + 2);
+        return ((uv & ~0xff) == 0) ? uv : (uv < 0) ? 0 : 255;
+}
 
-                static __device__ int VP8RGBToY(int r, int g, int b, int rounding)
-                {
-                        const int luma = 16839 * r + 33059 * g + 6420 * b;
-                        return (luma + rounding + (16 << YUV_FIX)) >> YUV_FIX; // no need to
-                                                                               // clip
-                }
+static __device__ int VP8RGBToY(int r, int g, int b, int rounding)
+{
+        const int luma = 16839 * r + 33059 * g + 6420 * b;
+        return (luma + rounding + (16 << YUV_FIX)) >> YUV_FIX; // no need to
+                                                               // clip
+}
 
-                static __device__ int VP8RGBToU(int r, int g, int b, int rounding)
-                {
-                        const int u = -9719 * r - 19081 * g + 28800 * b;
-                        return VP8ClipUV(u, rounding);
-                }
+static __device__ int VP8RGBToU(int r, int g, int b, int rounding)
+{
+        const int u = -9719 * r - 19081 * g + 28800 * b;
+        return VP8ClipUV(u, rounding);
+}
 
-                static __device__ int VP8RGBToV(int r, int g, int b, int rounding)
-                {
-                        const int v = +28800 * r - 24116 * g - 4684 * b;
-                        return VP8ClipUV(v, rounding);
-                }
-        };
+static __device__ int VP8RGBToV(int r, int g, int b, int rounding)
+{
+        const int v = +28800 * r - 24116 * g - 4684 * b;
+        return VP8ClipUV(v, rounding);
+}
+
+static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in,
+                                         int width, int height)
+{
         int x = 2 * (blockIdx.x * blockDim.x + threadIdx.x);
         int y = 2 * (blockIdx.y * blockDim.y + threadIdx.y);
         if (x >= width || y >= height) {
@@ -426,7 +425,7 @@ static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in, in
                         int r = d_in[3 * position];
                         int g = d_in[3 * position + 1];
                         int b = d_in[3 * position + 2];
-                        const int luma = fns::VP8RGBToY(r, g, b, YUV_HALF);
+                        const int luma = VP8RGBToY(r, g, b, YUV_HALF);
                         d_out[position] = luma;
                         rr += r;
                         gg += g;
@@ -434,8 +433,8 @@ static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in, in
                 }
         }
         // VP8RGBToU/V expects four accumulated pixels.
-        const int u = fns::VP8RGBToU(rr, gg, bb, YUV_HALF << 2);
-        const int v = fns::VP8RGBToV(rr, gg, bb, YUV_HALF << 2);
+        const int u = VP8RGBToU(rr, gg, bb, YUV_HALF << 2);
+        const int v = VP8RGBToV(rr, gg, bb, YUV_HALF << 2);
         d_out += width * height;
         int uv_off = y / 2 * ((width + 1) / 2) + x / 2;
         d_out[uv_off] = u;
@@ -471,7 +470,7 @@ static __global__ void kernel_y(const uint8_t *d_in, uint8_t *d_out, size_t coun
                 return;
         }
         int val  = d_in[pos];
-        d_out[pos] = 16 + val * 220 / 256;
+        d_out[pos] = VP8RGBToY(val, val, val, YUV_HALF);
 }
 uint8_t *convert_y_full_to_limited(const struct dec_image *in,
                                    cudaStream_t stream)
