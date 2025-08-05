@@ -21,7 +21,6 @@ extern int log_level;
 extern size_t gpu_memory;
 extern long long mem_limit;
 extern enum out_format output_format;
-extern bool no_whole_image;
 
 enum rc {
         ERR_SOME_FILES_NOT_TRANSCODED = 2,

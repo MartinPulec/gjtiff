@@ -63,15 +63,15 @@ cudaEvent_t cuda_event_stop;
 int interpolation = 0;
 long long mem_limit = 0;
 enum out_format output_format = OUTF_JPEG;
-bool no_whole_image = false;
 
 struct options {
         int req_quality;      ///< 0-100; -1 default
         int downscale_factor;
         bool use_libtiff;
         bool norotate;
+        bool no_whole_image;
         int zoom_levels[MAX_ZOOM_COUNT];
-#define OPTIONS_INIT {-1, 1, false, false, {-1}}
+#define OPTIONS_INIT {-1, 1, false, false, false, {-1}}
 };
 
 struct state_gjtiff {
@@ -514,7 +514,7 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
                    get_ext(), nullptr);
-        if (!no_whole_image) {
+        if (!s->opts.no_whole_image) {
                 struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
                 if (encode_gpu(s, uncomp, whole) == 0) {
                         return false;
@@ -717,7 +717,7 @@ int main(int argc, char **argv)
                         global_opts.norotate = true;
                         break;
                 case 'N':
-                        no_whole_image = true;
+                        global_opts.no_whole_image = true;
                         break;
                 case 'o':
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);
