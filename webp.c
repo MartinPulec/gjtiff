@@ -11,12 +11,13 @@
 
 enum {
         DEFAULT_WEBP_QUALITY = 75, ///< equals GJ default
+        MAX_WEBP_DIMENSION = 1 << 14,
+        CBCR_GRAY = 128,
 };
 
 struct webp_encoder {
         int quality;
-        unsigned char *chroma;
-        size_t chroma_allocated;
+        unsigned char chroma[MAX_WEBP_DIMENSION / 2];
 };
 
 static int my_write(const uint8_t *data, size_t data_size,
@@ -30,6 +31,8 @@ struct webp_encoder *webp_encoder_create(int quality)
 {
         struct webp_encoder *enc = calloc(1, sizeof *enc);
         enc->quality = quality == -1 ? DEFAULT_WEBP_QUALITY : quality;
+        memset(enc->chroma, CBCR_GRAY, sizeof enc->chroma);
+
         return enc;
 }
 
@@ -85,15 +88,6 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         unsigned long len = (unsigned long)img->width * img->height *
                             img->comp_count;
 
-        const size_t req_chroma_len = (((size_t)img->width + 1) / 2) *
-                                      (((size_t)img->height + 1) / 2);
-        if (req_chroma_len > enc->chroma_allocated) {
-                enc->chroma = realloc(enc->chroma, req_chroma_len);
-                memset(enc->chroma + enc->chroma_allocated, 128,
-                       req_chroma_len - enc->chroma_allocated);
-                enc->chroma_allocated = req_chroma_len;
-        }
-
         struct WebPPicture webp_picture;
         ok = WebPPictureInit(&webp_picture);
         assert(ok);
@@ -110,7 +104,7 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                 webp_picture.y = img->data;
                 webp_picture.a = img->alpha;
                 webp_picture.y_stride = img->width + width_padding;
-                webp_picture.uv_stride = (img->width + 1) / 2;
+                webp_picture.uv_stride = 0;
                 webp_picture.u = enc->chroma;
                 webp_picture.v = enc->chroma;
         } else {
