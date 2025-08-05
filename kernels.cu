@@ -411,8 +411,8 @@ static __device__ int VP8RGBToV(int r, int g, int b, int rounding)
 static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in,
                                          int width, int height)
 {
-        int x = 2 * (blockIdx.x * blockDim.x + threadIdx.x);
-        int y = 2 * (blockIdx.y * blockDim.y + threadIdx.y);
+        size_t x = 2 * (blockIdx.x * blockDim.x + threadIdx.x);
+        size_t y = 2 * (blockIdx.y * blockDim.y + threadIdx.y);
         if (x >= width || y >= height) {
                 return;
         }
@@ -421,10 +421,12 @@ static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in,
         int bb = 0;
         for (int j = 0; j < 2; ++j) {
                 for (int i = 0; i < 2; ++i) {
-                        int position = MIN(x + j, width - 1) + MIN(y + i, width - 1) * width;
+                        size_t position = MIN(x + j, (size_t)width - 1) +
+                                          (MIN(y + i, (size_t)width - 1) *
+                                           width);
                         int r = d_in[3 * position];
-                        int g = d_in[3 * position + 1];
-                        int b = d_in[3 * position + 2];
+                        int g = d_in[(3 * position) + 1];
+                        int b = d_in[(3 * position) + 2];
                         const int luma = VP8RGBToY(r, g, b, YUV_HALF);
                         d_out[position] = luma;
                         rr += r;
@@ -435,10 +437,10 @@ static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in,
         // VP8RGBToU/V expects four accumulated pixels.
         const int u = VP8RGBToU(rr, gg, bb, YUV_HALF << 2);
         const int v = VP8RGBToV(rr, gg, bb, YUV_HALF << 2);
-        d_out += width * height;
-        int uv_off = y / 2 * ((width + 1) / 2) + x / 2;
+        d_out += (size_t) width * height;
+        size_t uv_off = ((y / 2) * ((width + 1) / 2)) + (x / 2);
         d_out[uv_off] = u;
-        d_out += ((width + 1) / 2) * ((height + 1) / 2);
+        d_out += (((size_t) width + 1) / 2) * ((height + 1) / 2);
         d_out[uv_off] = v;
 }
 
