@@ -479,7 +479,7 @@ uint8_t *convert_y_full_to_limited(const struct dec_image *in,
 {
         assert(in->comp_count == 1);
         dim3 block(256, 1);
-        size_t count = in->width * in->height;
+        size_t count = (size_t) in->width * in->height;
         if (count > state.d_yuv420_allocated) {
                 CHECK_CUDA(cudaFree(state.d_yuv420));
                 CHECK_CUDA(cudaMalloc(&state.d_yuv420, count));

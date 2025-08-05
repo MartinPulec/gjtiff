@@ -299,8 +299,8 @@ struct owned_image *copy_img_from_device(const struct dec_image *in,
                                       cudaMemcpyDefault, stream));
         }
         if (in->comp_count == 3 && output_format == OUTF_WEBP) {
-                size_t len = (in->width * in->height) +
-                             (2 * ((in->width + 1) / 2) *
+                size_t len = ((size_t) in->width * in->height) +
+                             (2ULL * ((in->width + 1) / 2) *
                               ((in->height + 1) / 2));
                 uint8_t *d_buf= convert_rgb_to_yuv420(in, stream);
                 CHECK_CUDA(cudaStreamSynchronize(stream));
