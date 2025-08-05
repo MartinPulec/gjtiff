@@ -144,12 +144,19 @@ struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
         new_desc.width = (int)xpitch / src->comp_count;
         new_desc.height = (int)dst_lines;
         struct owned_image *ret = new_cuda_owned_image(&new_desc);
+        CHECK_CUDA(cudaMemsetAsync(ret->img.data, 0,
+                                   (size_t)ret->img.width * ret->img.height *
+                                       ret->img.comp_count,
+                                   state->stream));
         unsigned char *data = ret->img.data + ((ptrdiff_t)y * xpitch) +
                               ((ptrdiff_t)x * src->comp_count);
         downscale_int(state, new_width, xpitch, new_height, src->data,
                       src->width, src->height, src->comp_count, data);
         if (ret->img.alpha != NULL) {
                 size_t apitch = xpitch / src->comp_count;
+                CHECK_CUDA(cudaMemsetAsync(
+                    ret->img.alpha, 0, (size_t)ret->img.width * ret->img.height,
+                    state->stream));
                 unsigned char *a_ptr = ret->img.alpha +
                                        ((ptrdiff_t)y * apitch) + x;
                 downscale_int(state, new_width, apitch, new_height, src->alpha,
