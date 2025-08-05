@@ -5,6 +5,10 @@
 extern "C" {
 #endif
 
+enum {
+        MAX_WEBP_DIMENSION = (1 << 14) - 1,
+};
+
 struct webp_encoder;
 struct dec_image;
 struct webp_encoder *webp_encoder_create(int quality);

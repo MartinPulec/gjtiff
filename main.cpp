@@ -342,14 +342,45 @@ static size_t encode_file(struct state_gjtiff *s,
         abort();
 }
 
+static struct owned_image *scale_webp(struct state_gjtiff *s,
+                                       const struct dec_image *uncomp)
+{
+        int scaled_width = MAX_WEBP_DIMENSION;
+        int scaled_height = MAX_WEBP_DIMENSION;
+        if (uncomp->width > uncomp->height) {
+                scaled_height = (int)((size_t)MAX_WEBP_DIMENSION *
+                                      uncomp->height / uncomp->width);
+        } else {
+                scaled_width = (int)((size_t)MAX_WEBP_DIMENSION *
+                                     uncomp->width / uncomp->height);
+        }
+        WARN_MSG("Encoding of %dx%d image exceeds max WebP "
+                 "dimensions (16383x16383), downsizing to %dx%d!\n",
+                 uncomp->width, uncomp->height, scaled_width, scaled_height);
+        return scale(s->downscaler, scaled_width, scaled_height, uncomp);
+}
+
 ///< encodes file in GPU memory
 static size_t encode_gpu(struct state_gjtiff *s, const struct dec_image *uncomp,
                          const char *ofname)
 {
         struct owned_image *in_ram = nullptr;
         if (output_format != OUTF_JPEG) {
+                // handle WebP >= 16k*16k
+                struct owned_image *scaled = nullptr;
+                if (output_format == OUTF_WEBP &&
+                    (uncomp->width > MAX_WEBP_DIMENSION ||
+                     uncomp->height > MAX_WEBP_DIMENSION)) {
+                        scaled = scale_webp(s, uncomp);
+                        uncomp = &scaled->img;
+                }
+
                 in_ram = copy_img_from_device(uncomp, s->stream);
                 uncomp = &in_ram->img;
+
+                if (scaled != nullptr) {
+                        scaled->free(scaled);
+                }
         }
         const size_t len = encode_file(s, uncomp, 0, ofname, uncomp);
         if (in_ram != nullptr) {

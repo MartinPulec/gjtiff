@@ -11,13 +11,12 @@
 
 enum {
         DEFAULT_WEBP_QUALITY = 75, ///< equals GJ default
-        MAX_WEBP_DIMENSION = 1 << 14,
         CBCR_GRAY = 128,
 };
 
 struct webp_encoder {
         int quality;
-        unsigned char chroma[MAX_WEBP_DIMENSION / 2];
+        unsigned char chroma[(MAX_WEBP_DIMENSION + 1) / 2];
 };
 
 static int my_write(const uint8_t *data, size_t data_size,
@@ -126,7 +125,9 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
                 webp_picture.y += x + (y * webp_picture.y_stride);
                 webp_picture.u += x / 2 + (y / 2 * webp_picture.uv_stride);
                 webp_picture.v += x / 2 + (y / 2 * webp_picture.uv_stride);
-                webp_picture.a += x + (y * webp_picture.y_stride);
+                if (webp_picture.a != NULL) {
+                        webp_picture.a += x + (y * webp_picture.y_stride);
+                }
         }
         webp_picture.a_stride = webp_picture.y_stride;
 

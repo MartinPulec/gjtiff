@@ -112,9 +112,9 @@ static double normalize_coords(const struct coordinate src_coords[4],
 
         get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
         bounds[XLEFT] = lon_min;
-        bounds[YTOP] = lat_max;
+        bounds[YTOP] = lat_min;
         bounds[XRIGHT] = lon_max;
-        bounds[YBOTTOM] = lat_min;
+        bounds[YBOTTOM] = lat_max;
 
         double lat_range = lat_max - lat_min;
         double lon_range = lon_max - lon_min;
@@ -160,7 +160,17 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 return take_ownership(in);
         }
 
-        if (strncmp(in->authority, "ESPG:", strlen("ESPG:")) != 0) {
+        bool is_utm = false;
+        if (strncmp(in->authority, "EPSG:", strlen("EPSG:")) == 0) {
+                const int epsg_num = atoi(strchr(in->authority, ':') + 1);
+                if ((epsg_num >= 32601 && epsg_num <= 32660)    // North 1-60
+                    || (epsg_num >= 32701 && epsg_num <= 32760) // South 1-60
+                ) {
+                        is_utm = true;
+                }
+        }
+
+        if (is_utm) {
                 struct owned_image *ret = rotate_utm(s->rotate_utm, in);
                 if (ret != NULL) {
                         return ret;
