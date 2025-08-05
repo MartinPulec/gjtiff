@@ -450,8 +450,8 @@ uint8_t *convert_rgb_to_yuv420(const struct dec_image *in, cudaStream_t stream)
         int height = (in->height + 1) / 2;
         dim3 grid((width + block.x - 1) / block.x,
                   (height + block.y - 1) / block.y);
-        size_t len = (in->width * in->height) +
-                     (2 * ((in->width + 1) / 2) * ((in->height + 1) / 2));
+        size_t len = ((size_t) in->width * in->height) +
+                     (2ULL * ((in->width + 1) / 2) * ((in->height + 1) / 2));
         if (len > state.d_yuv420_allocated) {
                 CHECK_CUDA(cudaFree(state.d_yuv420));
                 CHECK_CUDA(cudaMalloc(&state.d_yuv420, len));
