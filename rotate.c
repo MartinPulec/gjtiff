@@ -221,10 +221,6 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 ret->img.bounds[i] = bounds[i];
         }
 
-        const size_t req_size = (size_t)ret->img.width * ret->img.height *
-                                ret->img.comp_count;
-        CHECK_CUDA(cudaMalloc((void **)&ret->img.data, req_size));
-
         NppiRect oDstROI = {0, 0, ret->img.width, ret->img.height};
         double aDstQuad[4][2] = {
             {coords[0].longitude * ret->img.width,
