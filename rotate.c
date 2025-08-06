@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "defs.h"
+#include "kernels.h"
 #include "nppdefs.h"
 #include "nppi_geometry_transforms.h"
 #include "rotate_utm.h"
@@ -207,6 +208,8 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 dst_desc.height = (int)(dst_desc.width / dst_aspect);
         }
 
+        dst_desc.alpha = output_format == OUTF_WEBP ? (unsigned char *)!NULL
+                                                    : NULL;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:4326");
         for (unsigned i = 0; i < ARR_SIZE(bounds); ++i) {
@@ -247,6 +250,9 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         CHECK_NPP(nppi_warp(in->data, oSrcSize, in->width, oSrcROI, aSrcQuad,
                             ret->img.data, ret->img.width, oDstROI, aDstQuad,
                             interpolation, s->nppStreamCtx));
+        if (ret->img.alpha != NULL) {
+                rotate_set_alpha(&ret->img, aDstQuad, s->stream);
+        }
         GPU_TIMER_STOP(rotate);
 
         return ret;

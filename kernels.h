@@ -39,6 +39,9 @@ void combine_images_cuda(struct dec_image *out, const struct dec_image *in1,
 [[nodiscard]] uint8_t *convert_y_full_to_limited(const struct dec_image *in,
                                                  cudaStream_t stream);
 
+void rotate_set_alpha(struct dec_image *in, double aDstQuad[4][2],
+                      cudaStream_t stream);
+
 void cleanup_cuda_kernels(void);
 
 #ifdef __cplusplus

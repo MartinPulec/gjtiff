@@ -491,6 +491,70 @@ uint8_t *convert_y_full_to_limited(const struct dec_image *in,
         return state.d_yuv420;
 }
 
+static __global__ void fillQuadKernel(unsigned char *out, int w, int h,
+                                      float2 A, float2 B, float2 C, float2 D)
+{
+        struct fns {
+                static __device__ bool pointInTriangle(const float2 &P,
+                                                       const float2 &A,
+                                                       const float2 &B,
+                                                       const float2 &C)
+                {
+                        // Barycentric method or cross product winding
+                        float2 v0 = make_float2(B.x - A.x, B.y - A.y);
+                        float2 v1 = make_float2(C.x - A.x, C.y - A.y);
+                        float2 v2 = make_float2(P.x - A.x, P.y - A.y);
+                        float d00 = v0.x * v0.x + v0.y * v0.y;
+                        float d01 = v0.x * v1.x + v0.y * v1.y;
+                        float d11 = v1.x * v1.x + v1.y * v1.y;
+                        float d20 = v2.x * v0.x + v2.y * v0.y;
+                        float d21 = v2.x * v1.x + v2.y * v1.y;
+                        float denom = d00 * d11 - d01 * d01;
+                        float v = (d11 * d20 - d01 * d21) / denom;
+                        float w = (d00 * d21 - d01 * d20) / denom;
+                        float u = 1.0f - v - w;
+                        return (u >= 0) && (v >= 0) && (w >= 0);
+                }
+
+                static __device__ bool
+                pointInQuad(const float2 &P, const float2 &A, const float2 &B,
+                            const float2 &C, const float2 &D)
+                {
+                        // Assumes quad is convex: AB, BC, CD, DA
+                        // Test triangles: ABC and CDA
+                        return pointInTriangle(P, A, B, C) ||
+                               pointInTriangle(P, C, D, A);
+                }
+        };
+
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+        if (x >= w || y >= h) {
+                return;
+        }
+
+        float2 P = make_float2(x + 0.5f, y + 0.5f);
+        if (fns::pointInQuad(P, A, B, C, D)) {
+                out[y * w + x] = 255;
+        } else {
+                out[y * w + x] = 0;
+        }
+}
+
+void rotate_set_alpha(struct dec_image *in, double aDstQuad[4][2],
+                                   cudaStream_t stream) {
+        float2 quadA = make_float2(aDstQuad[0][0], aDstQuad[0][1]);
+        float2 quadB = make_float2(aDstQuad[1][0], aDstQuad[1][1]);
+        float2 quadC = make_float2(aDstQuad[2][0], aDstQuad[2][1]);
+        float2 quadD = make_float2(aDstQuad[3][0], aDstQuad[3][1]);
+
+        dim3 block(16, 16);
+        dim3 grid((in->width + block.x - 1) / block.x, (in->height + block.y - 1) / block.y);
+        fillQuadKernel<<<grid, block, 0, stream>>>(
+            in->alpha, in->width, in->height, quadA, quadB, quadC, quadD);
+        CHECK_CUDA(cudaGetLastError());
+}
+
 void cleanup_cuda_kernels()
 {
         for (unsigned i = 0; i < ARR_SIZE(state.stat); ++i) {
