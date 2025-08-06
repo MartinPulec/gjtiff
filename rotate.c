@@ -18,17 +18,9 @@
 #include "rotate_utm.h"
 #include "utils.h"
 
-#ifdef NPP_NEW_API
-#define CONTEXT , s->nppStreamCtx
-#else
-#define CONTEXT
-#endif
-
 struct rotate_state {
         cudaStream_t stream;
-#ifdef NPP_NEW_API
         NppStreamContext nppStreamCtx;
-#endif
         struct rotate_utm_state *rotate_utm;
 };
 
@@ -239,17 +231,22 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                                        ret->img.comp_count,
                                    s->stream));
         const int interpolation = NPPI_INTER_LINEAR;
+
+        NppStatus (*nppi_warp)(
+            const Npp8u *pSrc, NppiSize oSrcSize, int nSrcStep,
+            NppiRect oSrcROI, const double aSrcQuad[4][2], Npp8u *pDst,
+            int nDstStep, NppiRect oDstROI, const double aDstQuad[4][2],
+            int eInterpolation, NppStreamContext nppStreamCtx) = NULL;
+
         if (in->comp_count == 1) {
-                CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C1R)(
-                    in->data, oSrcSize, in->width, oSrcROI, aSrcQuad, ret->img.data,
-                    ret->img.width, oDstROI, aDstQuad, interpolation CONTEXT));
+                nppi_warp = nppiWarpPerspectiveQuad_8u_C1R_Ctx;
         } else {
                 assert(in->comp_count == 3);
-                CHECK_NPP(NPP_CONTEXTIZE(nppiWarpPerspectiveQuad_8u_C3R)(
-                    in->data, oSrcSize, 3 * in->width, oSrcROI, aSrcQuad,
-                    ret->img.data, 3 * ret->img.width, oDstROI, aDstQuad,
-                    interpolation CONTEXT));
+                nppi_warp = nppiWarpPerspectiveQuad_8u_C3R_Ctx;
         }
+        CHECK_NPP(nppi_warp(in->data, oSrcSize, in->width, oSrcROI, aSrcQuad,
+                            ret->img.data, ret->img.width, oDstROI, aDstQuad,
+                            interpolation, s->nppStreamCtx));
         GPU_TIMER_STOP(rotate);
 
         return ret;
