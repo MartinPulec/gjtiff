@@ -422,7 +422,7 @@ static __global__ void kernel_rgb_to_yuv(uint8_t *d_out, const uint8_t *d_in,
         for (int j = 0; j < 2; ++j) {
                 for (int i = 0; i < 2; ++i) {
                         size_t position = MIN(x + j, (size_t)width - 1) +
-                                          (MIN(y + i, (size_t)width - 1) *
+                                          (MIN(y + i, (size_t)height - 1) *
                                            width);
                         int r = d_in[3 * position];
                         int g = d_in[(3 * position) + 1];
