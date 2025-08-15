@@ -216,7 +216,6 @@ size_t get_cuda_dev_global_memory()
         return device_properties.totalGlobalMem;
 }
 
-#if NPP_NEW_API
 void init_npp_context(NppStreamContext *nppStreamCtx,
                                cudaStream_t stream)
 {
@@ -241,7 +240,6 @@ void init_npp_context(NppStreamContext *nppStreamCtx,
             oDeviceProperties.maxThreadsPerBlock;
         nppStreamCtx->nSharedMemPerBlock = oDeviceProperties.sharedMemPerBlock;
 }
-#endif
 
 static void release_owned_cuda_image(struct owned_image *img)
 {
