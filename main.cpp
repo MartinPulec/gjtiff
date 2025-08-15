@@ -438,10 +438,10 @@ static bool encode_tiles_z(struct state_gjtiff *s,
         const int scale = 1<<zoom_level;
         int x_first = floor(uncomp->bounds[XLEFT] * scale);
         int x_end = ceil(uncomp->bounds[XRIGHT] * scale);
-        int dst_xpitch = x_end - x_first + 1;
+        int dst_xpitch = x_end - x_first;
         int y_first = floor(uncomp->bounds[YTOP] * scale);
         int y_end = ceil(uncomp->bounds[YBOTTOM] * scale);
-        int dst_lines = y_end - y_first + 1;
+        int dst_lines = y_end - y_first;
         dst_xpitch *= 256 * uncomp->comp_count;
         dst_lines *= 256;
         /// @todo roundf below?
