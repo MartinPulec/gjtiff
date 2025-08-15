@@ -470,21 +470,21 @@ static bool encode_tiles_z(struct state_gjtiff *s,
         omp_set_num_threads(output_format == OUTF_JPEG ? 1
                                                        : omp_get_max_threads());
 
-        for (int x = x_first; x < x_end; ++x) {
-                char *path = get_tile_ofdir(prefix, ifname, zoom_level, x);
+        for (int x = 0; x < x_end - x_first; ++x) {
+                char *path = get_tile_ofdir(prefix, ifname, zoom_level,
+                                            x_first + x);
                 const size_t path_len = strlen(path);
-                #pragma omp parallel for
-                for (int y = y_first; y < y_end; ++y) {
+#pragma omp parallel for
+                for (int y = 0; y < y_end - y_first; ++y) {
                         struct dec_image tile = scaled->img; // copy metadata
                         tile.width = tile.height = 256;
                         auto *fpath = (char *)malloc(PATH_MAX);
                         snprintf(fpath, PATH_MAX, "%s", path);
                         char *end = fpath + path_len;
-                        snprintf(end, PATH_MAX - (end - fpath), "/%d%s", y,
-                                 get_ext());
-                        size_t off = ((ptrdiff_t)(y - y_first) * 256 *
-                                      dst_xpitch) +
-                                     ((x - x_first) * 256 * uncomp->comp_count);
+                        snprintf(end, PATH_MAX - (end - fpath), "/%d%s",
+                                 y_first + y, get_ext());
+                        size_t off = ((ptrdiff_t)y * 256 * dst_xpitch) +
+                                     (x * 256 * uncomp->comp_count);
                         tile.data = src->data + off;
                         if (src->alpha != nullptr) {
                                 tile.alpha = src->alpha +
