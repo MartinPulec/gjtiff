@@ -445,8 +445,8 @@ static bool encode_tiles_z(struct state_gjtiff *s,
         dst_xpitch *= 256 * uncomp->comp_count;
         dst_lines *= 256;
         /// @todo roundf below?
-        int x = ((uncomp->bounds[XLEFT] * scale) - x_first) * 256.;
-        int y = ((uncomp->bounds[YTOP] * scale) -
+        int x_off = ((uncomp->bounds[XLEFT] * scale) - x_first) * 256.;
+        int y_off = ((uncomp->bounds[YTOP] * scale) -
                  floor(uncomp->bounds[YTOP] * scale)) *
                 256.;
         int new_height = ((uncomp->bounds[YBOTTOM] * scale) -
@@ -456,8 +456,8 @@ static bool encode_tiles_z(struct state_gjtiff *s,
                           (uncomp->bounds[XLEFT] * scale)) *
                          256.;
 
-        struct owned_image *scaled = scale_pitch(s->downscaler, new_width, x,
-                                                 dst_xpitch, new_height, y,
+        struct owned_image *scaled = scale_pitch(s->downscaler, new_width, x_off,
+                                                 dst_xpitch, new_height, y_off,
                                                  dst_lines, uncomp);
         const struct dec_image *src = &scaled->img;
         struct owned_image *in_ram = nullptr;
