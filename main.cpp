@@ -430,20 +430,19 @@ static char *get_tile_ofdir(const char *prefix, const char *ifname, int zoom, in
         return ret;
 }
 
-static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
-                           const char *ifname, const char *prefix,
-                           int zoom_level)
+static bool encode_tiles_z(struct state_gjtiff *s,
+                           struct dec_image *const uncomp, const char *ifname,
+                           const char *prefix, int zoom_level)
 {
         bool ret = true;
-        struct dec_image *const uncomp = &ifiles->ifiles[0].img->img;
         const int scale = 1<<zoom_level;
         int x_first = floor(uncomp->bounds[XLEFT] * scale);
         int x_end = ceil(uncomp->bounds[XRIGHT] * scale);
-        int xpitch = x_end - x_first + 1;
+        int dst_xpitch = x_end - x_first + 1;
         int y_first = floor(uncomp->bounds[YTOP] * scale);
         int y_end = ceil(uncomp->bounds[YBOTTOM] * scale);
         int dst_lines = y_end - y_first + 1;
-        xpitch *= 256 * uncomp->comp_count;
+        dst_xpitch *= 256 * uncomp->comp_count;
         dst_lines *= 256;
         /// @todo roundf below?
         int x = ((uncomp->bounds[XLEFT] * scale) - x_first) * 256.;
@@ -456,10 +455,11 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
         int new_width = ((uncomp->bounds[XRIGHT] * scale) -
                           (uncomp->bounds[XLEFT] * scale)) *
                          256.;
-        struct owned_image *scaled = scale_pitch(
-            s->downscaler, new_width, x, xpitch, new_height, y,
-            dst_lines, &ifiles->ifiles[0].img->img);
-        const struct dec_image *src= &scaled->img;
+
+        struct owned_image *scaled = scale_pitch(s->downscaler, new_width, x,
+                                                 dst_xpitch, new_height, y,
+                                                 dst_lines, uncomp);
+        const struct dec_image *src = &scaled->img;
         struct owned_image *in_ram = nullptr;
         if (output_format != OUTF_JPEG) {
                 in_ram = copy_img_from_device(&scaled->img, s->stream);
@@ -482,16 +482,17 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
                         char *end = fpath + path_len;
                         snprintf(end, PATH_MAX - (end - fpath), "/%d%s", y,
                                  get_ext());
-                        size_t off = ((ptrdiff_t)(y - y_first) * 256 * xpitch) +
-                                    ((x - x_first) * 256 * uncomp->comp_count);
+                        size_t off = ((ptrdiff_t)(y - y_first) * 256 *
+                                      dst_xpitch) +
+                                     ((x - x_first) * 256 * uncomp->comp_count);
                         tile.data = src->data + off;
                         if (src->alpha != nullptr) {
                                 tile.alpha = src->alpha +
                                             off / uncomp->comp_count;
                         }
                         size_t len = encode_file(
-                            s, &tile, xpitch - 256 * uncomp->comp_count, fpath,
-                            src);
+                            s, &tile, dst_xpitch - 256 * uncomp->comp_count,
+                            fpath, src);
                         if (len != 0) {
                                 // printf(", \"%s\"", path);
                         } else {
@@ -508,7 +509,7 @@ static bool encode_tiles_z(struct state_gjtiff *s, const struct ifiles *ifiles,
         return ret;
 }
 
-static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
+static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
                          const char *ifname, const char *prefix,
                          int *zoom_levels)
 {
@@ -518,7 +519,6 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
                    get_ext(), nullptr);
         if (!s->opts.no_whole_image) {
-                struct dec_image *uncomp = &ifiles->ifiles[0].img->img;
                 if (encode_gpu(s, uncomp, whole) == 0) {
                         return false;
                 }
@@ -532,7 +532,7 @@ static bool encode_tiles(struct state_gjtiff *s, const struct ifiles *ifiles,
         printf("\t\t\"outfile\":");
         printf("\"%s\"", whole);
         while (*zoom_levels != -1) {
-                ret &= encode_tiles_z(s, ifiles, ifname, prefix, *zoom_levels);
+                ret &= encode_tiles_z(s, uncomp, ifname, prefix, *zoom_levels);
                 zoom_levels++;
         }
         printf("\n");
@@ -824,7 +824,7 @@ int main(int argc, char **argv)
                                   ? ret
                                   : ERR_SOME_FILES_NOT_TRANSCODED;
                 } else {
-                        ret = encode_tiles(&state, &ifiles,
+                        ret = encode_tiles(&state, &ifiles.ifiles[0].img->img,
                                            ifiles.ifiles[0].ifname, ofdir,
                                            global_opts.zoom_levels)
                                   ? ret
