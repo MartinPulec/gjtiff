@@ -130,7 +130,7 @@ struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
  */
 struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
                                 int x_off, size_t dst_xpitch, int new_height, int y_off,
-                                size_t dst_lines, const struct dec_image *src)
+                                size_t dst_lines, const struct dec_image *src, int src_pitch_px)
 {
         struct dec_image new_desc = *src;
         new_desc.width = (int)dst_xpitch / src->comp_count;
@@ -143,7 +143,7 @@ struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
         unsigned char *data = ret->img.data + ((ptrdiff_t)y_off * dst_xpitch) +
                               ((ptrdiff_t)x_off * src->comp_count);
         downscale_int(state, new_width, dst_xpitch, new_height, src->data,
-                      src->width, src->width * src->comp_count, src->height,
+                      src->width, src_pitch_px * src->comp_count, src->height,
                       src->comp_count, data);
         if (ret->img.alpha != NULL) {
                 size_t apitch = dst_xpitch / src->comp_count;
@@ -153,7 +153,7 @@ struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
                 unsigned char *a_ptr = ret->img.alpha +
                                        ((ptrdiff_t)y_off * apitch) + x_off;
                 downscale_int(state, new_width, apitch, new_height, src->alpha,
-                              src->width, src->width, src->height, 1, a_ptr);
+                              src->width, src_pitch_px, src->height, 1, a_ptr);
         }
         return ret;
 }
@@ -163,7 +163,7 @@ struct owned_image *scale(struct downscaler_state *state, int new_width,
 {
         const size_t dstPitch = (size_t)new_width * src->comp_count;
         return scale_pitch(state, new_width, 0, dstPitch, new_height, 0,
-                           new_height, src);
+                           new_height, src, src->width);
 }
 
 void downscaler_destroy(struct downscaler_state *s) {
