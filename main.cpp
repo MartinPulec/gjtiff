@@ -516,6 +516,105 @@ static bool encode_tiles_z(struct state_gjtiff *s,
         return ret;
 }
 
+#if 0
+static bool encode_tiles_z_with_scale(struct state_gjtiff *s,
+                           struct dec_image *const uncomp, const char *ifname,
+                           const char *prefix, int zoom_level)
+{
+        bool ret = true;
+        const int scale = 1<<zoom_level;
+        int x_first = floor(uncomp->bounds[XLEFT] * scale);
+        int x_end = ceil(uncomp->bounds[XRIGHT] * scale);
+        int y_first = floor(uncomp->bounds[YTOP] * scale);
+        int y_end = ceil(uncomp->bounds[YBOTTOM] * scale);
+        int dst_lines = y_end - y_first;
+        dst_lines *= 256;
+        /// @todo roundf below?
+        int x_off = ((uncomp->bounds[XLEFT] * scale) - x_first) * 256.;
+        int y_off = ((uncomp->bounds[YTOP] * scale) -
+                 floor(uncomp->bounds[YTOP] * scale)) *
+                256.;
+        int new_height = ((uncomp->bounds[YBOTTOM] * scale) -
+                          (uncomp->bounds[YTOP] * scale)) *
+                         256.;
+        int new_width = ((uncomp->bounds[XRIGHT] * scale) -
+                          (uncomp->bounds[XLEFT] * scale)) *
+                         256.;
+
+        const int src_pitch_px = uncomp->width;
+        const int dst_xpitch = 256 * uncomp->comp_count;
+
+        // disable MT via OMP for JPEG
+        omp_set_num_threads(output_format == OUTF_JPEG ? 1
+                                                       : omp_get_max_threads());
+
+        struct dec_image src_strip = *uncomp;
+
+        for (int x = 0; x < x_end - x_first; ++x) {
+                int dst_width = 256 - x_off;
+                src_strip.width = dst_width * uncomp->width / new_width;
+                // cap the width to src width
+                int w_remain = uncomp->width - ((src_strip.data - uncomp->data) /
+                                                   src_strip.comp_count);
+                if (w_remain < src_strip.width) {
+                        src_strip.width = w_remain;
+                        dst_width = w_remain * new_width / uncomp->width;
+                }
+
+                struct owned_image *scaled = scale_pitch(
+                    s->downscaler, dst_width, x_off, dst_xpitch, new_height, y_off,
+                    dst_lines, &src_strip, src_pitch_px);
+
+                const struct dec_image *src = &scaled->img;
+                struct owned_image *in_ram = nullptr;
+                if (output_format != OUTF_JPEG) {
+                        in_ram = copy_img_from_device(&scaled->img, s->stream);
+                        src = &in_ram->img;
+                }
+
+                char *path = get_tile_ofdir(prefix, ifname, zoom_level,
+                                            x_first + x);
+                const size_t path_len = strlen(path);
+#pragma omp parallel for
+                for (int y = 0; y < y_end - y_first; ++y) {
+                        struct dec_image tile = scaled->img; // copy metadata
+                        tile.width = tile.height = 256;
+                        auto *fpath = (char *)malloc(PATH_MAX);
+                        snprintf(fpath, PATH_MAX, "%s", path);
+                        char *end = fpath + path_len;
+                        snprintf(end, PATH_MAX - (end - fpath), "/%d%s",
+                                 y_first + y, get_ext());
+                        size_t off = ((ptrdiff_t)y * 256 * dst_xpitch);
+                        tile.data = src->data + off;
+                        if (src->alpha != nullptr) {
+                                tile.alpha = src->alpha +
+                                            off / uncomp->comp_count;
+                        }
+                        size_t len = encode_file(s, &tile, 0, fpath, src);
+                        if (len != 0) {
+                                // printf(", \"%s\"", path);
+                        } else {
+                                ret = false;
+                        }
+                        free(fpath);
+                }
+                scaled->free(scaled);
+                if (in_ram != nullptr) {
+                        in_ram->free(in_ram);
+                }
+                free(path);
+
+                // move right inside the source image
+                x_off = 0;
+                src_strip.data += (size_t)src_strip.width * src_strip.comp_count;
+                if (src_strip.alpha != nullptr) {
+                        src_strip.alpha += (size_t)src_strip.width;
+                }
+        }
+        return ret;
+}
+#endif
+
 static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
                          const char *ifname, const char *prefix,
                          int *zoom_levels)
