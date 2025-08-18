@@ -13,11 +13,11 @@ static __device__ __forceinline__ uint8_t bilinearSample(const uint8_t *src,
         int x1 = x0 + 1;
         int y1 = y0 + 1;
 
-        // // Clamp to image edges - doesn't happen
-        // x0 = max(0, min(x0, W - 1));
-        // y0 = max(0, min(y0, H - 1));
-        // x1 = max(0, min(x1, W - 1));
-        // y1 = max(0, min(y1, H - 1));
+        // // Clamp to image edges - seem to happen at right
+        x0 = max(0, min(x0, W - 1));
+        y0 = max(0, min(y0, H - 1));
+        x1 = max(0, min(x1, W - 1));
+        y1 = max(0, min(y1, H - 1));
 
         // Fetch four neighbors
         float I00 = src[w_stride * (y0 * W + x0)];
