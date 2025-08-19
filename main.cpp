@@ -52,6 +52,13 @@
 #define PATH_MAX 4096
 #endif
 
+#define STRINGIFY(A) #A
+#define TOSTRING(A) STRINGIFY(A)
+#ifndef GIT_REV
+#define GIT_REV (unknown)
+#endif
+#define GIT_REV_STR TOSTRING(GIT_REV)
+
 enum { MAX_ZOOM_COUNT = 20,};
 
 // declared in defs.h
@@ -584,6 +591,7 @@ static void show_help(const char *progname)
         INFO_MSG("\t-I <num> - downsampling interpolation idx (NppiInterpolationMode; default 8 /SUPER/)\n");
         INFO_MSG("\t-M <sz_GB>- GPUJPEG memory limit (in GB, floating point; default 1/2 of available VRAM)\n");
         INFO_MSG("\t-z <zlevel>- zoom level\n");
+        INFO_MSG("\t-V       - print version (Git commit)\n");
         INFO_MSG("\n");
         INFO_MSG("Input must be in TIFF or JP2.\"\n");
         INFO_MSG("Output filename will be \"basename ${name%%.*}.jpg\"\n");
@@ -697,7 +705,7 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+I:M:NQdhnno:q:rs:vwz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+I:M:NQVdhnno:q:rs:vwz:")) != -1) {
                 switch (opt) {
                 case 'I':
                         interpolation = (int)strtol(optarg, nullptr, 0);
@@ -708,6 +716,9 @@ int main(int argc, char **argv)
                 case 'Q':
                         log_level -= 1;
                         break;
+                case 'V':
+                        puts(GIT_REV_STR);
+                        return 0;
                 case 'd':
                         return !!gpujpeg_print_devices_info();
                 case 'h':

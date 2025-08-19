@@ -1,7 +1,9 @@
 NVCC ?= nvcc
 NVCC_DIR := $(shell dirname $$(command -v $(NVCC)))
+GIT_REV != git rev-parse --short HEAD || echo '(unknown)'
 COMMON = $(shell pkg-config --cflags gdal) -g -Wall -Wextra -fopenmp \
-	-I$(NVCC_DIR)/../include -DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE
+	-I$(NVCC_DIR)/../include -DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE \
+	-DGIT_REV=$(GIT_REV)
 CFLAGS += $(COMMON)
 CXXFLAGS += $(COMMON)
 CUDAFLAGS ?= 
