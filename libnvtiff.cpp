@@ -228,11 +228,18 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
                 WARN_MSG("%s not supported by nvtiff\n", fname);
                 return {};
         }
-        if (e != NVTIFF_STATUS_SUCCESS) {
-                ERROR_MSG("nvtiff error code %d in file '%s' in line %i\n", e,
-                          __FILE__, __LINE__);
-                return {};
+
+#define CHECK_ERROR                                                            \
+        if (e != NVTIFF_STATUS_SUCCESS) {                                      \
+                ERROR_MSG("nvtiff error code %d in file '%s' in line %i for "  \
+                          "%s: %s\n",                                          \
+                          e, __FILE__, __LINE__, fname,                        \
+                          nvtiff_status_to_str(e));                            \
+                return {};                                                     \
         }
+
+        CHECK_ERROR
+
         if (s->log_level >= 2) {
                 CHECK_NVTIFF(nvtiffStreamPrint(s->tiff_stream));
         }
@@ -263,11 +270,7 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
                 ERROR_MSG("nvCOMP needed for DEFLATE not found in path...\n");
                 return DEC_IMG_ERR(ERR_NVCOMP_NOT_FOUND);
         }
-        if (e != NVTIFF_STATUS_SUCCESS) {
-                ERROR_MSG("nvtiff error code %d in file '%s' in line %i\n", e,
-                          __FILE__, __LINE__);
-                return {};
-        }
+        CHECK_ERROR
         ret.width = image_info.image_width;
         ret.height = image_info.image_height;
         ret.comp_count = image_info.samples_per_pixel;
