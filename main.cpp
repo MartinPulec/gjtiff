@@ -888,6 +888,11 @@ int main(int argc, char **argv)
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
                 for (int i = 0; i < ifiles.count; ++i) {
+#ifdef DEBUG_DUMP
+                        char cmd[1024];
+                        snprintf(cmd, sizeof cmd, "cp %s /tmp", ifiles.ifiles[i].ifname);
+                        system(cmd);
+#endif
                         struct dec_image dec = decode(&state, ifiles.ifiles[i].ifname);
                         if (dec.data == nullptr) {
                                 ret = ERR_SOME_FILES_NOT_TRANSCODED;
