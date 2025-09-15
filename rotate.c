@@ -78,8 +78,9 @@ void get_lat_lon_min_max(const struct coordinate coords[4], double *lat_min,
  * normalize the coordinates to 0..1 and
  * @return asoect ratio
  */
-static double normalize_coords(const struct coordinate src_coords[4],
-                               struct coordinate coords[4], double bounds[4])
+static double normalize_coords(const struct coordinate src_coords[static 4],
+                               struct coordinate coords[static 4],
+                               double bounds[static 4])
 {
         double lat_min = 0;
         double lat_max = 0;
