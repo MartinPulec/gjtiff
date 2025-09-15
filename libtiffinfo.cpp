@@ -153,9 +153,7 @@ struct tiff_info get_tiff_info(TIFF *tif)
         const char *description = nullptr;
         if (TIFFGetField(tif, TIFFTAG_IMAGEDESCRIPTION, &description) == 1 &&
             strstr(description, " SLC ") != nullptr) {
-                WARN_MSG("SLC product detected, not setting GEO coordinates "
-                         "(to disable rotation).\n");
-                return ret;
+                ret.common.is_slc = true;
         }
 
         double *tiepoints = nullptr;

@@ -145,13 +145,35 @@ static struct owned_image *take_ownership(const struct dec_image *in)
 
 struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
 {
-        if (s == NULL) {
-                return take_ownership(in);
-        }
         if (!in->coords_set) {
                 WARN_MSG("Coordinates not set, not normalizing image...\n");
                 return take_ownership(in);
         }
+
+        struct owned_image *ret = NULL;
+
+        struct coordinate coords[4] = {};
+        double bounds[4] = {};
+        const double dst_aspect = normalize_coords(in->coords, coords, bounds);
+        if (dst_aspect == -1) {
+                DEBUG_MSG("Near North/South pole - not rotating\n");
+                ret = take_ownership(in);
+        } else if (s == NULL) { //  no state - rotation disabled
+                ret = take_ownership(in);
+        } else if (in->is_slc) {
+                WARN_MSG("SLC product detected, not rotating...\n");
+                ret = take_ownership(in);
+        }
+        if (ret != NULL) {
+                snprintf(ret->img.authority, sizeof ret->img.authority, "%s",
+                         "EPSG:4326");
+                // set the bounds
+                for (unsigned i = 0; i < ARR_SIZE(bounds); ++i) {
+                        ret->img.bounds[i] = bounds[i];
+                }
+                return ret;
+        }
+        assert(dst_aspect > 0);
 
         bool is_utm = false;
         if (strncmp(in->authority, "EPSG:", strlen("EPSG:")) == 0) {
@@ -186,14 +208,6 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
             {0.0, in->height}        // Bottom-left
         };
 
-        struct coordinate coords[4];
-        double bounds[4];
-        const double dst_aspect = normalize_coords(in->coords, coords, bounds);
-        if (dst_aspect == -1) {
-                DEBUG_MSG("Near North/South pole - not rotating\n");
-                return take_ownership(in);
-        }
-        assert(dst_aspect > 0);
 
         NppiRect oSrcROI = {0, 0, in->width, in->height};
         NppiSize oSrcSize = {in->width, in->height};
@@ -210,7 +224,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
 
         dst_desc.alpha = output_format == OUTF_WEBP ? (unsigned char *)!NULL
                                                     : NULL;
-        struct owned_image *ret = new_cuda_owned_image(&dst_desc);
+        ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:4326");
         for (unsigned i = 0; i < ARR_SIZE(bounds); ++i) {
                 ret->img.bounds[i] = bounds[i];

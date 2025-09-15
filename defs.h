@@ -52,6 +52,7 @@ struct dec_image {
         double bounds[4]; // order - enum bound_indices
 
         int e3857_sug_w, e3857_sug_h; // ESPG:3857 suggested dimensions
+        bool is_slc;
 };
 
 struct owned_image {
@@ -60,7 +61,8 @@ struct owned_image {
 };
 
 #define DEC_IMG_ERR(rc)                                                        \
-        {rc, 0, 0, 0, NULL, NULL, {{0.0, 0.0}}, false, "", {0, 0, 0, 0}, 0, 0}
+        {rc,           0, 0, 0,    NULL, NULL, {{0.0, 0.0}}, false, "",        \
+         {0, 0, 0, 0}, 0, 0, false}
 
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \
