@@ -137,10 +137,8 @@ state_gjtiff::state_gjtiff(struct options opts)
         }
         downscaler = downscaler_init(stream);
         assert(downscaler != nullptr);
-        if (!opts.norotate) {
-                rotate = rotate_init(stream);
-                assert(rotate != nullptr);
-        }
+        rotate = rotate_init(stream, opts.norotate);
+        assert(rotate != nullptr);
 }
 
 state_gjtiff::~state_gjtiff()

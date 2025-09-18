@@ -20,15 +20,17 @@
 #include "utils.h"
 
 struct rotate_state {
+        bool disabled;
         cudaStream_t stream;
         NppStreamContext nppStreamCtx;
         struct rotate_utm_state *rotate_utm;
 };
 
-struct rotate_state *rotate_init(cudaStream_t stream)
+struct rotate_state *rotate_init(cudaStream_t stream, bool disabled)
 {
         struct rotate_state *s = calloc(1, sizeof *s);
         assert(s != NULL);
+        s->disabled = disabled;
         s->stream = stream;
 
 #ifdef NPP_NEW_API
@@ -155,6 +157,7 @@ static bool is_utm(const char *authority) {
 
 struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
 {
+        assert(s != nullptr);
         if (!in->coords_set) {
                 WARN_MSG("Coordinates not set, not normalizing image...\n");
                 return take_ownership(in);
@@ -168,7 +171,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         if (dst_aspect == -1) {
                 DEBUG_MSG("Near North/South pole - not rotating\n");
                 ret = take_ownership(in);
-        } else if (s == NULL) { //  no state - rotation disabled
+        } else if (s->disabled) { // rotation disabled
                 ret = take_ownership(in);
         } else if (in->is_slc) {
                 WARN_MSG("SLC product detected, not rotating...\n");

@@ -98,5 +98,9 @@ struct owned_image {
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
+#if !defined __cplusplus && __STDC_VERSION__ <= 202311L
+#define nullptr NULL
+#endif
+
 #endif // ! defined DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
 
