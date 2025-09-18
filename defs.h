@@ -35,6 +35,15 @@ struct coordinate {
 enum coord_indices { ULEFT, URIGHT, BRIGHT, BLEFT, };
 enum bound_indices { XLEFT, YTOP, XRIGHT, YBOTTOM, };
 
+enum epsg {
+        // North
+        EPSG_UTM_1N = 32601,
+        EPSG_UTM_60N = 32660,
+        // South
+        EPSG_UTM_1S = 32701,
+        EPSG_UTM_60S = 32760,
+};
+
 struct dec_image {
         enum rc rc; ///< defined only if data=nullptr
         int width;

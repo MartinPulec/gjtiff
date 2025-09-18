@@ -144,6 +144,15 @@ static struct owned_image *take_ownership(const struct dec_image *in)
         return ret;
 }
 
+static bool is_utm(const char *authority) {
+        if (strncmp(authority, "EPSG:", strlen("EPSG:")) != 0) {
+                return false;
+        }
+        const int epsg_num = atoi(strchr(authority, ':') + 1);
+        return (epsg_num >= EPSG_UTM_1N && epsg_num <= EPSG_UTM_60N) ||
+               (epsg_num >= EPSG_UTM_1S && epsg_num <= EPSG_UTM_60S);
+}
+
 struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
 {
         if (!in->coords_set) {
@@ -176,17 +185,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         }
         assert(dst_aspect > 0);
 
-        bool is_utm = false;
-        if (strncmp(in->authority, "EPSG:", strlen("EPSG:")) == 0) {
-                const int epsg_num = atoi(strchr(in->authority, ':') + 1);
-                if ((epsg_num >= 32601 && epsg_num <= 32660)    // North 1-60
-                    || (epsg_num >= 32701 && epsg_num <= 32760) // South 1-60
-                ) {
-                        is_utm = true;
-                }
-        }
-
-        if (is_utm) {
+        if (is_utm(in->authority)) {
                 struct owned_image *ret = rotate_utm(s->rotate_utm, in);
                 if (ret != NULL) {
                         return ret;
