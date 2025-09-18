@@ -176,9 +176,10 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
         CHECK_NVTIFF(nvtiffStreamGetTagValue(s->tiff_stream, image_id,
                                              NVTIFF_TAG_MODEL_TIE_POINT,
                                              s->tiff_info_buf, count));
-        double *vals = (double *)s->tiff_info_buf;
+        image->tie_points = (double *)s->tiff_info_buf;
+        image->tie_point_count = count;
 
-        if (tiff_get_corners(vals, count, image->width, image->height,
+        if (tiff_get_corners(image->tie_points, count, image->width, image->height,
                              image->coords)) {
                 image->coords_set = true;
         }
@@ -269,7 +270,8 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
 #endif
         if (e == NVTIFF_STATUS_NVCOMP_NOT_FOUND) {
                 ERROR_MSG("nvCOMP needed for DEFLATE not found in path...\n");
-                return DEC_IMG_ERR(ERR_NVCOMP_NOT_FOUND);
+                ret.rc = ERR_NVCOMP_NOT_FOUND;
+                return ret;
         }
         CHECK_ERROR
         ret.width = image_info.image_width;

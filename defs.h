@@ -53,16 +53,15 @@ struct dec_image {
 
         int e3857_sug_w, e3857_sug_h; // ESPG:3857 suggested dimensions
         bool is_slc;
+
+        const double *tie_points;
+        size_t tie_point_count;
 };
 
 struct owned_image {
         struct dec_image img;
         void (*free)(struct owned_image *img);
 };
-
-#define DEC_IMG_ERR(rc)                                                        \
-        {rc,           0, 0, 0,    NULL, NULL, {{0.0, 0.0}}, false, "",        \
-         {0, 0, 0, 0}, 0, 0, false}
 
 #define CHECK_CUDA(call)                                                       \
         {                                                                      \

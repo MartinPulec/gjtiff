@@ -76,7 +76,7 @@ struct val_str_desc_map compressions[] = {
      "JPEGXL: WARNING not registered in Adobe-maintained registry"},
 };
 
-bool tiff_get_corners(double *points, size_t count, int img_width,
+bool tiff_get_corners(const double *points, size_t count, int img_width,
                       int img_height, struct coordinate coords[4])
 {
         unsigned points_set = 0;
@@ -159,6 +159,8 @@ struct tiff_info get_tiff_info(TIFF *tif)
         double *tiepoints = nullptr;
         uint32_t count = 0;
         if (TIFFGetField(tif, TIFFTAG_MODELTIEPOINTTAG, &count, &tiepoints) == 1) {
+                ret.common.tie_point_count = count;
+                ret.common.tie_points = tiepoints;
                 if (tiff_get_corners(tiepoints, count, ret.common.width,
                                      ret.common.height, ret.common.coords)) {
                         ret.common.coords_set = true;
