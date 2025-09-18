@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cuda_runtime.h>
+#include <gdal.h>         // for GDALAllRegister
 #include <libgpujpeg/gpujpeg_common.h>
 #include <libgpujpeg/gpujpeg_encoder.h>
 #include <libgpujpeg/gpujpeg_type.h>
@@ -799,6 +800,7 @@ static void init_term_colors() {
 int main(int argc, char **argv)
 {
         init_term_colors();
+        GDALAllRegister();
 
         char ofdir[PATH_MAX] = "./";
         struct options global_opts = OPTIONS_INIT;

@@ -23,9 +23,6 @@ static bool transform_and_print(double x, double y,
 
 void set_coords_from_gdal(const char *fname, struct dec_image *image)
 {
-        static pthread_once_t gdal_init = PTHREAD_ONCE_INIT;
-        pthread_once(&gdal_init, GDALAllRegister);
-
         GDALDatasetH dataset = GDALOpen(fname, GA_ReadOnly);
         if (dataset == NULL) {
                 WARN_MSG("[gdal] Failed to open file: %s\n", fname);
