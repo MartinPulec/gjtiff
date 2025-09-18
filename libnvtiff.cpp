@@ -40,8 +40,9 @@
 #include <cstdio>          // for fprintf, stderr, size_t
 
 #include "defs.h"          // for dec_image, CHECK_CUDA, rc
+#include "gdal_coords.h"   // for set_suggested_size_from_gdal
 #include "kernels.h"     // for convert_16_8_normalize_cuda
-#include "libtiffinfo.hpp" // for set_coords_from_geotiff
+#include "libtiffinfo.hpp" // for tiff_get_corners
 #include "utils.h"         // for ERROR_MSG
 
 #define DIV_UP(a, b) (((a) + ((b) - 1)) / (b))
@@ -276,6 +277,7 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
         ret.comp_count = image_info.samples_per_pixel;
         ret.data = s->decoded;
         set_coords_from_geotiff(s, image_id, &ret);
+        set_suggested_size_from_gdal(fname, &ret);
         if (image_info.bits_per_sample[0] == 8) {
                 return ret;
         }

@@ -9,6 +9,7 @@
 #include <tiffio.h>
 
 #include "defs.h"
+#include "gdal_coords.h"
 #include "libtiffinfo.hpp"
 #include "kernels.h"
 #include "utils.h"
@@ -31,7 +32,7 @@ struct libtiff_state {
 
         struct dec_image decode(const char *fname);
 
-        struct dec_image decode_fallback(TIFF *tif);
+        struct dec_image decode_fallback(TIFF *tif, struct tiff_info *tiffinfo);
         struct dec_image decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo);
         struct dec_image decode_tiled(TIFF *tif, struct tiff_info *tiffinfo);
 };
@@ -50,10 +51,10 @@ libtiff_state::~libtiff_state()
         CHECK_CUDA(cudaFree(d_converted));
 }
 
-struct dec_image libtiff_state::decode_fallback(TIFF *tif)
+struct dec_image libtiff_state::decode_fallback(TIFF *tif,
+                                                struct tiff_info *tiffinfo)
 {
-        struct tiff_info tiffinfo = get_tiff_info(tif);
-        struct dec_image ret = tiffinfo.common;
+        struct dec_image ret = tiffinfo->common;
         const size_t read_size = sizeof(uint32_t) * ret.width *
                                  ret.height;
         if (read_size > decoded_allocated) {
@@ -252,8 +253,9 @@ struct dec_image libtiff_state::decode(const char *fname)
 
         if (ret.data == nullptr) {
                 WARN_MSG("using fallback decode for %s!\n", fname);
-                ret = decode_fallback(tif);
+                ret = decode_fallback(tif, &tiffinfo);
         }
+        set_suggested_size_from_gdal(fname, &ret);
         TIFFClose(tif);
 
         return ret;

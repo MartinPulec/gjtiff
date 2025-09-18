@@ -1,7 +1,6 @@
 #include <gdal.h>
 #include <gdal_alg.h>    // for GDALCreateGenImgProjTransformer
 #include <ogr_srs_api.h>
-#include <pthread.h>
 #include <stdlib.h>
 
 #include "defs.h"
@@ -19,6 +18,42 @@ static bool transform_and_print(double x, double y,
         coord->longitude = y;
         INFO_MSG("\t%-11s: %f, %f\n", label, coord->latitude, coord->longitude);
         return true;
+}
+
+static void set_suggested_size_from_gdal_int(GDALDatasetH dataset,
+                                         struct dec_image *image)
+{
+        OGRSpatialReferenceH dst_srs = OSRNewSpatialReference(NULL);
+
+        OSRImportFromEPSG(dst_srs, 3857);
+        char *dst_wkt = NULL;
+        OSRExportToWkt(dst_srs, &dst_wkt);
+        void *hTransform = GDALCreateGenImgProjTransformer(
+            dataset, NULL, NULL, dst_wkt, TRUE, 0.0, 1);
+        int nDstPixels = 0; int nDstLines= 0;
+        double geoTransform[6]; // unused
+        CPLErr eErr = GDALSuggestedWarpOutput(dataset, GDALGenImgProjTransform,
+                                              hTransform, geoTransform,
+                                              &nDstPixels, &nDstLines);
+        if (eErr != CE_None) {
+                VERBOSE_MSG("GDALSuggestedWarpOutput() failed\n");
+        } else {
+                VERBOSE_MSG("\tRaster Size = %d x %d pixels\n", nDstPixels, nDstLines);
+                image->e3857_sug_w = nDstPixels;
+                image->e3857_sug_h = nDstLines;
+        }
+        OSRDestroySpatialReference(dst_srs);
+}
+
+void set_suggested_size_from_gdal(const char *fname, struct dec_image *image)
+{
+        GDALDatasetH dataset = GDALOpen(fname, GA_ReadOnly);
+        if (dataset == NULL) {
+                WARN_MSG("[gdal] Failed to open file: %s\n", fname);
+                return;
+        }
+        set_suggested_size_from_gdal_int(dataset, image);
+        GDALClose(dataset);
 }
 
 void set_coords_from_gdal(const char *fname, struct dec_image *image)
@@ -94,22 +129,7 @@ void set_coords_from_gdal(const char *fname, struct dec_image *image)
         INFO_MSG("\t%s (%s): %.2f %.2f %.2f %.2f\n", image->authority, OSRGetName(src_srs), image->bounds[0],
                  image->bounds[1], image->bounds[2], image->bounds[3]);
 
-        OSRImportFromEPSG(dst_srs, 3857);
-        char *dst_wkt = NULL;
-        OSRExportToWkt(dst_srs, &dst_wkt);
-        void *hTransform = GDALCreateGenImgProjTransformer(
-            dataset, NULL, NULL, dst_wkt, TRUE, 0.0, 1);
-        int nDstPixels = 0; int nDstLines= 0;
-        CPLErr eErr = GDALSuggestedWarpOutput(dataset, GDALGenImgProjTransform,
-                                              hTransform, geoTransform,
-                                              &nDstPixels, &nDstLines);
-        if (eErr != CE_None) {
-                VERBOSE_MSG("GDALSuggestedWarpOutput() failed\n");
-        } else {
-                VERBOSE_MSG("\tRaster Size = %d x %d pixels\n", nDstPixels, nDstLines);
-                image->e3857_sug_w = nDstPixels;
-                image->e3857_sug_h = nDstLines;
-        }
+        set_suggested_size_from_gdal_int(dataset, image);
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);

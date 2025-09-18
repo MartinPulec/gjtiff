@@ -7,6 +7,7 @@ extern "C" {
 
 struct dec_image;
 void set_coords_from_gdal(const char *fname, struct dec_image *image);
+void set_suggested_size_from_gdal(const char *fname, struct dec_image *image);
 
 #ifdef __cplusplus
 }
