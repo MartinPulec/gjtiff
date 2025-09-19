@@ -15,6 +15,13 @@ struct rotate_utm_state *rotate_utm_init(cudaStream_t stream);
 struct owned_image *rotate_utm(struct rotate_utm_state *state, const struct dec_image *in);
 void rotate_utm_destroy(struct rotate_utm_state *s);
 
+// for rotate_tie_points
+typedef void *OGRCoordinateTransformationH;
+/// transforms WGS84 to Web Mercator scaled 0-1 from west to east/north to south
+/// x is latitude and y longitude (!) for WGS84
+bool transform_to_float(double *x, double *y,
+                        OGRCoordinateTransformationH transform);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

@@ -179,8 +179,9 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
         image->tie_points = (double *)s->tiff_info_buf;
         image->tie_point_count = count;
 
-        if (tiff_get_corners(image->tie_points, count, image->width, image->height,
-                             image->coords)) {
+        if (tiff_get_corners_bounds(image->tie_points, count, image->width,
+                                    image->height, image->coords,
+                                    image->bounds)) {
                 image->coords_set = true;
         }
 }

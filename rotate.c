@@ -174,7 +174,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         if (is_utm(in->authority)) {
                 ret = rotate_utm(s->rotate_utm, in);
         } else if (in->tie_point_count > 0) {
-                // ret = rotate_tie_points(s->rotate_tp, in);
+                ret = rotate_tie_points(s->rotate_tp, in);
         }
         if (ret != NULL) {
                 return ret;

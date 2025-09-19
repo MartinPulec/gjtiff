@@ -129,14 +129,13 @@ kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
         }
 }
 
-static bool transform_to_float(double *x, double *y,
-                              OGRCoordinateTransformationH transform)
+bool transform_to_float(double *x, double *y,
+                        OGRCoordinateTransformationH transform)
 {
-
-        constexpr double M = 20037508.342789244;
+        constexpr double M = EARTH_PERIMETER;
         if (OCTTransform(transform, 1, x, y, NULL)) {
                 *x = (*x + M) / (2 * M);
-                // why 1- ?
+                // flip from bottom-up
                 *y = 1 - ((*y + M) / (2 * M));
                 return true;
         }
@@ -144,6 +143,7 @@ static bool transform_to_float(double *x, double *y,
         return false;
 }
 
+/// @todo needed? isn't sufficient to compute just left/top and right/bottom corner
 static bool adjust_dst_bounds(int x_loc, int y_loc,
                               const struct bounds *src_bounds,
                               struct bounds *dst_bounds,
@@ -186,7 +186,7 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         OGRSpatialReferenceH src_srs = OSRNewSpatialReference(NULL);
         OGRSpatialReferenceH dst_srs = OSRNewSpatialReference(NULL);
         OSRImportFromEPSG(src_srs, atoi(strchr(in->authority, ':') + 1));
-        OSRImportFromEPSG(dst_srs, 3857);
+        OSRImportFromEPSG(dst_srs, EPSG_PSEUDO_MERC);
         OGRCoordinateTransformationH transform = OCTNewCoordinateTransformation(
             src_srs, dst_srs);
         if (transform == nullptr) {

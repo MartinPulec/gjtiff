@@ -6,7 +6,6 @@ COMMON = $(shell pkg-config --cflags gdal) -g -Wall -Wextra -fopenmp \
 	-DGIT_REV=$(GIT_REV)
 CFLAGS += $(COMMON)
 CXXFLAGS += $(COMMON)
-CUDAFLAGS ?= 
 INSTALL = install
 LDFLAGS += -fopenmp -L$(NVCC_DIR)/../lib64
 LIBS += $(shell pkg-config --libs gdal)
@@ -31,7 +30,7 @@ CUDAARCHS != for n in $$(nvcc --list-gpu-arch | \
 	do echo "$$n" | sed -e 's/.*_\([0-9]*\).*/\1/' \
 	-e 's/.*/-gencode arch=compute_&,code=sm_&/'; done | tr '\n' ' '
 
-CUDAFLAGS := $(CUDAARCHS)
+CUDAFLAGS ?= $(CUDAARCHS)
 
 all: $(BUILD_DIR)/gjtiff
 

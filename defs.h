@@ -35,7 +35,12 @@ struct coordinate {
 enum coord_indices { ULEFT, URIGHT, BRIGHT, BLEFT, };
 enum bound_indices { XLEFT, YTOP, XRIGHT, YBOTTOM, };
 
+#define EARTH_PERIMETER 20037508.342789244
+
 enum epsg {
+        EPSG_WEB_MERCATOR = 3857, ///< coords normalized to 0..1 and vertical
+                                  ///< axis top-bottom (0.0 == ~85 N)
+        EPSG_WGS_84 = 4326,
         // North
         EPSG_UTM_1N = 32601,
         EPSG_UTM_60N = 32660,
@@ -64,7 +69,8 @@ struct dec_image {
         bool is_slc;
 
         const double *tie_points;
-        size_t tie_point_count;
+        size_t tie_point_count; ///< count of doubles, must be divisible by 6
+                                ///< (6x 6-tuple members)
 };
 
 struct owned_image {

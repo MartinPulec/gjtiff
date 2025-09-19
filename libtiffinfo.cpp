@@ -4,6 +4,7 @@
 #include <tiffio.h>
 
 #include "defs.h"
+#include "rotate.h" // for get_lat_lon_min_max
 
 struct val_str_desc_map {
         int val;
@@ -76,8 +77,9 @@ struct val_str_desc_map compressions[] = {
      "JPEGXL: WARNING not registered in Adobe-maintained registry"},
 };
 
-bool tiff_get_corners(const double *points, size_t count, int img_width,
-                      int img_height, struct coordinate coords[4])
+bool tiff_get_corners_bounds(const double *points, size_t count, int img_width,
+                             int img_height, struct coordinate coords[4],
+                             double bounds[4])
 {
         unsigned points_set = 0;
         for (unsigned i = 0; i < count; i += 6) {
@@ -117,6 +119,18 @@ bool tiff_get_corners(const double *points, size_t count, int img_width,
                                coords[i].longitude);
                 }
         }
+
+        // set bounds
+        double lat_min = 0;
+        double lat_max = 0;
+        double lon_min = 0;
+        double lon_max = 0;
+        get_lat_lon_min_max(coords, &lat_min, &lat_max, &lon_min, &lon_max);
+        bounds[YTOP] = lat_max;
+        bounds[YBOTTOM] = lat_min;
+        bounds[XLEFT] = lon_min;
+        bounds[XRIGHT] = lon_max;
+
         return true;
 }
 
@@ -161,8 +175,9 @@ struct tiff_info get_tiff_info(TIFF *tif)
         if (TIFFGetField(tif, TIFFTAG_MODELTIEPOINTTAG, &count, &tiepoints) == 1) {
                 ret.common.tie_point_count = count;
                 ret.common.tie_points = tiepoints;
-                if (tiff_get_corners(tiepoints, count, ret.common.width,
-                                     ret.common.height, ret.common.coords)) {
+                if (tiff_get_corners_bounds(
+                        tiepoints, count, ret.common.width, ret.common.height,
+                        ret.common.coords, ret.common.bounds)) {
                         ret.common.coords_set = true;
                 }
         };
