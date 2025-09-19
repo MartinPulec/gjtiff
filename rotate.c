@@ -16,6 +16,7 @@
 #include "kernels.h"
 #include "nppdefs.h"
 #include "nppi_geometry_transforms.h"
+#include "rotate_tie_points.h"
 #include "rotate_utm.h"
 #include "utils.h"
 
@@ -24,6 +25,7 @@ struct rotate_state {
         cudaStream_t stream;
         NppStreamContext nppStreamCtx;
         struct rotate_utm_state *rotate_utm;
+        struct rotate_tie_points_state *rotate_tp;
 };
 
 struct rotate_state *rotate_init(cudaStream_t stream, bool disabled)
@@ -37,6 +39,8 @@ struct rotate_state *rotate_init(cudaStream_t stream, bool disabled)
         init_npp_context(&s->nppStreamCtx, stream);
 #endif
 
+        s->rotate_tp = rotate_tie_points_init(stream);
+        assert(s->rotate_tp != NULL);
         s->rotate_utm = rotate_utm_init(stream);
         assert(s->rotate_utm != NULL);
 
@@ -48,6 +52,7 @@ void rotate_destroy(struct rotate_state *s)
         if (s == NULL) {
                 return;
         }
+        rotate_tie_points_destroy(s->rotate_tp);
         rotate_utm_destroy(s->rotate_utm);
         free(s);
 }
@@ -163,21 +168,27 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 return take_ownership(in);
         }
 
+        struct owned_image *ret = NULL;
+
+        // delegates
         if (is_utm(in->authority)) {
-                struct owned_image *ret = rotate_utm(s->rotate_utm, in);
-                if (ret != NULL) {
-                        return ret;
-                }
-                WARN_MSG("rotate_utm returned nullptr!\n");
-        } else if (strlen(in->authority) > 0) {
-                WARN_MSG("Unsupported authority: %s!\n", in->authority);
+                ret = rotate_utm(s->rotate_utm, in);
+        } else if (in->tie_point_count > 0) {
+                // ret = rotate_tie_points(s->rotate_tp, in);
+        }
+        if (ret != NULL) {
+                return ret;
         }
 
-        struct owned_image *ret = NULL;
+        // fallback follows
+        if (strlen(in->authority) > 0) { // not UTM but defined...
+                WARN_MSG("Unsupported authority: %s!\n", in->authority);
+        }
 
         struct coordinate coords[4] = {};
         double bounds[4] = {};
         const double dst_aspect = normalize_coords(in->coords, coords, bounds);
+        // rotation won't be performed
         if (dst_aspect == -1) {
                 DEBUG_MSG("Near North/South pole - not rotating\n");
                 ret = take_ownership(in);
@@ -187,10 +198,10 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 WARN_MSG("SLC product detected, not rotating...\n");
                 ret = take_ownership(in);
         }
+        // will not rotate but set at least the bounds (+authority)
         if (ret != NULL) {
                 snprintf(ret->img.authority, sizeof ret->img.authority, "%s",
                          "EPSG:4326");
-                // set the bounds
                 for (unsigned i = 0; i < ARR_SIZE(bounds); ++i) {
                         ret->img.bounds[i] = bounds[i];
                 }
