@@ -38,6 +38,8 @@ extern long long mem_limit; // defined in main.c
 struct rotate_utm_state {
         cudaStream_t stream;
         NppStreamContext nppStreamCtx;
+        OGRSpatialReferenceH src_srs;
+        OGRSpatialReferenceH dst_srs;
 };
 
 struct rotate_utm_state *rotate_utm_init(cudaStream_t stream)
@@ -49,6 +51,10 @@ struct rotate_utm_state *rotate_utm_init(cudaStream_t stream)
 
         init_npp_context(&s->nppStreamCtx, stream);
 
+        s->src_srs = OSRNewSpatialReference(nullptr);
+        s->dst_srs = OSRNewSpatialReference(nullptr);
+        OSRImportFromEPSG(s->dst_srs, EPSG_WEB_MERCATOR);
+
         return s;
 }
 
@@ -57,6 +63,8 @@ void rotate_utm_destroy(struct rotate_utm_state *s)
         if (s == NULL) {
                 return;
         }
+        OSRDestroySpatialReference(s->src_srs);
+        OSRDestroySpatialReference(s->dst_srs);
         free(s);
 }
 
@@ -154,10 +162,12 @@ static bool adjust_dst_bounds(int x_loc, int y_loc,
         if (!transform_to_float(&x, &y, transform)) {
                 return false;
         }
-        dst_bounds->bound[XLEFT] = min(dst_bounds->bound[XLEFT], x);
-        dst_bounds->bound[XRIGHT] = max(dst_bounds->bound[XRIGHT], x);
-        dst_bounds->bound[YTOP] = min(dst_bounds->bound[YTOP], y);
-        dst_bounds->bound[YBOTTOM] = max(dst_bounds->bound[YBOTTOM], y);
+        auto xf = (float)x;
+        auto yf = (float)y;
+        dst_bounds->bound[XLEFT] = min(dst_bounds->bound[XLEFT], xf);
+        dst_bounds->bound[XRIGHT] = max(dst_bounds->bound[XRIGHT], xf);
+        dst_bounds->bound[YTOP] = min(dst_bounds->bound[YTOP], yf);
+        dst_bounds->bound[YBOTTOM] = max(dst_bounds->bound[YBOTTOM], yf);
         return true;
 }
 
@@ -183,12 +193,9 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         dst_bounds.bound[YTOP] = 1;
         dst_bounds.bound[XRIGHT] = 0;
         dst_bounds.bound[YBOTTOM] = 0;
-        OGRSpatialReferenceH src_srs = OSRNewSpatialReference(NULL);
-        OGRSpatialReferenceH dst_srs = OSRNewSpatialReference(NULL);
-        OSRImportFromEPSG(src_srs, atoi(strchr(in->authority, ':') + 1));
-        OSRImportFromEPSG(dst_srs, EPSG_PSEUDO_MERC);
+        OSRImportFromEPSG(s->src_srs, atoi(strchr(in->authority, ':') + 1));
         OGRCoordinateTransformationH transform = OCTNewCoordinateTransformation(
-            src_srs, dst_srs);
+            s->src_srs, s->dst_srs);
         if (transform == nullptr) {
                 ERROR_MSG("Cannot create transform!\n");
                 return nullptr;
@@ -253,8 +260,6 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);
-        OSRDestroySpatialReference(src_srs);
-        OSRDestroySpatialReference(dst_srs);
 
         GPU_TIMER_STOP(utm_to_epsg_3857);
 
