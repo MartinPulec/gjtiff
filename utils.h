@@ -139,6 +139,9 @@ void gcs_to_webm(double latitude, double longitude, double *y, double *x);
 
 bool gj_adjust_size(int *width, int *height, int comp_count);
 
+const struct tie_point *tuple6_to_tie_points(unsigned count,
+                                             const double *tie_points);
+
 #ifdef __cplusplus
 }
 #endif // _cplusplus

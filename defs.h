@@ -49,6 +49,13 @@ enum epsg {
         EPSG_UTM_60S = 32760,
 };
 
+struct tie_point {
+        double lat;
+        double lon;
+        unsigned short x;
+        unsigned short y;
+};
+
 struct dec_image {
         enum rc rc; ///< defined only if data=nullptr
         int width;
@@ -68,9 +75,8 @@ struct dec_image {
         int e3857_sug_w, e3857_sug_h; // ESPG:3857 suggested dimensions
         bool is_slc;
 
-        const double *tie_points;
-        size_t tie_point_count; ///< count of doubles, must be divisible by 6
-                                ///< (6x 6-tuple members)
+        const struct tie_point *tie_points;
+        size_t tie_point_count;
 };
 
 struct owned_image {

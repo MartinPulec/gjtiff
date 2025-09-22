@@ -362,3 +362,25 @@ bool gj_adjust_size(int *width, int *height, int comp_count)
                  *height);
         return true;
 }
+
+const struct tie_point *tuple6_to_tie_points(unsigned count,
+                                             const double *tie_points)
+{
+        /// @todo will leak on exit but doesn't matter
+        static _Thread_local struct tie_point *out;
+
+        if (out != nullptr) {
+                free(out);
+        }
+        out = malloc(sizeof *out * count);
+
+        for (size_t i = 0; i < count; i++) {
+                out[i].x = (unsigned short)tie_points[(i * 6)];
+                out[i].y = (unsigned short)tie_points[(i * 6) + 1];
+
+                out[i].lat = tie_points[(i * 6) + 3];
+                out[i].lon = tie_points[(i * 6) + 4];
+
+        }
+        return out;
+}

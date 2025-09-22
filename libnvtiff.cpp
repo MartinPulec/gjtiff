@@ -176,11 +176,12 @@ static void set_coords_from_geotiff(struct nvtiff_state *s, uint32_t image_id,
         CHECK_NVTIFF(nvtiffStreamGetTagValue(s->tiff_stream, image_id,
                                              NVTIFF_TAG_MODEL_TIE_POINT,
                                              s->tiff_info_buf, count));
-        image->tie_points = (double *)s->tiff_info_buf;
-        image->tie_point_count = count;
+        image->tie_point_count = count / 6;
+        image->tie_points = tuple6_to_tie_points(image->tie_point_count,
+                                                 (double *)s->tiff_info_buf);
 
-        if (tiff_get_corners_bounds(image->tie_points, count, image->width,
-                                    image->height, image->coords,
+        if (tiff_get_corners_bounds(image->tie_points, image->tie_point_count,
+                                    image->width, image->height, image->coords,
                                     image->bounds)) {
                 image->coords_set = true;
         }

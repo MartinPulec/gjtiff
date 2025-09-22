@@ -32,8 +32,9 @@ struct tiff_info {
 
 struct tiff_info get_tiff_info(TIFF *tif);
 void print_tiff_info(struct tiff_info info);
-bool tiff_get_corners_bounds(const double *points, size_t count, int img_width,
-                             int img_height, struct coordinate coords[4],
-                             double bounds[4]);
+struct tie_point;
+bool tiff_get_corners_bounds(const struct tie_point *points, size_t count,
+                             int img_width, int img_height,
+                             struct coordinate coords[4], double bounds[4]);
 
 #endif // !defined LIBTIFF_HPP_2FA42E68_0054_4FAA_81AC_473D033EAADB
