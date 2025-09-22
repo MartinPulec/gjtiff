@@ -13,12 +13,14 @@
 struct rotate_tie_points_state {
         cudaStream_t stream;
         OGRCoordinateTransformationH transform;
+
+        struct tie_point *d_tie_points;
+        unsigned tie_point_allocated_count;
 };
 
 struct rotate_tie_points_state *rotate_tie_points_init(cudaStream_t stream)
 {
-        struct rotate_tie_points_state *s = (struct rotate_tie_points_state *)calloc(
-            1, sizeof *s);
+        auto *s = new rotate_tie_points_state{};
         assert(s != nullptr);
         s->stream = stream;
 
@@ -43,7 +45,8 @@ void rotate_tie_points_destroy(struct rotate_tie_points_state *s)
                 return;
         }
         OCTDestroyCoordinateTransformation(s->transform);
-        free(s);
+        CHECK_CUDA(cudaFree(s->d_tie_points));
+        delete s;
 }
 // template <int components, bool alpha>
 // static __global__ void
@@ -135,6 +138,21 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
         transform_to_float(&x, &y, s->transform);
         ret->img.bounds[XRIGHT] = x;
         ret->img.bounds[YBOTTOM] = y;
+
+        assert(in->tie_points != nullptr);
+
+        if (in->tie_point_count > s->tie_point_allocated_count) {
+                CHECK_CUDA(cudaFree(s->d_tie_points));
+                CHECK_CUDA(cudaMallocAsync(&s->d_tie_points,
+                                           s->tie_point_allocated_count *
+                                               sizeof *s->d_tie_points,
+                                           s->stream));
+                s->tie_point_allocated_count = in->tie_point_count;
+        }
+        CHECK_CUDA(cudaMemcpyAsync(s->d_tie_points, in->tie_points,
+                                   s->tie_point_allocated_count *
+                                       sizeof *s->d_tie_points,
+                                   cudaMemcpyDefault, s->stream));
 
         abort();
 
