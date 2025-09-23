@@ -201,13 +201,20 @@ static void print_tiff_info(nvtiffStream_t tiff_stream, uint32_t image_id)
         DEBUG_MSG("TIFF structure:\n");
         DEBUG_MSG("\ttype: %s\n",
                geometry.type == NVTIFF_IMAGE_STRIPED ? "stripped" : "tiled");
+        const char *strile_type = geometry.type == NVTIFF_IMAGE_STRIPED
+                                      ? "stripe"
+                                      : "tile";
         DEBUG_MSG("\tdepth: %" PRIu32 "\n", geometry.image_depth);
-        DEBUG_MSG("\tstrile width: %" PRIu32 "\n", geometry.strile_width);
-        DEBUG_MSG("\tstrile height: %" PRIu32 "\n", geometry.strile_height);
-        DEBUG_MSG("\tstrile depth: %" PRIu32 "\n", geometry.strile_depth);
-        DEBUG_MSG("\tnum striles per plane: %" PRIu32 "\n",
-               geometry.num_striles_per_plane);
-        DEBUG_MSG("\tnum striles: %" PRIu32 "\n", geometry.num_striles);
+        DEBUG_MSG("\t%s width: %" PRIu32 "\n", strile_type,
+                  geometry.strile_width);
+        DEBUG_MSG("\t%s height: %" PRIu32 "\n", strile_type,
+                  geometry.strile_height);
+        DEBUG_MSG("\t%s depth: %" PRIu32 "\n", strile_type,
+                  geometry.strile_depth);
+        DEBUG_MSG("\tnum %ss per plane: %" PRIu32 "\n", strile_type,
+                  geometry.num_striles_per_plane);
+        DEBUG_MSG("\tnum %ss: %" PRIu32 "\n", strile_type,
+                  geometry.num_striles);
 }
 #endif
 
