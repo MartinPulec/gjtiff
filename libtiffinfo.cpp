@@ -1,5 +1,6 @@
 #include "libtiffinfo.hpp"
 
+#include <cassert>
 #include <cstring>
 #include <tiffio.h>
 
@@ -77,15 +78,15 @@ struct val_str_desc_map compressions[] = {
      "JPEGXL: WARNING not registered in Adobe-maintained registry"},
 };
 
-bool tiff_get_corners_bounds(const struct tie_point *points, size_t count,
+bool tiff_get_corners_bounds(const struct tie_points points,
                              int img_width, int img_height,
                              struct coordinate coords[4], double bounds[4])
 {
         unsigned points_set = 0;
-        for (unsigned i = 0; i < count; ++i) {
-                double x = points[i].x;
-                double y = points[i].y;
-                printf("%f %f\n", x, y);
+        for (unsigned i = 0; i < points.count; ++i) {
+                double x = points.points[i].x;
+                double y = points.points[i].y;
+                // printf("%f %f\n", x, y);
 
                 if (x == 0 || x == img_width - 1) {
                         if (y == 0 || y == img_height - 1) {
@@ -97,8 +98,8 @@ bool tiff_get_corners_bounds(const struct tie_point *points, size_t count,
                                 }
 
                                 points_set |= 1 << idx;
-                                coords[idx].latitude = points[i].lat;
-                                coords[idx].longitude = points[i].lon;
+                                coords[idx].latitude = points.points[i].lat;
+                                coords[idx].longitude = points.points[i].lon;
 
                                 if (points_set == 0xF) { // all points set
                                         break;
@@ -175,13 +176,13 @@ struct tiff_info get_tiff_info(TIFF *tif)
         double *tiepoints = nullptr;
         uint32_t count = 0;
         if (TIFFGetField(tif, TIFFTAG_MODELTIEPOINTTAG, &count, &tiepoints) == 1) {
-                ret.common.tie_point_count = count / 6;
+                assert(count % 6 == 0);
                 ret.common.tie_points = tuple6_to_tie_points(
-                    ret.common.tie_point_count, tiepoints);
-                if (tiff_get_corners_bounds(
-                        ret.common.tie_points, ret.common.tie_point_count,
-                        ret.common.width, ret.common.height, ret.common.coords,
-                        ret.common.bounds)) {
+                    count / 6, tiepoints);
+                if (tiff_get_corners_bounds(ret.common.tie_points,
+                                            ret.common.width, ret.common.height,
+                                            ret.common.coords,
+                                            ret.common.bounds)) {
                         ret.common.coords_set = true;
                 }
         };

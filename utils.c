@@ -363,24 +363,33 @@ bool gj_adjust_size(int *width, int *height, int comp_count)
         return true;
 }
 
-const struct tie_point *tuple6_to_tie_points(unsigned count,
-                                             const double *tie_points)
+struct tie_points tuple6_to_tie_points(unsigned count, const double *tie_points)
 {
         /// @todo will leak on exit but doesn't matter
-        static _Thread_local struct tie_point *out;
+        static _Thread_local struct tie_point *points;
 
-        if (out != nullptr) {
-                free(out);
+        if (points != nullptr) {
+                free(points);
         }
-        out = malloc(sizeof *out * count);
+        points = malloc(sizeof *points * count);
+
+        unsigned grid_width = 0;
 
         for (size_t i = 0; i < count; i++) {
-                out[i].x = (unsigned short)tie_points[(i * 6)];
-                out[i].y = (unsigned short)tie_points[(i * 6) + 1];
+                points[i].x = (unsigned short)tie_points[(i * 6)];
+                points[i].y = (unsigned short)tie_points[(i * 6) + 1];
 
-                out[i].lat = tie_points[(i * 6) + 3];
-                out[i].lon = tie_points[(i * 6) + 4];
+                if (points[i].y == 0) {
+                        grid_width += 1;
+                }
+
+                points[i].lat = tie_points[(i * 6) + 4];
+                points[i].lon = tie_points[(i * 6) + 3];
 
         }
-        return out;
+        assert(count % grid_width == 0);
+        assert(grid_width > 0);
+
+        return (struct tie_points){
+            .points = points, .count = count, .grid_width = grid_width};
 }

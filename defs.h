@@ -50,10 +50,22 @@ enum epsg {
 };
 
 struct tie_point {
-        double lat;
-        double lon;
+        union {
+                float lat;
+                float webx;
+        };
+        union {
+                float lon;
+                float weby;
+        };
         unsigned short x;
         unsigned short y;
+};
+
+struct tie_points {
+        struct tie_point *points;
+        unsigned count;
+        unsigned grid_width; ///< number of tie points on line
 };
 
 struct dec_image {
@@ -75,8 +87,7 @@ struct dec_image {
         int e3857_sug_w, e3857_sug_h; // ESPG:3857 suggested dimensions
         bool is_slc;
 
-        const struct tie_point *tie_points;
-        size_t tie_point_count;
+        struct tie_points tie_points;
 };
 
 struct owned_image {

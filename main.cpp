@@ -843,6 +843,8 @@ int main(int argc, char **argv)
                         output_format = OUTF_RAW;
                         break;
                 case 's':
+                        ERROR_MSG("probably no longer working - will be likely upscaled later again (suggested size)!\n");
+                        abort();
                         global_opts.downscale_factor = (int)strtol(optarg,
                                                                    nullptr, 10);
                         break;
