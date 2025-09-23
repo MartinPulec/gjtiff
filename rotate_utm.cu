@@ -257,6 +257,7 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         kernel<<<grid, block, 0, s->stream>>>(
             d_proj, in->data, ret->img.data, ret->img.alpha, in->width,
             in->height, width, height, src_bounds, dst_bounds);
+        CHECK_CUDA(cudaGetLastError());
 
         // Cleanup
         OCTDestroyCoordinateTransformation(transform);

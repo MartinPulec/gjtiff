@@ -48,69 +48,77 @@ void rotate_tie_points_destroy(struct rotate_tie_points_state *s)
         CHECK_CUDA(cudaFree(s->d_tie_points));
         delete s;
 }
-// template <int components, bool alpha>
-// static __global__ void
-// kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
-//                            uint8_t *d_out, uint8_t *d_out_alpha, int in_width,
-//                            int in_height, int out_width, int out_height,
-//                            struct bounds src_bounds, struct bounds dst_bounds)
-// {
-//         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
-//         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
-//         if (out_x >= out_width || out_y >= out_height) {
-//                 return;
-//         }
+struct bounds {
+        float bound[4];
+};
 
-//         float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
-//         float this_y = dst_bounds.bound[YTOP];
-//         this_y += y_scale * ((out_y + .5f) / out_height);
+template <int components, bool alpha>
+static __global__ void
+kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
+                  int in_width, int in_height, int out_width, int out_height,
+                  struct bounds dst_bounds, size_t tie_point_count,
+                  struct tie_point *tie_points)
+{
+        int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
+        int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
-//         float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
-//         float this_x = dst_bounds.bound[XLEFT];
-//         this_x += x_scale * ((out_x + .5f) / out_width);
+        if (out_x >= out_width || out_y >= out_height) {
+                return;
+        }
 
-//         // transformace
-//         float pos_wgs84_lon = 360. * this_x - 180.; // lambda
-//         float t = (float) M_PI * (1. - 2. *  this_y);
-//         float fi_rad = 2 * atanf(powf(M_E, t)) - (M_PI / 2);
-//         float pos_wgs84_lat = fi_rad * 180. / M_PI;
+        float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
+        float this_y = dst_bounds.bound[YTOP];
+        this_y += y_scale * ((out_y + .5f) / out_height);
 
-//         cuproj::vec_2d<float> pos_wgs84{pos_wgs84_lat, pos_wgs84_lon};
-//         cuproj::vec_2d<float> pos_utm = d_proj.transform(pos_wgs84);
-//         pos_utm = d_proj.transform(pos_wgs84);
+        float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
+        float this_x = dst_bounds.bound[XLEFT];
+        this_x += x_scale * ((out_x + .5f) / out_width);
 
-//         float rel_pos_src_x = (pos_utm.x - src_bounds.bound[XLEFT]) /
-//                               (src_bounds.bound[XRIGHT] - src_bounds.bound[XLEFT]);
-//         float rel_pos_src_y = (pos_utm.y - src_bounds.bound[YTOP]) /
-//                               (src_bounds.bound[YBOTTOM] - src_bounds.bound[YTOP]);
+        // transformace
+        float pos_wgs84_lon = 360. * this_x - 180.; // lambda
+        float t = (float) M_PI * (1. - 2. *  this_y);
+        float fi_rad = 2 * atanf(powf(M_E, t)) - (M_PI / 2);
+        float pos_wgs84_lat = fi_rad * 180. / M_PI;
 
-//         if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
-//             rel_pos_src_y < 0 || rel_pos_src_y > 1) {
-//                 for (int i = 0; i < components; ++i) {
-//                         d_out[components * (out_x + out_y * out_width) + i] = 0;
-//                 }
-//                 if (alpha) {
-//                         d_out_alpha[out_x + (out_y * out_width)] = 0;
-//                 }
-//                 return;
-//         }
-//         if (alpha) {
-//                 d_out_alpha[out_x + (out_y * out_width)] = 255;
-//         }
-//         // if (out_y == 0) {
-//         //         printf("%f %f\n" , rel_pos_src_x, rel_pos_src_y);
-//         // }
+#if 0
+        cuproj::vec_2d<float> pos_wgs84{pos_wgs84_lat, pos_wgs84_lon};
+        cuproj::vec_2d<float> pos_utm = d_proj.transform(pos_wgs84);
+        pos_utm = d_proj.transform(pos_wgs84);
 
-//         float abs_pos_src_x = rel_pos_src_x * in_width;
-//         float abs_pos_src_y = rel_pos_src_y * in_height;
+        float rel_pos_src_x = (pos_utm.x - src_bounds.bound[XLEFT]) /
+                              (src_bounds.bound[XRIGHT] - src_bounds.bound[XLEFT]);
+        float rel_pos_src_y = (pos_utm.y - src_bounds.bound[YTOP]) /
+                              (src_bounds.bound[YBOTTOM] - src_bounds.bound[YTOP]);
 
-//         for (int i = 0; i < components; ++i) {
-//                 d_out[components * (out_x + out_y * out_width) + i] =
-//                     bilinearSample(d_in + i, in_width, components, in_height,
-//                                    abs_pos_src_x, abs_pos_src_y);
-//         }
-// }
+        if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
+            rel_pos_src_y < 0 || rel_pos_src_y > 1) {
+                for (int i = 0; i < components; ++i) {
+                        d_out[components * (out_x + out_y * out_width) + i] = 0;
+                }
+                if (alpha) {
+                        d_out_alpha[out_x + (out_y * out_width)] = 0;
+                }
+                return;
+        }
+        if (alpha) {
+                d_out_alpha[out_x + (out_y * out_width)] = 255;
+        }
+        // if (out_y == 0) {
+        //         printf("%f %f\n" , rel_pos_src_x, rel_pos_src_y);
+        // }
+
+        float abs_pos_src_x = rel_pos_src_x * in_width;
+        float abs_pos_src_y = rel_pos_src_y * in_height;
+
+        for (int i = 0; i < components; ++i) {
+                d_out[components * (out_x + out_y * out_width) + i] =
+                    bilinearSample(d_in + i, in_width, components, in_height,
+                                   abs_pos_src_x, abs_pos_src_y);
+        }
+#endif
+                d_out[components * (out_x + out_y * out_width) + 0] = 255;
+}
 
 struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const struct dec_image *in)
 {
@@ -118,6 +126,7 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
                 WARN_MSG("Suggested size set to 0, skipping rotate_tie_points...\n");
                 return nullptr;
         }
+        GPU_TIMER_START(rotate_geotff, LL_DEBUG, s->stream);
         struct dec_image dst_desc = *in;
         dst_desc.width = in->e3857_sug_w;
         dst_desc.height = in->e3857_sug_h;
@@ -142,42 +151,42 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
         assert(in->tie_points != nullptr);
 
         if (in->tie_point_count > s->tie_point_allocated_count) {
-                CHECK_CUDA(cudaFree(s->d_tie_points));
-                CHECK_CUDA(cudaMallocAsync(&s->d_tie_points,
-                                           s->tie_point_allocated_count *
+                CHECK_CUDA(cudaFreeAsync(s->d_tie_points, s->stream));
+                CHECK_CUDA(cudaMallocAsync((void **)&s->d_tie_points,
+                                           in->tie_point_count *
                                                sizeof *s->d_tie_points,
                                            s->stream));
                 s->tie_point_allocated_count = in->tie_point_count;
         }
+        CHECK_CUDA(cudaStreamSynchronize(s->stream));
         CHECK_CUDA(cudaMemcpyAsync(s->d_tie_points, in->tie_points,
-                                   s->tie_point_allocated_count *
+                                   in->tie_point_count *
                                        sizeof *s->d_tie_points,
                                    cudaMemcpyDefault, s->stream));
 
-        abort();
+        struct bounds dst_bounds{};
+        for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
+                dst_bounds.bound[i] = (float) ret->img.bounds[i];
+        }
+        dim3 block(16, 16);
+        int width = dst_desc.width;
+        int height = dst_desc.height;
+        dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
 
-        // dim3 block(16, 16);
-        // int width = dst_desc.width;
-        // int height = dst_desc.height;
-        // dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-        // decltype(kernel_utm_to_web_mercator<1, true>) *kernel = nullptr;
-        // if (output_format == OUTF_WEBP) {
-        //         if (in->comp_count == 1) {
-        //                 kernel = kernel_utm_to_web_mercator<1, true>;
-        //         } else {
-        //                 kernel = kernel_utm_to_web_mercator<3, true>;
-        //         }
-        // } else {
-        //         if (in->comp_count == 1) {
-        //                 kernel = kernel_utm_to_web_mercator<1, false>;
-        //         } else {
-        //                 kernel = kernel_utm_to_web_mercator<3, false>;
-        //         }
-        // }
-        // kernel<<<grid, block, 0, s->stream>>>(
-        //     d_proj, in->data, ret->img.data, ret->img.alpha, in->width,
-        //     in->height, width, height, src_bounds, dst_bounds);
+        auto *kernel_alpha = in->comp_count == 1 ? kernel_tie_points<1, true>
+                                                 : kernel_tie_points<3, true>;
+        auto *kernel_wo_alpha = in->comp_count == 1
+                                    ? kernel_tie_points<1, false>
+                                    : kernel_tie_points<3, false>;
+        auto *kernel = output_format == OUTF_WEBP ? kernel_alpha
+                                                  : kernel_wo_alpha;
 
+        kernel<<<grid, block, 0, s->stream>>>(
+            in->data, ret->img.data, ret->img.alpha, in->width, in->height,
+            width, height, dst_bounds, in->tie_point_count, s->d_tie_points);
+        CHECK_CUDA(cudaGetLastError());
+
+        GPU_TIMER_STOP(rotate_geotff);
 
         return ret;
 }
