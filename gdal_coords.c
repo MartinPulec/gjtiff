@@ -25,11 +25,11 @@ static void set_suggested_size_from_gdal_int(GDALDatasetH dataset,
 {
         OGRSpatialReferenceH dst_srs = OSRNewSpatialReference(NULL);
 
-        OSRImportFromEPSG(dst_srs, 3857);
+        OSRImportFromEPSG(dst_srs, EPSG_WEB_MERCATOR);
         char *dst_wkt = NULL;
         OSRExportToWkt(dst_srs, &dst_wkt);
         void *hTransform = GDALCreateGenImgProjTransformer(
-            dataset, NULL, NULL, dst_wkt, TRUE, 0.0, 1);
+            dataset, NULL, NULL, dst_wkt, TRUE, 0.0, 0);
         int nDstPixels = 0; int nDstLines= 0;
         double geoTransform[6]; // unused
         CPLErr eErr = GDALSuggestedWarpOutput(dataset, GDALGenImgProjTransform,

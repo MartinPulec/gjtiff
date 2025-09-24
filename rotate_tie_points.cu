@@ -5,6 +5,7 @@
 #include <ogr_srs_api.h>
 
 // #include "cuda_common.cuh"
+#include "cuda_common.cuh"  // for bilinearSample
 #include "defs.h"
 #include "nppdefs.h"
 #include "rotate_utm.h" // for transform_to_float
@@ -89,12 +90,13 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
         float this_x = dst_bounds.bound[XLEFT];
         this_x += x_scale * ((out_x + .5f) / out_width);
 
-        int val = 0;
-
         unsigned grid_width = tie_points.grid_width;
         unsigned grid_height = tie_points.count / tie_points.grid_width;
+        const struct tie_point *tie_bounds[4];
+        tie_bounds[0] = nullptr;
         for (unsigned grid_x = 0; grid_x < grid_width - 1; ++grid_x) {
                 for (unsigned grid_y = 0; grid_y < grid_height - 1; ++grid_y) {
+                        // clang-format off
                         const struct tie_point *a = &tie_points.points[grid_x + (grid_y * grid_width)];
                         const struct tie_point *b = &tie_points.points[(grid_x + 1) + (grid_y * grid_width)];
                         const struct tie_point *c = &tie_points.points[(grid_x + 1)+ ((grid_y + 1) * grid_width)];
@@ -108,24 +110,65 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
                         // c = &cc;
                         // d = &dd;
 
-                        double cross1 = (b->webx - a->webx) * (this_y - a->weby) - (b->weby - a->weby) * (this_x - a->webx);
-                        double cross2 = (c->webx - b->webx) * (this_y - b->weby) - (c->weby - b->weby) * (this_x - b->webx);
-                        double cross3 = (d->webx - c->webx) * (this_y - c->weby) - (d->weby - c->weby) * (this_x - c->webx);
-                        double cross4 = (a->webx - d->webx) * (this_y - d->weby) - (a->weby - d->weby) * (this_x - d->webx);
+                        float cross1 = (b->webx - a->webx) * (this_y - a->weby) - (b->weby - a->weby) * (this_x - a->webx);
+                        float cross2 = (c->webx - b->webx) * (this_y - b->weby) - (c->weby - b->weby) * (this_x - b->webx);
+                        float cross3 = (d->webx - c->webx) * (this_y - c->weby) - (d->weby - c->weby) * (this_x - c->webx);
+                        float cross4 = (a->webx - d->webx) * (this_y - d->weby) - (a->weby - d->weby) * (this_x - d->webx);
+                        // clang-format on
 
-                        bool all_positive = (cross1 >= 0 and cross2 >= 0 and cross3 >= 0 and cross4 >= 0);
-                        bool all_negative = (cross1 <= 0 and cross2 <= 0 and cross3 <= 0 and cross4 <= 0);
-                        if (all_positive || all_negative ) {
-                                val = 255;
-                                
+                        bool all_positive = (cross1 >= 0 and cross2 >= 0 and
+                                             cross3 >= 0 and cross4 >= 0);
+                        bool all_negative = (cross1 <= 0 and cross2 <= 0 and
+                                             cross3 <= 0 and cross4 <= 0);
+                        if (all_positive || all_negative) {
+                                tie_bounds[0] = a;
+                                tie_bounds[1] = b;
+                                tie_bounds[2] = c;
+                                tie_bounds[3] = d;
+                                break;
                         }
                 }
         }
 
+        if (tie_bounds[0] == nullptr) {
+                for (int i = 0; i < components; ++i) {
+                        d_out[(components * (out_x + out_y * out_width)) + i] =
+                            0;
+                }
+                return;
+        }
 
-        // dummy white
+        // clang-format off
+        float dists[4]; // from lines AB,BC,CD,DA (letters are tie points)
+        for (unsigned i = 0; i < 4; ++i ) {
+                unsigned m = i;
+                unsigned n = (i + 1) % 4;
+                dists[i] = fabsf(((tie_bounds[n]->webx - tie_bounds[m]->webx) * (this_y - tie_bounds[m]->weby)) -
+                                 ((tie_bounds[n]->weby - tie_bounds[m]->weby) * (this_x - tie_bounds[m]->webx))) /
+                           sqrtf(powf(tie_bounds[n]->webx - tie_bounds[m]->webx, 2) +
+                                 powf(tie_bounds[n]->weby - tie_bounds[m]->weby, 2));
+        }
+        float dist_y = dists[0] + dists[2]; // distance of current point from line AB + CD
+        float src_y = (((float) tie_bounds[0]->y * (dist_y - dists[0])) +
+                       ((float) tie_bounds[2]->y * (dist_y - dists[2]))) / dist_y;
+        float dist_x = dists[1] + dists[3];
+        float src_x = (((float) tie_bounds[1]->x * (dist_x - dists[1])) +
+                       ((float) tie_bounds[3]->x * (dist_x - dists[3]))) / dist_x;
+        // clang-format on
+
+        // if (out_x == out_width/2 && out_y == out_height/2) {
+        //         printf("%f %f\n", this_x, this_y);
+        //         for (int i = 0; i< 4;++i) {
+        //                 printf("%hu %hu %f %f\n", tie_bounds[i]->x,tie_bounds[i]->y, tie_bounds[i]->webx,tie_bounds[i]->weby );
+        //         }
+        //         printf("%f %f\n", dists[0], dists[2]);
+        //         printf("%f %f\n", src_x, src_y);
+        // }
+
         for (int i = 0; i < components; ++i) {
-                d_out[(components * (out_x + out_y * out_width)) + i] = val;
+                d_out[(components * (out_x + out_y * out_width)) + i] =
+                    bilinearSample(d_in + i, in_width, components, in_height,
+                                   src_x, src_y);
         }
 }
 
@@ -167,7 +210,6 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
                                            s->stream));
                 s->tie_point_allocated_count = in->tie_points.count;
         }
-        CHECK_CUDA(cudaStreamSynchronize(s->stream));
         CHECK_CUDA(cudaMemcpyAsync(s->d_tie_points, in->tie_points.points,
                                    in->tie_points.count *
                                        sizeof *s->d_tie_points,
