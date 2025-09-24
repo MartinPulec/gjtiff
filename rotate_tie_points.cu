@@ -135,7 +135,13 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
                         d_out[(components * (out_x + out_y * out_width)) + i] =
                             0;
                 }
+                if (alpha) {
+                        d_out_alpha[out_x + (out_y * out_width)] = 0;
+                }
                 return;
+        }
+        if (alpha) {
+                d_out_alpha[out_x + (out_y * out_width)] = 255;
         }
 
         // clang-format off
