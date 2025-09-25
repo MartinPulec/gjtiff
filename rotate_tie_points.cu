@@ -94,8 +94,8 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
         unsigned grid_height = tie_points.count / tie_points.grid_width;
         const struct tie_point *tie_bounds[4];
         tie_bounds[0] = nullptr;
-        for (unsigned grid_x = 0; grid_x < grid_width - 1; ++grid_x) {
-                for (unsigned grid_y = 0; grid_y < grid_height - 1; ++grid_y) {
+        for (unsigned grid_y = 0; grid_y < grid_height - 1; ++grid_y) {
+                for (unsigned grid_x = 0; grid_x < grid_width - 1; ++grid_x) {
                         // clang-format off
                         const struct tie_point *a = &tie_points.points[grid_x + (grid_y * grid_width)];
                         const struct tie_point *b = &tie_points.points[(grid_x + 1) + (grid_y * grid_width)];
@@ -125,7 +125,9 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
                                 tie_bounds[1] = b;
                                 tie_bounds[2] = c;
                                 tie_bounds[3] = d;
-                                break;
+                                // leave both loops
+                                grid_x = grid_width;
+                                grid_y = grid_height;
                         }
                 }
         }
