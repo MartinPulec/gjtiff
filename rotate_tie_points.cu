@@ -74,14 +74,16 @@ static __global__ void kernel_tie_points(unsigned tie_point_count,
         // printf("%f %f\n", tie_points[pos].webx , tie_points[pos].weby);
 }
 
+enum { GRID_B_X_MIN, GRID_B_X_MAX, GRID_B_Y_MIN, GRID_B_Y_MAX, GRID_B_COUNT };
+
 static __device__ bool
 get_bounding_tie_points(const struct tie_point *tie_bounds[4], float this_x,
-                        float this_y, const struct tie_points &tie_points)
+                        float this_y, const struct tie_points &tie_points,
+                        const int grid_bounds[GRID_B_COUNT])
 {
         int grid_width = tie_points.grid_width;
-        int grid_height = tie_points.count / tie_points.grid_width;
-        for (int grid_y = 0; grid_y < grid_height - 1; ++grid_y) {
-                for (int grid_x = 0; grid_x < grid_width - 1; ++grid_x) {
+        for (int grid_y = grid_bounds[GRID_B_Y_MIN]; grid_y <= grid_bounds[GRID_B_Y_MAX]; ++grid_y) {
+                for (int grid_x = grid_bounds[GRID_B_X_MIN]; grid_x <= grid_bounds[GRID_B_X_MAX]; ++grid_x) {
                         // clang-format off
                         const struct tie_point *a = &tie_points.points[grid_x + (grid_y * grid_width)];
                         const struct tie_point *b = &tie_points.points[(grid_x + 1) + (grid_y * grid_width)];
@@ -118,12 +120,10 @@ get_bounding_tie_points(const struct tie_point *tie_bounds[4], float this_x,
         return false;
 }
 
-enum { GRID_B_X_MIN, GRID_B_X_MAX, GRID_B_Y_MIN, GRID_B_Y_MAX, GRID_B_COUNT };
-
 static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
                                        struct bounds &dst_bounds, int out_width,
                                        int out_height,
-                                       __shared__ int grid_bounds[4])
+                                       int grid_bounds[4])
 {
         int thread_id = (blockDim.x * threadIdx.y) + threadIdx.x;
         int thread_count = blockDim.x * blockDim.y;
@@ -246,7 +246,8 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
         }
 
         const struct tie_point *tie_bounds[4];
-        if (!get_bounding_tie_points(tie_bounds, this_x, this_y, tie_points)) {
+        if (!get_bounding_tie_points(tie_bounds, this_x, this_y, tie_points,
+                                     grid_bounds)) {
                 for (int i = 0; i < components; ++i) {
                         d_out[(components * (out_x + out_y * out_width)) + i] =
                             0;
