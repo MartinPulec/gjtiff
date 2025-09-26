@@ -73,10 +73,10 @@ static __device__ bool
 get_bounding_tie_points(const struct tie_point *tie_bounds[4], float this_x,
                         float this_y, const struct tie_points &tie_points)
 {
-        unsigned grid_width = tie_points.grid_width;
-        unsigned grid_height = tie_points.count / tie_points.grid_width;
-        for (unsigned grid_y = 0; grid_y < grid_height - 1; ++grid_y) {
-                for (unsigned grid_x = 0; grid_x < grid_width - 1; ++grid_x) {
+        int grid_width = tie_points.grid_width;
+        int grid_height = tie_points.count / tie_points.grid_width;
+        for (int grid_y = 0; grid_y < grid_height - 1; ++grid_y) {
+                for (int grid_x = 0; grid_x < grid_width - 1; ++grid_x) {
                         // clang-format off
                         const struct tie_point *a = &tie_points.points[grid_x + (grid_y * grid_width)];
                         const struct tie_point *b = &tie_points.points[(grid_x + 1) + (grid_y * grid_width)];
@@ -152,9 +152,9 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
 
         // clang-format off
         float dists[4]; // from lines AB,BC,CD,DA (letters are tie points)
-        for (unsigned i = 0; i < 4; ++i ) {
-                unsigned m = i;
-                unsigned n = (i + 1) % 4;
+        for (int i = 0; i < 4; ++i) {
+                int m = i;
+                int n = (i + 1) % 4;
                 dists[i] = fabsf(((tie_bounds[n]->webx - tie_bounds[m]->webx) * (this_y - tie_bounds[m]->weby)) -
                                  ((tie_bounds[n]->weby - tie_bounds[m]->weby) * (this_x - tie_bounds[m]->webx))) /
                            sqrtf(powf(tie_bounds[n]->webx - tie_bounds[m]->webx, 2) +
