@@ -11,6 +11,11 @@
 #include "rotate_utm.h" // for transform_to_float
 #include "utils.h"              // for ERROR_MSG
 
+enum {
+        THREAD_X_COUNT = 16,
+        THREAD_Y_COUNT = 16,
+};
+
 struct rotate_tie_points_state {
         cudaStream_t stream;
         OGRCoordinateTransformationH transform;
@@ -113,6 +118,107 @@ get_bounding_tie_points(const struct tie_point *tie_bounds[4], float this_x,
         return false;
 }
 
+enum { GRID_B_X_MIN, GRID_B_X_MAX, GRID_B_Y_MIN, GRID_B_Y_MAX, GRID_B_COUNT };
+
+static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
+                                       struct bounds &dst_bounds, int out_width,
+                                       int out_height,
+                                       __shared__ int grid_bounds[4])
+{
+        int thread_id = (blockDim.x * threadIdx.y) + threadIdx.x;
+        int thread_count = blockDim.x * blockDim.y;
+
+        int base_x = blockIdx.x * blockDim.x;
+        int base_y = blockIdx.y * blockDim.y;
+
+        // block bounding pixels
+        int x[4];
+        int y[4];
+        x[0] = base_x;
+        y[0] = base_y;
+        x[1] = base_x + blockDim.x - 1;
+        y[1] = base_y;
+        x[2] = base_x + blockDim.x - 1;
+        y[2] = base_y + blockDim.y - 1;
+        x[3] = base_x;
+        y[3] = base_y + blockDim.y - 1;
+
+        float merc_x[4];
+        float merc_y[4];
+
+        const float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
+        const float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
+
+        for (int i = 0; i < 4; ++i) {
+                merc_x[i] = dst_bounds.bound[XLEFT] + x_scale * ((x[i] + .5f) / out_width);
+                merc_y[i] = dst_bounds.bound[YTOP] + y_scale * ((y[i] + .5f) / out_height);
+        }
+
+        int grid_x_min = INT_MAX;
+        int grid_x_max = -1;
+        int grid_y_min = INT_MAX;
+        int grid_y_max = -1;
+
+        
+        int grid_width = tie_points.grid_width;
+        int grid_height = tie_points.count / tie_points.grid_width;
+        for (unsigned i = thread_id; i < (grid_width - 1) * (grid_height - 1); i += thread_count) {
+                int grid_x = i % (tie_points.grid_width - 1);
+                int grid_y = i / (tie_points.grid_width - 1);
+                
+                const struct tie_point *a = &tie_points.points[grid_x + (grid_y * grid_width)];
+                const struct tie_point *b = &tie_points.points[(grid_x + 1) + (grid_y * grid_width)];
+                const struct tie_point *c = &tie_points.points[(grid_x + 1)+ ((grid_y + 1) * grid_width)];
+                const struct tie_point *d = &tie_points.points[grid_x + ((grid_y + 1) * grid_width)];
+
+                for (int i = 0; i < 4; ++i) {
+                        float this_x = merc_x[i];
+                        float this_y = merc_y[i];
+                        
+                        float cross1 = (b->webx - a->webx) * (this_y - a->weby) - (b->weby - a->weby) * (this_x - a->webx);
+                        float cross2 = (c->webx - b->webx) * (this_y - b->weby) - (c->weby - b->weby) * (this_x - b->webx);
+                        float cross3 = (d->webx - c->webx) * (this_y - c->weby) - (d->weby - c->weby) * (this_x - c->webx);
+                        float cross4 = (a->webx - d->webx) * (this_y - d->weby) - (a->weby - d->weby) * (this_x - d->webx);
+                        // clang-format on
+
+                        bool all_positive = (cross1 >= 0 and cross2 >= 0 and
+                                             cross3 >= 0 and cross4 >= 0);
+                        bool all_negative = (cross1 <= 0 and cross2 <= 0 and
+                                             cross3 <= 0 and cross4 <= 0);
+                        if (all_positive || all_negative) {
+                                grid_x_min = min(grid_x_min, grid_x);
+                                grid_x_max = max(grid_x_max, grid_x);
+                                grid_y_min = min(grid_y_min, grid_y);
+                                grid_y_max = max(grid_y_max, grid_y);
+                        }
+                }
+        }
+
+        __shared__ int gb[THREAD_X_COUNT * THREAD_Y_COUNT][GRID_B_COUNT];
+        gb[thread_id][GRID_B_X_MIN] = grid_x_min;
+        gb[thread_id][GRID_B_X_MAX] = grid_x_max;
+        gb[thread_id][GRID_B_Y_MIN] = grid_y_min;
+        gb[thread_id][GRID_B_Y_MAX] = grid_y_max;
+        __syncthreads();
+
+        if (thread_id == 0) {
+                grid_bounds[GRID_B_X_MIN] = INT_MAX;
+                grid_bounds[GRID_B_X_MAX] = -1;
+                grid_bounds[GRID_B_Y_MIN] = INT_MAX;
+                grid_bounds[GRID_B_Y_MAX] = -1;
+
+                for (int i = 0; i < THREAD_X_COUNT * THREAD_Y_COUNT; ++i) {
+                        grid_bounds[GRID_B_X_MIN] = min(gb[i][GRID_B_X_MIN], grid_bounds[GRID_B_X_MIN]);
+                        grid_bounds[GRID_B_X_MAX] = max(gb[i][GRID_B_X_MAX], grid_bounds[GRID_B_X_MAX]);
+                        grid_bounds[GRID_B_Y_MIN] = min(gb[i][GRID_B_Y_MIN], grid_bounds[GRID_B_Y_MIN]);
+                        grid_bounds[GRID_B_Y_MAX] = max(gb[i][GRID_B_Y_MAX], grid_bounds[GRID_B_Y_MAX]);
+                }
+                
+        }
+        __syncthreads();
+        return grid_bounds[GRID_B_X_MIN] != INT_MAX;
+}
+
 template <int components, bool alpha>
 static __global__ void
 kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
@@ -122,17 +228,22 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
-        if (out_x >= out_width || out_y >= out_height) {
-                return;
-        }
-
         float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
         float this_y = dst_bounds.bound[YTOP];
-        this_y += y_scale * ((out_y + .5f) / out_height) ;
+        this_y += y_scale * ((out_y + .5f) / out_height);
 
         float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
         float this_x = dst_bounds.bound[XLEFT];
         this_x += x_scale * ((out_x + .5f) / out_width);
+
+        __shared__ int grid_bounds[GRID_B_COUNT];
+        if (!set_grid_bounds(tie_points, dst_bounds, out_width, out_height, grid_bounds)) {
+                return;
+        }
+
+        if (out_x >= out_width || out_y >= out_height) {
+                return;
+        }
 
         const struct tie_point *tie_bounds[4];
         if (!get_bounding_tie_points(tie_bounds, this_x, this_y, tie_points)) {
@@ -236,7 +347,7 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
         for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
                 dst_bounds.bound[i] = (float) ret->img.bounds[i];
         }
-        dim3 block(16, 16);
+        dim3 block(THREAD_X_COUNT, THREAD_Y_COUNT);
         int dst_width = dst_desc.width;
         int dst_height = dst_desc.height;
         dim3 grid((dst_width + block.x - 1) / block.x, (dst_height + block.y - 1) / block.y);
