@@ -69,31 +69,12 @@ static __global__ void kernel_tie_points(unsigned tie_point_count,
         // printf("%f %f\n", tie_points[pos].webx , tie_points[pos].weby);
 }
 
-template <int components, bool alpha>
-static __global__ void
-kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
-                  int in_width, int in_height, int out_width, int out_height,
-                  struct bounds dst_bounds, struct tie_points tie_points)
+static __device__ bool
+get_bounding_tie_points(const struct tie_point *tie_bounds[4], float this_x,
+                        float this_y, const struct tie_points &tie_points)
 {
-        int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
-        int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
-
-        if (out_x >= out_width || out_y >= out_height) {
-                return;
-        }
-
-        float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
-        float this_y = dst_bounds.bound[YTOP];
-        this_y += y_scale * ((out_y + .5f) / out_height) ;
-
-        float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
-        float this_x = dst_bounds.bound[XLEFT];
-        this_x += x_scale * ((out_x + .5f) / out_width);
-
         unsigned grid_width = tie_points.grid_width;
         unsigned grid_height = tie_points.count / tie_points.grid_width;
-        const struct tie_point *tie_bounds[4];
-        tie_bounds[0] = nullptr;
         for (unsigned grid_y = 0; grid_y < grid_height - 1; ++grid_y) {
                 for (unsigned grid_x = 0; grid_x < grid_width - 1; ++grid_x) {
                         // clang-format off
@@ -125,14 +106,36 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
                                 tie_bounds[1] = b;
                                 tie_bounds[2] = c;
                                 tie_bounds[3] = d;
-                                // leave both loops
-                                grid_x = grid_width;
-                                grid_y = grid_height;
+                                return true;
                         }
                 }
         }
+        return false;
+}
 
-        if (tie_bounds[0] == nullptr) {
+template <int components, bool alpha>
+static __global__ void
+kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
+                  int in_width, int in_height, int out_width, int out_height,
+                  struct bounds dst_bounds, struct tie_points tie_points)
+{
+        int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
+        int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
+
+        if (out_x >= out_width || out_y >= out_height) {
+                return;
+        }
+
+        float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
+        float this_y = dst_bounds.bound[YTOP];
+        this_y += y_scale * ((out_y + .5f) / out_height) ;
+
+        float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
+        float this_x = dst_bounds.bound[XLEFT];
+        this_x += x_scale * ((out_x + .5f) / out_width);
+
+        const struct tie_point *tie_bounds[4];
+        if (!get_bounding_tie_points(tie_bounds, this_x, this_y, tie_points)) {
                 for (int i = 0; i < components; ++i) {
                         d_out[(components * (out_x + out_y * out_width)) + i] =
                             0;
@@ -142,6 +145,7 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
                 }
                 return;
         }
+
         if (alpha) {
                 d_out_alpha[out_x + (out_y * out_width)] = 255;
         }
