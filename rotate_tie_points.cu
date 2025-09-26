@@ -14,6 +14,8 @@
 enum {
         THREAD_X_COUNT = 16,
         THREAD_Y_COUNT = 16,
+        THREAD_COUNT = THREAD_X_COUNT * THREAD_Y_COUNT,
+        WARP_SZ = 32,
 };
 
 struct rotate_tie_points_state {
@@ -194,6 +196,39 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
                 }
         }
 
+#if __CUDA_ARCH__ >= 800
+        __shared__ int gb[THREAD_COUNT / WARP_SZ][GRID_B_COUNT];
+        const auto all_x_min = __reduce_min_sync(-1U, grid_x_min);
+        const auto all_x_max = __reduce_max_sync(-1U, grid_x_max);
+        const auto all_y_min = __reduce_min_sync(-1U, grid_y_min);
+        const auto all_y_max = __reduce_max_sync(-1U, grid_y_max);
+        __syncthreads();
+
+        if ((thread_id % WARP_SZ) == 0) {
+                for (int i = 0; i < 4; ++i) {
+                        gb[thread_id / WARP_SZ][GRID_B_X_MIN] = all_x_min;
+                        gb[thread_id / WARP_SZ][GRID_B_X_MAX] = all_x_max;
+                        gb[thread_id / WARP_SZ][GRID_B_Y_MIN] = all_y_min;
+                        gb[thread_id / WARP_SZ][GRID_B_Y_MAX] = all_y_max;
+                }
+        }
+        __syncthreads();
+
+        if (thread_id == 0) {
+                grid_bounds[GRID_B_X_MIN] = INT_MAX;
+                grid_bounds[GRID_B_X_MAX] = -1;
+                grid_bounds[GRID_B_Y_MIN] = INT_MAX;
+                grid_bounds[GRID_B_Y_MAX] = -1;
+                for (unsigned i = 0; i < sizeof gb / sizeof gb[0]; ++i) {
+                        grid_bounds[GRID_B_X_MIN] = min(gb[i][GRID_B_X_MIN], grid_bounds[GRID_B_X_MIN]);
+                        grid_bounds[GRID_B_X_MAX] = max(gb[i][GRID_B_X_MAX], grid_bounds[GRID_B_X_MAX]);
+                        grid_bounds[GRID_B_Y_MIN] = min(gb[i][GRID_B_Y_MIN], grid_bounds[GRID_B_Y_MIN]);
+                        grid_bounds[GRID_B_Y_MAX] = max(gb[i][GRID_B_Y_MAX], grid_bounds[GRID_B_Y_MAX]);
+                }
+        }
+        __syncthreads();
+
+#else
         __shared__ int gb[THREAD_X_COUNT * THREAD_Y_COUNT][GRID_B_COUNT];
         gb[thread_id][GRID_B_X_MIN] = grid_x_min;
         gb[thread_id][GRID_B_X_MAX] = grid_x_max;
@@ -207,14 +242,14 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
                 grid_bounds[GRID_B_Y_MIN] = INT_MAX;
                 grid_bounds[GRID_B_Y_MAX] = -1;
 
-                for (int i = 0; i < THREAD_X_COUNT * THREAD_Y_COUNT; ++i) {
+                for (int i = 0; i < THREAD_COUNT; ++i) {
                         grid_bounds[GRID_B_X_MIN] = min(gb[i][GRID_B_X_MIN], grid_bounds[GRID_B_X_MIN]);
                         grid_bounds[GRID_B_X_MAX] = max(gb[i][GRID_B_X_MAX], grid_bounds[GRID_B_X_MAX]);
                         grid_bounds[GRID_B_Y_MIN] = min(gb[i][GRID_B_Y_MIN], grid_bounds[GRID_B_Y_MIN]);
                         grid_bounds[GRID_B_Y_MAX] = max(gb[i][GRID_B_Y_MAX], grid_bounds[GRID_B_Y_MAX]);
                 }
-                
         }
+#endif
         __syncthreads();
         return grid_bounds[GRID_B_X_MIN] != INT_MAX;
 }
