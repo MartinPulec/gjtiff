@@ -91,14 +91,6 @@ get_bounding_tie_points(const struct tie_point *tie_bounds[4], float this_x,
                         const struct tie_point *b = &tie_points.points[(grid_x + 1) + (grid_y * grid_width)];
                         const struct tie_point *c = &tie_points.points[(grid_x + 1)+ ((grid_y + 1) * grid_width)];
                         const struct tie_point *d = &tie_points.points[grid_x + ((grid_y + 1) * grid_width)];
-                        // struct tie_point aa= {.webx =0.537795, .weby = 0.34 };
-                        // struct tie_point bb= {.webx =0.549097, .weby = 0.334925 };
-                        // struct tie_point cc= {.webx =0.549097, .weby = 0.343166};
-                        // struct tie_point dd= {.webx =0.537795, .weby = 0.343166};
-                        // a = &aa;
-                        // b = &bb;
-                        // c = &cc;
-                        // d = &dd;
 
                         float cross1 = (b->webx - a->webx) * (this_y - a->weby) - (b->weby - a->weby) * (this_x - a->webx);
                         float cross2 = (c->webx - b->webx) * (this_y - b->weby) - (c->weby - b->weby) * (this_x - b->webx);
@@ -127,10 +119,12 @@ get_bounding_tie_points(const struct tie_point *tie_bounds[4], float this_x,
  *
  * In every thread, take 4 bounding points of current thread block and try to find
  * used tie point regions.
+ *
+ * @returns false if the whole thread block lies out-of-bounds of the source img
  */
 static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
-                                       struct bounds &dst_bounds, int out_width,
-                                       int out_height,
+                                       struct bounds &dst_bounds,
+                                       float out_width, float out_height,
                                        int grid_bounds[4])
 {
         int thread_id = (blockDim.x * threadIdx.y) + threadIdx.x;
@@ -158,8 +152,10 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
         const float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
 
         for (int i = 0; i < 4; ++i) {
-                merc_x[i] = dst_bounds.bound[XLEFT] + x_scale * ((x[i] + .5f) / out_width);
-                merc_y[i] = dst_bounds.bound[YTOP] + y_scale * ((y[i] + .5f) / out_height);
+                merc_x[i] = dst_bounds.bound[XLEFT] +
+                            x_scale * (((float)x[i] + .5f) / out_width);
+                merc_y[i] = dst_bounds.bound[YTOP] +
+                            y_scale * (((float)y[i] + .5f) / out_height);
         }
 
         int grid_x_min = INT_MAX;
@@ -169,10 +165,12 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
 
         int grid_width = tie_points.grid_width;
         int grid_height = tie_points.count / tie_points.grid_width;
-        for (unsigned i = thread_id; i < (grid_width - 1) * (grid_height - 1); i += thread_count) {
+        for (unsigned i = thread_id; i < (grid_width - 1) * (grid_height - 1);
+             i += thread_count) {
                 int grid_x = i % (tie_points.grid_width - 1);
                 int grid_y = i / (tie_points.grid_width - 1);
-                
+
+                // clang-format off
                 const struct tie_point *a = &tie_points.points[grid_x + (grid_y * grid_width)];
                 const struct tie_point *b = &tie_points.points[(grid_x + 1) + (grid_y * grid_width)];
                 const struct tie_point *c = &tie_points.points[(grid_x + 1)+ ((grid_y + 1) * grid_width)];
@@ -181,7 +179,7 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
                 for (int i = 0; i < 4; ++i) {
                         float this_x = merc_x[i];
                         float this_y = merc_y[i];
-                        
+
                         float cross1 = (b->webx - a->webx) * (this_y - a->weby) - (b->weby - a->weby) * (this_x - a->webx);
                         float cross2 = (c->webx - b->webx) * (this_y - b->weby) - (c->weby - b->weby) * (this_x - b->webx);
                         float cross3 = (d->webx - c->webx) * (this_y - c->weby) - (d->weby - c->weby) * (this_x - c->webx);
@@ -201,7 +199,7 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
                 }
         }
 
-        // final tie point ROI reduction
+        // finally do the tie point ROI reduction
 #if __CUDA_ARCH__ >= 800
         __shared__ int gb[THREAD_COUNT / WARP_SZ][GRID_B_COUNT];
         const auto all_x_min = __reduce_min_sync(-1U, grid_x_min);
@@ -234,7 +232,7 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
         }
         __syncthreads();
 
-#else
+#else // __CUDA_ARCH__ <= 800
         __shared__ int gb[THREAD_X_COUNT * THREAD_Y_COUNT][GRID_B_COUNT];
         gb[thread_id][GRID_B_X_MIN] = grid_x_min;
         gb[thread_id][GRID_B_X_MAX] = grid_x_max;
@@ -263,14 +261,15 @@ static __device__ bool set_grid_bounds(const struct tie_points &tie_points,
 template <int components, bool alpha>
 static __global__ void
 kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
-                  int in_width, int in_height, int out_width, int out_height,
+                  int in_width, int in_height, unsigned out_width, unsigned out_height,
                   struct bounds dst_bounds, struct tie_points tie_points)
 {
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
         __shared__ int grid_bounds[GRID_B_COUNT];
-        if (!set_grid_bounds(tie_points, dst_bounds, out_width, out_height, grid_bounds)) {
+        if (!set_grid_bounds(tie_points, dst_bounds, (float)out_width,
+                             (float)out_height, grid_bounds)) {
                 return;
         }
 
@@ -280,10 +279,12 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
         }
 
         float y_scale = dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP];
-        float this_y = dst_bounds.bound[YTOP] + (y_scale * (((float) out_y + .5F) / out_height));
+        float this_y = dst_bounds.bound[YTOP] +
+                       (y_scale * (((float)out_y + .5F) / (float)out_height));
 
         float x_scale = dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT];
-        float this_x = dst_bounds.bound[XLEFT] + (x_scale * (((float) out_x + .5F) / out_width));
+        float this_x = dst_bounds.bound[XLEFT] +
+                       (x_scale * (((float)out_x + .5F) / (float)out_width));
 
         const struct tie_point *tie_bounds[4];
         if (!get_bounding_tie_points(tie_bounds, this_x, this_y, tie_points,
