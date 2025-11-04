@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cuda_runtime.h>
+#include <fcntl.h>        // for fcntl
 #include <gdal.h>         // for GDALAllRegister
 #include <libgpujpeg/gpujpeg_common.h>
 #include <libgpujpeg/gpujpeg_encoder.h>
@@ -35,7 +36,7 @@
 #include <libgpujpeg/gpujpeg_version.h>
 #include <linux/limits.h>
 #include <omp.h>
-#include <sys/stat.h> // for mkdir
+#include <sys/stat.h> // for mkdir, open
 #include <unistd.h>
 
 #include "defs.h"
@@ -795,6 +796,34 @@ static void init_term_colors() {
         }
 }
 
+/**
+ * waits for exclusive lock of /tmp/gjtiff.lck to serialize GJTIFF runs.
+ * @note F_UNLCK and close(lock_fd) is left to OS after process ends
+ */
+static void wait_exclusive_run()
+{
+        const int lock_fd = open("/tmp/gjtiff.lck",
+                                 O_WRONLY | O_CREAT | O_CLOEXEC, S_IWUSR);
+        if (lock_fd == -1) {
+                perror("lock open");
+                abort();
+        }
+        struct flock fl;
+        fl.l_type = F_WRLCK; // == exclusive/write lock
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = 0; // 0 means "lock to EOF"
+        int rc = 0;
+        do {
+                rc = fcntl(lock_fd, F_SETLKW, &fl);
+                // or BSD/Linux flock(fd, LOCK_EX);
+        } while (rc == -1 && errno == EINTR); // interrupted syscall (signal)
+        if (rc == -1) {
+                perror("lock F_SETLKW");
+                abort();
+        }
+}
+
 int main(int argc, char **argv)
 {
         init_term_colors();
@@ -867,6 +896,8 @@ int main(int argc, char **argv)
                 show_help(argv[0]);
                 return EXIT_FAILURE;
         }
+
+        wait_exclusive_run();
 
         gpu_memory = get_cuda_dev_global_memory();
         struct state_gjtiff state(global_opts);
