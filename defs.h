@@ -118,7 +118,9 @@ struct owned_image {
         }
 
 #define ARR_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#undef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#undef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 #if !defined __cplusplus && __STDC_VERSION__ <= 202311L
