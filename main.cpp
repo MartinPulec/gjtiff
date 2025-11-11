@@ -403,24 +403,25 @@ static bool encode_single(struct state_gjtiff *s,
 {
         const size_t len = encode_gpu(s, uncomp, ofname);
         char buf[UINT64_ASCII_LEN + 1];
-        char fullpath[PATH_MAX + 1];
-        realpath(ofname, fullpath);
-        if (len != 0) {
-                if (!s->first) {
-                        printf(",\n");
-                }
-                printf("\t{\n");
-                s->first = false;
-                printf("\t\t\"infile\": \"%s\",\n", ifname);
-                printf("\t\t\"outfile\": \"%s\",\n", fullpath);
-                print_bbox(uncomp->coords);
-                printf("\t}");
-        }
         INFO_MSG("%s (%dx%d; %s B) encoded %ssuccessfully\n", ofname,
                uncomp->width, uncomp->height,
                format_number_with_delim(len, buf, sizeof buf),
                (len == 0 ? "un" : ""));
-        return len != 0;
+        if (len == 0) {
+                return false;
+        }
+        char fullpath[PATH_MAX + 1];
+        realpath(ofname, fullpath);
+        if (!s->first) {
+                printf(",\n");
+        }
+        printf("\t{\n");
+        s->first = false;
+        printf("\t\t\"infile\": \"%s\",\n", ifname);
+        printf("\t\t\"outfile\": \"%s\",\n", fullpath);
+        print_bbox(uncomp->coords);
+        printf("\t}");
+        return true;
 }
 
 static char *get_tile_ofdir(const char *prefix, const char *ifname, int zoom, int x) {
