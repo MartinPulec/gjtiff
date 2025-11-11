@@ -411,7 +411,9 @@ static bool encode_single(struct state_gjtiff *s,
                 return false;
         }
         char fullpath[PATH_MAX + 1];
-        realpath(ofname, fullpath);
+        if (realpath(ofname, fullpath) != fullpath) {
+                perror("realpath");
+        }
         if (!s->first) {
                 printf(",\n");
         }
