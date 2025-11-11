@@ -97,8 +97,8 @@ static double normalize_coords(const struct coordinate src_coords[static 4],
         // check if not near poles
         get_lat_lon_min_max(src_coords, &lat_min, &lat_max, &lon_min, &lon_max);
         if (lat_min < -85. || lat_max > 85.) {
-                const double near_pole_pt_lat = (lat_max > 85 ? lat_max
-                                                              : lat_min);
+                [[maybe_unused]] const double near_pole_pt_lat =
+                    (lat_max > 85 ? lat_max : lat_min);
                 WARN_MSG("Not normalizing areas near North/South Pole! (at "
                          "least one point at most 5° /%f°/ degrees from the "
                          "Pole)\n",

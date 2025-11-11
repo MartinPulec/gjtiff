@@ -5,23 +5,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN echo "nvidia-legacy-check nvidia-driver/check-for-unsupported-gpu boolean false" | debconf-set-selections
 RUN sed -i 's/^Components:.*/Components: main contrib non-free non-free-firmware/' \
   /etc/apt/sources.list.d/debian.sources
-RUN apt -y update
-RUN apt -y install curl g++ gcc git libgdal-dev libtiff-dev libwebp-dev \
+RUN apt-get -y update
+RUN apt-get -y install curl g++ gcc git libgdal-dev libtiff-dev libwebp-dev \
                    make pkgconf wget xz-utils
-RUN apt -y --no-install-recommends install nvidia-cuda-toolkit
+RUN apt-get -y --no-install-recommends install nvidia-cuda-toolkit
 
 RUN wget https://developer.download.nvidia.com/compute/cuda/repos/\
 debian12/x86_64/cuda-keyring_1.1-1_all.deb && \
 dpkg -i cuda-keyring_1.1-1_all.deb
-RUN apt -y update
-RUN apt -y install nvcomp nvjpeg2k-cuda-11 nvtiff-cuda-11
+RUN apt-get -y update
+RUN apt-get -y install nvcomp nvjpeg2k-cuda-11 nvtiff-cuda-11
 
-RUN curl -LO https://github.com/Kitware/CMake/releases/download/v4.1.0-rc2/\
+RUN curl -LOSs https://github.com/Kitware/CMake/releases/download/v4.1.0-rc2/\
 cmake-4.1.0-rc2-linux-x86_64.tar.gz && tar xaf cmake-* && cp -r cmake*/* /usr
 RUN git clone https://github.com/rapidsai/cuspatial.git && \
-    cd cuspatial/cpp/cuproj && cmake . && make install
+    cd cuspatial/cpp/cuproj && cmake -Wno-dev . && make install
 
-RUN curl -LO https://github.com/CESNET/GPUJPEG/releases/download/continuous/\
+RUN curl -LOSs https://github.com/CESNET/GPUJPEG/releases/download/continuous/\
 GPUJPEG-Linux-all.tar.xz && tar xaf GPUJPEG*tar* && cp -r GPUJPEG/* /usr
 
 COPY .git *c *cpp *h *hpp *cu *cuh Makefile gjtiff/
