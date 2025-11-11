@@ -262,19 +262,25 @@ template <int components, bool alpha>
 static __global__ void
 kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
                   int in_width, int in_height, unsigned out_width, unsigned out_height,
-                  struct bounds dst_bounds, struct tie_points tie_points)
+                  struct bounds dst_bounds, struct tie_points tie_points, int fill_color)
 {
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
         __shared__ int grid_bounds[GRID_B_COUNT];
-        if (!set_grid_bounds(tie_points, dst_bounds, (float)out_width,
-                             (float)out_height, grid_bounds)) {
-                return;
-        }
+        bool block_in_roi = set_grid_bounds(tie_points, dst_bounds,
+                                            (float)out_width, (float)out_height,
+                                            grid_bounds);
 
         // do the return after set_grid_bounds -> we need all threads for the fn
         if (out_x >= out_width || out_y >= out_height) {
+                return;
+        }
+        if (not block_in_roi) {
+                for (int i = 0; i < components; ++i) {
+                        d_out[(components * (out_x + out_y * out_width)) + i] =
+                            fill_color;
+                }
                 return;
         }
 
@@ -291,7 +297,7 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
                                      grid_bounds)) {
                 for (int i = 0; i < components; ++i) {
                         d_out[(components * (out_x + out_y * out_width)) + i] =
-                            0;
+                            fill_color;
                 }
                 if (alpha) {
                         d_out_alpha[out_x + (out_y * out_width)] = 0;
@@ -407,7 +413,7 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
 
         kernel<<<grid, block, 0, s->stream>>>(
             in->data, ret->img.data, ret->img.alpha, in->width, in->height,
-            dst_width, dst_height, dst_bounds, d_tie_points);
+            dst_width, dst_height, dst_bounds, d_tie_points, fill_color);
         CHECK_CUDA(cudaGetLastError());
 
         GPU_TIMER_STOP(rotate_geotff);

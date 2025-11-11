@@ -11,6 +11,9 @@ instead.
 
 # NEWS
 
+- 11th Nov '25 - add parameter `-F` to change fill-color from black to eg. white
+- Oct '25 - support for more correct S1 repositioning to WebP (using
+GeoTIFF tie pointes)
 - 1st Aug '25 - added -w to generate WebP (including alpha); added -N
 to suppress generating whole image (in tiled mode) - performance reasons
 - 29th Jun '25 - jpeg2000 decode performance improved through

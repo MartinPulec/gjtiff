@@ -257,7 +257,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         };
 
         GPU_TIMER_START(rotate, LL_DEBUG, s->stream);
-        CHECK_CUDA(cudaMemsetAsync(ret->img.data, 0,
+        CHECK_CUDA(cudaMemsetAsync(ret->img.data, fill_color,
                                    (size_t)ret->img.width * ret->img.height *
                                        ret->img.comp_count,
                                    s->stream));

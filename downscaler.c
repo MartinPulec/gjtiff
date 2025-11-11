@@ -136,7 +136,7 @@ struct owned_image *scale_pitch(struct downscaler_state *state, int new_width,
         new_desc.width = (int)dst_xpitch / src->comp_count;
         new_desc.height = (int)dst_lines;
         struct owned_image *ret = new_cuda_owned_image(&new_desc);
-        CHECK_CUDA(cudaMemsetAsync(ret->img.data, 0,
+        CHECK_CUDA(cudaMemsetAsync(ret->img.data, fill_color,
                                    (size_t)ret->img.width * ret->img.height *
                                        ret->img.comp_count,
                                    state->stream));

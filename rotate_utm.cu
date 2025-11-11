@@ -78,7 +78,8 @@ static __global__ void
 kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
                            uint8_t *d_out, uint8_t *d_out_alpha, int in_width,
                            int in_height, int out_width, int out_height,
-                           struct bounds src_bounds, struct bounds dst_bounds)
+                           struct bounds src_bounds, struct bounds dst_bounds,
+                           int fill_color)
 {
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
@@ -113,7 +114,7 @@ kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
         if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
             rel_pos_src_y < 0 || rel_pos_src_y > 1) {
                 for (int i = 0; i < components; ++i) {
-                        d_out[components * (out_x + out_y * out_width) + i] = 0;
+                        d_out[components * (out_x + out_y * out_width) + i] = fill_color;
                 }
                 if (alpha) {
                         d_out_alpha[out_x + (out_y * out_width)] = 0;
@@ -256,7 +257,7 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         }
         kernel<<<grid, block, 0, s->stream>>>(
             d_proj, in->data, ret->img.data, ret->img.alpha, in->width,
-            in->height, width, height, src_bounds, dst_bounds);
+            in->height, width, height, src_bounds, dst_bounds, fill_color);
         CHECK_CUDA(cudaGetLastError());
 
         // Cleanup
