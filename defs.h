@@ -15,7 +15,7 @@ enum {
         LL_VERBOSE = 1,
         LL_DEBUG = 2,
 };
-enum out_format { OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
+enum out_format { OUTF_NONE, OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
 
 // defined in main.c
 extern int log_level;
