@@ -1,10 +1,11 @@
 #ifndef DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
 #define DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
 
-#include "utils.h"   // ERROR_MSG
-
 #ifndef __cplusplus
 #include <stdbool.h>
+#include <stddef.h>  // for size_t
+#else
+#include <cstddef>  // for size_t
 #endif
 
 enum {
@@ -95,28 +96,6 @@ struct owned_image {
         struct dec_image img;
         void (*free)(struct owned_image *img);
 };
-
-#define CHECK_CUDA(call)                                                       \
-        {                                                                      \
-                cudaError_t err = call;                                        \
-                if (cudaSuccess != err) {                                      \
-                        ERROR_MSG(                                             \
-                            "Cuda error in file '%s' in line %i : %s.\n",      \
-                            __FILE__, __LINE__, cudaGetErrorString(err));      \
-                        abort();                                               \
-                }                                                              \
-        }
-#define CHECK_NPP(call)                                                        \
-        {                                                                      \
-                NppStatus rc = call;                                           \
-                if (NPP_NO_ERROR != rc) {                                      \
-                        ERROR_MSG(                                             \
-                            "NPP error in file '%s' in line %i : %s (%d).\n",  \
-                            __FILE__, __LINE__, npp_status_to_str(rc),         \
-                            (int)rc);                                          \
-                        abort();                                               \
-                }                                                              \
-        }
 
 #define ARR_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #undef MIN

@@ -6,6 +6,7 @@
 
 #include "defs.h"
 #include "rotate.h" // for get_lat_lon_min_max
+#include "utils.h"
 
 struct val_str_desc_map {
         int val;

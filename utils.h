@@ -16,7 +16,7 @@
 #include <nppdefs.h>      // for NppStatus
 #include <npp.h> // NPP_VERSION_MINOR
 
-#include "utils.h" // for NPP_NEW_API
+#include "defs.h"
 
 #if NPP_VERSION_MAJOR >= 12
 #define NPP_NEW_API 1
@@ -107,6 +107,29 @@ extern cudaEvent_t cuda_event_stop;
         cudaStreamSynchronize(stream);                                         \
         cudaMalloc(ptr, size)
 #endif
+
+#define CHECK_CUDA(call)                                                       \
+        {                                                                      \
+                cudaError_t err = call;                                        \
+                if (cudaSuccess != err) {                                      \
+                        ERROR_MSG(                                             \
+                            "Cuda error in file '%s' in line %i : %s.\n",      \
+                            __FILE__, __LINE__, cudaGetErrorString(err));      \
+                        abort();                                               \
+                }                                                              \
+        }
+#define CHECK_NPP(call)                                                        \
+        {                                                                      \
+                NppStatus rc = call;                                           \
+                if (NPP_NO_ERROR != rc) {                                      \
+                        ERROR_MSG(                                             \
+                            "NPP error in file '%s' in line %i : %s (%d).\n",  \
+                            __FILE__, __LINE__, npp_status_to_str(rc),         \
+                            (int)rc);                                          \
+                        abort();                                               \
+                }                                                              \
+        }
+
 
 #ifdef __cplusplus
 extern "C" {
