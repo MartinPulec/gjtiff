@@ -79,10 +79,10 @@ struct options {
         int downscale_factor;
         bool use_libtiff;
         bool norotate;
-        enum out_format whole_image_fmt;
+        enum out_format whole_image_fmt; ///< can differ from output_format
         int zoom_levels[MAX_ZOOM_COUNT];
         enum out_format output_format;
-#define OPTIONS_INIT {-1, 1, false, false, OUTF_JPEG, {-1}, OUTF_JPEG}
+#define OPTIONS_INIT {-1, 1, false, false, OUTF_NONE, {-1}, OUTF_JPEG}
 };
 
 struct state_gjtiff {
@@ -132,11 +132,13 @@ state_gjtiff::state_gjtiff(struct options opts)
         assert(state_nvj2k != nullptr);
         state_nvtiff = nvtiff_init(stream, log_level);
         assert(state_nvtiff != nullptr);
-        if (opts.output_format == OUTF_JPEG) {
+        if (opts.output_format == OUTF_JPEG ||
+            opts.whole_image_fmt == OUTF_JPEG) {
                 gj_enc = gpujpeg_encoder_create(stream);
                 assert(gj_enc != nullptr);
         }
-        if (opts.output_format == OUTF_WEBP) {
+        if (opts.output_format == OUTF_WEBP ||
+            opts.whole_image_fmt == OUTF_WEBP) {
                 webp_enc = webp_encoder_create(opts.req_quality);
                 assert(webp_enc != nullptr);
         }
@@ -635,7 +637,7 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         char whole[PATH_MAX];
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
-                   get_ext(s->opts.output_format), nullptr);
+                   get_ext(s->opts.whole_image_fmt), nullptr);
         if (s->opts.whole_image_fmt != OUTF_NONE) {
                 if (encode_gpu(s, uncomp, whole, s->opts.whole_image_fmt) ==
                     0) {
@@ -704,7 +706,7 @@ static void show_help(const char *progname)
         INFO_MSG("\t-q <q>   - JPEG quality\n");
         INFO_MSG("\t-s <d>   - downscale factor\n");
         INFO_MSG("\t-v[v]    - be verbose (2x for more messages)\n");
-        INFO_MSG("\t-w       - WebP encode\n");
+        INFO_MSG("\t-w|-W    - WebP encode (use uppercase for WebP tiles and JPG whole)\n");
         INFO_MSG("\t-z <zlevel>- zoom level\n");
         INFO_MSG("\n");
         INFO_MSG("Input must be in TIFF or JP2.\"\n");
@@ -849,7 +851,7 @@ int main(int argc, char **argv)
         bool no_whole_image = false;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+D:F:I:M:NQVdhnno:q:rs:vwz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+D:F:I:M:NQVWdhnno:q:rs:vwz:")) != -1) {
                 switch (opt) {
                 case 'D':
                         CHECK_CUDA(cudaSetDevice(strtol(optarg, nullptr, 0)));
@@ -905,6 +907,10 @@ int main(int argc, char **argv)
                 case 'w':
                         global_opts.output_format = OUTF_WEBP;
                         break;
+                case 'W':
+                        global_opts.output_format = OUTF_WEBP;
+                        global_opts.whole_image_fmt = OUTF_JPEG;
+                        break;
                 case 'z':
                         parse_zoom_levels(global_opts.zoom_levels, optarg);
                         break;
@@ -919,8 +925,11 @@ int main(int argc, char **argv)
                 return EXIT_FAILURE;
         }
 
-        alpha_wanted = global_opts.output_format == OUTF_WEBP;
-        global_opts.whole_image_fmt = no_whole_image ? OUTF_NONE : global_opts.output_format;
+        if (not no_whole_image && global_opts.whole_image_fmt == OUTF_NONE) {
+                global_opts.whole_image_fmt = global_opts.output_format;
+        }
+        alpha_wanted = global_opts.output_format == OUTF_WEBP ||
+                       global_opts.whole_image_fmt == OUTF_WEBP;
 
         wait_exclusive_run();
 

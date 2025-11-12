@@ -11,6 +11,7 @@ instead.
 
 # NEWS
 
+- 12th Nov '25 - add parameter `-W` for encoding tiles as WebP and whole as JPG
 - 11th Nov '25 - add parameter `-F` to change fill-color from black to eg. white
 - Oct '25 - support for more correct S1 repositioning to WebP (using
 GeoTIFF tie pointes)
