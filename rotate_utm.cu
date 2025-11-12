@@ -229,8 +229,7 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
                 }
         }
 
-        dst_desc.alpha = output_format == OUTF_WEBP ? (unsigned char *)!NULL
-                                                    : NULL;
+        dst_desc.alpha = alpha_wanted ? (unsigned char *) 1 : nullptr;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:3857");
         for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
@@ -242,7 +241,7 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
         decltype(kernel_utm_to_web_mercator<1, true>) *kernel = nullptr;
-        if (output_format == OUTF_WEBP) {
+        if (alpha_wanted) {
                 if (in->comp_count == 1) {
                         kernel = kernel_utm_to_web_mercator<1, true>;
                 } else {

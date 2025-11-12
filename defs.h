@@ -21,7 +21,7 @@ enum out_format { OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
 extern int log_level;
 extern size_t gpu_memory;
 extern long long mem_limit;
-extern enum out_format output_format;
+extern bool alpha_wanted;
 extern int fill_color;
 
 enum rc {

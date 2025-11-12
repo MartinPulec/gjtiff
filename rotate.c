@@ -236,8 +236,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 dst_desc.height = (int)(dst_desc.width / dst_aspect);
         }
 
-        dst_desc.alpha = output_format == OUTF_WEBP ? (unsigned char *)!NULL
-                                                    : NULL;
+        dst_desc.alpha = alpha_wanted ? (unsigned char *) 1 : NULL;
         ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:4326");
         for (unsigned i = 0; i < ARR_SIZE(bounds); ++i) {

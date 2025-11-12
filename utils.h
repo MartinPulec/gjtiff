@@ -156,6 +156,7 @@ struct owned_image;
 struct owned_image *new_cuda_owned_image(const struct dec_image *in);
 // struct owned_image *new_cuda_owned_float_image(const struct dec_image *in);
 struct owned_image *copy_img_from_device(const struct dec_image *in,
+                                         enum out_format output_format,
                                          cudaStream_t stream);
 
 void gcs_to_webm(double latitude, double longitude, double *y, double *x);

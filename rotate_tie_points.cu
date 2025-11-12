@@ -354,8 +354,7 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
         dst_desc.width = in->e3857_sug_w;
         dst_desc.height = in->e3857_sug_h;
 
-        dst_desc.alpha = output_format == OUTF_WEBP ? (unsigned char *)1
-                                                    : nullptr;
+        dst_desc.alpha = alpha_wanted ? (unsigned char *)1 : nullptr;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "EPSG:%d",
                  EPSG_WEB_MERCATOR);
@@ -405,8 +404,7 @@ struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const s
         auto *kernel_wo_alpha = in->comp_count == 1
                                     ? kernel_tie_points<1, false>
                                     : kernel_tie_points<3, false>;
-        auto *kernel = output_format == OUTF_WEBP ? kernel_alpha
-                                                  : kernel_wo_alpha;
+        auto *kernel = alpha_wanted ? kernel_alpha : kernel_wo_alpha;
 
         struct tie_points d_tie_points = in->tie_points;
         d_tie_points.points = s->d_tie_points;

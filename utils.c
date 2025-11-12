@@ -283,6 +283,7 @@ struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 // }
 
 struct owned_image *copy_img_from_device(const struct dec_image *in,
+                                         enum out_format output_format,
                                          cudaStream_t stream)
 {
         struct owned_image *ret = malloc(sizeof *ret);
