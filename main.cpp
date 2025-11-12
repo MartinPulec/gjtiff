@@ -680,6 +680,7 @@ static void show_help(const char *progname)
         INFO_MSG("%s [options] img [img2...]\n", progname);
         INFO_MSG("%s [options] -\n\n", progname);
         INFO_MSG("Options:\n");
+        INFO_MSG("\t-D <idx> - use specified CUDA device\n");
         INFO_MSG("\t-F <col> - color to be used to fill margins (u8; for RGB, it copied to all channels)\n");
         INFO_MSG("\t-I <num> - downsampling interpolation idx (NppiInterpolationMode; default 8 /SUPER/)\n");
         INFO_MSG("\t-M <sz_GB>- GPUJPEG memory limit (in GB, floating point; default 1/2 of available VRAM)\n");
@@ -838,8 +839,11 @@ int main(int argc, char **argv)
         struct options global_opts = OPTIONS_INIT;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+F:I:M:NQVdhnno:q:rs:vwz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+D:F:I:M:NQVdhnno:q:rs:vwz:")) != -1) {
                 switch (opt) {
+                case 'D':
+                        CHECK_CUDA(cudaSetDevice(strtol(optarg, nullptr, 0)));
+                        break;
                 case 'F':
                         fill_color = (int)strtol(optarg, nullptr, 0);
                         break;
