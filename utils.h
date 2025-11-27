@@ -166,6 +166,8 @@ bool gj_adjust_size(int *width, int *height, int comp_count);
 struct tie_points tuple6_to_tie_points(unsigned count,
                                        const double *tie_points);
 
+enum nd_feature get_nd_feature(const char *filename1, const char *filename2);
+
 #ifdef __cplusplus
 }
 #endif // _cplusplus

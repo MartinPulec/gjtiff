@@ -107,5 +107,14 @@ struct owned_image {
 #define nullptr NULL
 #endif
 
+/// normalized difference feature (feat1-feat2)/(feat1+feat2)
+enum nd_feature {
+        ND_UNKNOWN,
+        NDVI, ///< Normalized Difference Vegetation Index (B8, B4)
+        NDMI, ///< Normalized Difference Moisture Index (B8A, B11)
+        NDWI, ///< Normalized Difference Water Index (B3, B8)
+        NDSI, ///< Normalised Difference Snow Index (B3, B11)
+};
+
 #endif // ! defined DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510
 

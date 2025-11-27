@@ -45,6 +45,7 @@
 #include "libnvj2k.h"
 #include "libnvtiff.h"
 #include "libtiff.hpp"
+#include "nd_processing.cuh"
 #include "pam.h"
 #include "rotate.h"
 #include "utils.h"
@@ -311,20 +312,30 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
                                           char *combined_ifname,
                                           cudaStream_t stream)
 {
-        assert(ifiles->count == 3);
+        assert(ifiles->count == 2 || ifiles->count == 3);
+
         struct dec_image dst_desc = ifiles->ifiles[0].img->img;
         dst_desc.comp_count = 3;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
-        combine_images_cuda(&ret->img, &ifiles->ifiles[0].img->img,
-                            &ifiles->ifiles[1].img->img,
-                            &ifiles->ifiles[2].img->img, stream);
+
+        if (ifiles->count == 2) {
+                enum nd_feature feature = get_nd_feature(
+                    ifiles->ifiles[0].ifname, ifiles->ifiles[1].ifname);
+                process_nd_features_cuda(&ret->img, feature,
+                                         &ifiles->ifiles[0].img->img,
+                                         &ifiles->ifiles[1].img->img, stream);
+        } else {
+                combine_images_cuda(&ret->img, &ifiles->ifiles[0].img->img,
+                                    &ifiles->ifiles[1].img->img,
+                                    &ifiles->ifiles[2].img->img, stream);
+        }
 
         // set new ifname
         combined_ifname[0] = '\0';
         char *const end = combined_ifname + PATH_MAX;
         get_ofname(ifiles->ifiles[0].ifname, combined_ifname,
                    end - combined_ifname, "", &combined_ifname);
-        for (int i = 1; i < 3; ++i) {
+        for (int i = 1; i < ifiles->count; ++i) {
                 combined_ifname += snprintf(combined_ifname,
                                             end - combined_ifname, "-COMMA-");
                 get_ofname(ifiles->ifiles[i].ifname, combined_ifname,
@@ -779,8 +790,8 @@ static ifiles parse_ifiles(const char *ifnames)
                          sizeof ret.ifiles[0].ifname, "%s", item);
                 tmp = nullptr;
         }
-        if (ret.count == 2) {
-                ERROR_MSG("Combination of 2 bands unsupported, must be 3!\n");
+        if (ret.count > 3) {
+                ERROR_MSG("Combination of more than 3 bands unsupported!\n");
                 return {};
         }
         return ret;

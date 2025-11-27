@@ -40,7 +40,7 @@ $(BUILD_DIR)/%.o: %.cpp $(wildcard *.h *.hpp)
 $(BUILD_DIR)/%.o: %.c $(wildcard *.h)
 	$(CC) $(CFLAGS) $< -c -o $@
 
-$(BUILD_DIR)/%.o: %.cu %.h $(wildcard *.cuh *.h *.hpp)
+$(BUILD_DIR)/%.o: %.cu $(wildcard *.cuh *.h *.hpp)
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 $(BUILD_DIR)/gjtiff: \
@@ -52,6 +52,7 @@ $(BUILD_DIR)/gjtiff: \
 	$(BUILD_DIR)/libtiff.o \
 	$(BUILD_DIR)/libtiffinfo.o \
 	$(BUILD_DIR)/main.o \
+	$(BUILD_DIR)/nd_processing.o \
 	$(BUILD_DIR)/pam.o \
 	$(BUILD_DIR)/rotate.o \
 	$(BUILD_DIR)/rotate_tie_points.o \

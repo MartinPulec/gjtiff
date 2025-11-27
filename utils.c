@@ -394,3 +394,5 @@ struct tie_points tuple6_to_tie_points(unsigned count, const double *tie_points)
         return (struct tie_points){
             .points = points, .count = count, .grid_width = grid_width};
 }
+
+enum nd_feature get_nd_feature(const char *filename1, const char *filename2) {}
