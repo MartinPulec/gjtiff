@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cuda_runtime.h>
 #include <math.h>
+#include <regex.h>
 #include <stddef.h>
 #include <stdlib.h>        // for abort
 #include <string.h>        // for memset
@@ -395,4 +396,39 @@ struct tie_points tuple6_to_tie_points(unsigned count, const double *tie_points)
             .points = points, .count = count, .grid_width = grid_width};
 }
 
-enum nd_feature get_nd_feature(const char *filename1, const char *filename2) {}
+enum nd_feature get_nd_feature(const char *const filename1,
+                               const char *const filename2)
+{
+        struct {
+                const char *patt1;
+                const char *patt2;
+                enum nd_feature feature;
+        } regex_feature_map[] = {
+            {"_B08_", "_B04_", NDVI},
+            {"_B08A_", "_B11_", NDMI},
+            {"_B03_", "_B08_", NDWI},
+            {"_B03_", "_B11_", NDSI},
+        };
+
+        for (unsigned i = 0; i < ARR_SIZE(regex_feature_map); i++) {
+                regex_t re1;
+                regex_t re2;
+
+                if (regcomp(&re1, regex_feature_map[i].patt1,
+                            REG_EXTENDED | REG_NOSUB) != 0 ||
+                    regcomp(&re2, regex_feature_map[i].patt2,
+                            REG_EXTENDED | REG_NOSUB) != 0) {
+                        perror("regcomp");
+                        abort();
+                }
+                int status1 = regexec(&re1, filename1, (size_t)0, NULL, 0);
+                int status2 = regexec(&re2, filename2, (size_t)0, NULL, 0);
+                regfree(&re1);
+                regfree(&re2);
+                if (status1 == 0 && status2 == 0) {
+                        return regex_feature_map[i].feature;
+                }
+        }
+        WARN_MSG("Unrecognized Normalized Difference pattern!\n");
+        return ND_UNKNOWN;
+}
