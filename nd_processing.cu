@@ -28,8 +28,15 @@ static __global__ void nd_process(struct dec_image out,
 
         val1 /= 255.0;
         val2 /= 255.0;
+#ifdef GAMMA
+        val1 = pow(val1, 1.0F / GAMMA);
+        val2 = pow(val2, 1.0F / GAMMA);
+#endif
 
         float res = (val1 - val2) / (val1 / val2);
+#ifdef GAMMA
+        res = pow(res, GAMMA);
+#endif
         float res255 = 255 * __saturatef((res + 1.F) / 2.F);
 
         out.data[3 * (out_x + out_y * out.width)] = res255;
