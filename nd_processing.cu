@@ -99,6 +99,8 @@ static __global__ void nd_process(struct dec_image out,
         val1 = pow(val1, 1.0F / GAMMA);
         val2 = pow(val2, 1.0F / GAMMA);
 #endif
+        val1 *= in1.scale;
+        val2 *= in2.scale;
 
         float res = (val1 - val2) / (val1 + val2 + 0.000001f);
 

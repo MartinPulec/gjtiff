@@ -85,7 +85,8 @@ struct normalize_16b {
 };
 
 template <typename t>
-void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
+static float normalize_cuda(struct dec_image *in, uint8_t *out,
+                            cudaStream_t stream)
 {
         enum {
                 MEAN = 0,
@@ -173,17 +174,18 @@ void normalize_cuda(struct dec_image *in, uint8_t *out, cudaStream_t stream)
             <<<dim3((count + 255) / 256), dim3(256), 0, stream>>>(
                 (typename t::nv_type *)in->data, out, count, scale);
         CHECK_CUDA(cudaGetLastError());
+        return scale;
 }
 
-void convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out,
-                                 cudaStream_t stream)
+float convert_16_8_normalize_cuda(struct dec_image *in, uint8_t *out,
+                                  cudaStream_t stream)
 {
-        normalize_cuda<normalize_16b>(in, out, stream);
+        return normalize_cuda<normalize_16b>(in, out, stream);
 }
 
-void normalize_8(struct dec_image *in, uint8_t *out, cudaStream_t stream)
+float normalize_8(struct dec_image *in, uint8_t *out, cudaStream_t stream)
 {
-        normalize_cuda<normalize_8b>(in, out, stream);
+        return normalize_cuda<normalize_8b>(in, out, stream);
 }
 
 /*                             _                 __    _  __   _     

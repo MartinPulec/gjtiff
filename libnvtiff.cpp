@@ -111,7 +111,7 @@ void nvtiff_destroy(struct nvtiff_state *s)
         delete s;
 }
 
-static uint8_t *convert_16_8(struct nvtiff_state  *s, struct dec_image *img)
+static uint8_t *convert_16_8(struct nvtiff_state  *s, struct dec_image *img, float *scale)
 {
         const size_t out_size = (size_t) img->width * img->height;
         if (out_size > s->converted_allocated) {
@@ -119,7 +119,7 @@ static uint8_t *convert_16_8(struct nvtiff_state  *s, struct dec_image *img)
                 CHECK_CUDA(cudaMalloc(&s->converted, out_size));
                 s->converted_allocated = out_size;
         }
-        convert_16_8_normalize_cuda(img, s->converted, s->stream);
+        *scale = convert_16_8_normalize_cuda(img, s->converted, s->stream);
         return s->converted;
 }
 
@@ -293,7 +293,7 @@ struct dec_image nvtiff_decode(struct nvtiff_state *s, const char *fname)
                 return ret;
         }
         assert(image_info.bits_per_sample[0] == 16);
-        ret.data = convert_16_8(s, &ret);
+        ret.data = convert_16_8(s, &ret, &ret.scale);
         GPU_TIMER_STOP(nvtiff_decode);
         return ret;
 }
