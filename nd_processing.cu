@@ -110,6 +110,7 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                               const struct dec_image *in1,
                               const struct dec_image *in2, cudaStream_t stream)
 {
+        GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
         dim3 block(16, 16);
         int width = out->width;
         int height = out->height;
@@ -121,4 +122,5 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                 nd_process<ND_UNKNOWN><<<grid, block, 0, stream>>>(*out, *in1, *in2);
         }
         CHECK_CUDA(cudaGetLastError());
+        GPU_TIMER_STOP(process_nd_features_cuda);
 }
