@@ -69,25 +69,34 @@ template <> __device__ void process_mapping<NDVI>(uint8_t *out, float val)
         out[2] = b;
 }
 
-template<enum nd_feature feature>
-static __global__ void nd_process(struct dec_image out,
-                                      struct dec_image in1,
-                                      struct dec_image in2)
+template <enum nd_feature feature>
+static __global__ void nd_process(struct dec_image out, struct dec_image in1,
+                                  struct dec_image in2, int d_fill_color)
 {
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
-        if (out_x >= out.width|| out_y >= out.height) {
+        if (out_x >= out.width || out_y >= out.height) {
                 return;
         }
+        uint8_t *out_p = out.data + ((size_t)3 * (out_x + (out_y * out.width)));
 
         float rel_pos_src_x = (out_x + 0.5) / out.width;
         float rel_pos_src_y = (out_y + 0.5) / out.height;
 
         float abs_pos_src_x = rel_pos_src_x * in1.width;
         float abs_pos_src_y = rel_pos_src_y * in1.height;
+        uint8_t alpha1 = bilinearSample(in1.alpha, in1.width, 1, in1.height,
+                                        abs_pos_src_x, abs_pos_src_y);
+        out.alpha[out_x + (out_y * out.width)] =  alpha1;
+        if (alpha1 != 255) {
+                out_p[0] = out_p[1] = out_p[2] = d_fill_color;
+                return;
+        }
+
         float val1 = bilinearSample(
             in1.data, in1.width, 1, in1.height, abs_pos_src_x, abs_pos_src_y);
+
         abs_pos_src_x = rel_pos_src_x * in2.width;
         abs_pos_src_y = rel_pos_src_y * in2.height;
         float val2 = bilinearSample(
@@ -104,14 +113,14 @@ static __global__ void nd_process(struct dec_image out,
 
         float res = (val1 - val2) / (val1 + val2 + 0.000001f);
 
-        process_mapping<feature>(out.data + (3 * (out_x + out_y * out.width)),
-                                 res);
+        process_mapping<feature>(out_p, res);
 }
 
 void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                               const struct dec_image *in1,
                               const struct dec_image *in2, cudaStream_t stream)
 {
+        assert(alpha_wanted);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
         dim3 block(16, 16);
         int width = out->width;
@@ -119,9 +128,11 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
         dim3 grid((width + block.x - 1) / block.x,
                   (height + block.y - 1) / block.y);
         if (feature == NDVI) {
-                nd_process<NDVI><<<grid, block, 0, stream>>>(*out, *in1, *in2);
+                nd_process<NDVI>
+                    <<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
         } else {
-                nd_process<ND_UNKNOWN><<<grid, block, 0, stream>>>(*out, *in1, *in2);
+                nd_process<ND_UNKNOWN>
+                    <<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
         }
         CHECK_CUDA(cudaGetLastError());
         GPU_TIMER_STOP(process_nd_features_cuda);

@@ -963,6 +963,9 @@ int main(int argc, char **argv)
                         ret = EXIT_FAILURE;
                         continue;
                 }
+                if (ifiles.count == 2) {
+                        alpha_wanted = true;
+                }
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
                 for (int i = 0; i < ifiles.count; ++i) {
