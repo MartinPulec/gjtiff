@@ -37,6 +37,23 @@ static const __constant__ struct ramp_item ramp_ndvi[] = {
         {INFINITY, 0x004400},
 };
 
+static const __constant__ struct ramp_item ramp_ndmi[] = {
+       {-0.8, 0x800000},
+       {-0.24, 0xff0000},
+       {-0.032, 0xffff00},
+       {0.032, 0x00ffff},
+       {0.24, 0x0000ff},
+       {0.8, 0x000080},
+       {INFINITY, 0x000080},
+};
+
+static const __constant__ struct ramp_item ramp_ndwi[] = {
+       {-0.8, 0x008000},
+       {0, 0xFFFFFF},
+       {0.8, 0x0000CC},
+       {INFINITY, 0x0000CC},
+};
+
 template <enum nd_feature feature>
 __device__ void process_mapping(uint8_t *out, float val);
 
@@ -51,14 +68,57 @@ template <> __device__ void process_mapping<ND_UNKNOWN>(uint8_t *out, float val)
         out[2] = grayscale;
 }
 
-template <> __device__ void process_mapping<NDVI>(uint8_t *out, float val)
+__device__ static void process_mapping_nd(uint8_t *out, float val,
+                                          const struct ramp_item *ramp)
 {
-        int col = ramp_ndvi[0].col;
-        unsigned i = 0;
-        for (i = 0; i < ARR_SIZE(ramp_ndvi) - 1; ++i) {
-                if (val > ramp_ndvi[i].val && val <= ramp_ndvi[i + 1].val) {
-                        col = ramp_ndvi[i].col;
+        int col = ramp[0].col;
+        while (ramp->val != INFINITY) {
+                if (val > ramp->val && val <= ramp[1].val) {
+                        col = ramp->col;
                         break;
+                }
+                ramp++;
+        }
+        uint8_t r = col >> 16;
+        uint8_t g = (col >> 8) & 0xff;
+        uint8_t b = col & 0xff;
+        out[0] = r;
+        out[1] = g;
+        out[2] = b;
+}
+
+__device__ static void
+process_mapping_nd_interpolate(uint8_t *out, float val,
+                               const struct ramp_item *ramp)
+{
+        int col = 0;
+        if (val < ramp[0].val) {
+                col = ramp[0].col;
+        } else {
+                while (ramp->val != INFINITY) {
+                        if (val > ramp->val && val <= ramp[1].val) {
+                                break;
+                        }
+                        ramp++;
+                }
+                if (ramp->val == INFINITY) {
+                        col = ramp->col;
+                } else {
+                        col = ramp->col;
+                        uint8_t r1 = col >> 16;
+                        uint8_t g1 = (col >> 8) & 0xff;
+                        uint8_t b1 = col & 0xff;
+                        col = ramp[1].col;
+                        uint8_t r2 = col >> 16;
+                        uint8_t g2 = (col >> 8) & 0xff;
+                        uint8_t b2 = col & 0xff;
+                        float scale =  ramp[1].val - ramp->val;
+                        val -= ramp->val;
+                        uint8_t r = round(r1 * (scale - val) / scale + r2 * val / scale);
+                        uint8_t g = round(g1 * (scale - val) / scale + g2 * val / scale);
+                        uint8_t b = round(b1 * (scale - val) / scale + b2 * val / scale);
+                        // if (ramp->val == 0) printf("%d %d = %d  %d %d   %f %f   %f\n", b1, b2, r,g,b,  ramp[0].val, ramp[1].val, val + ramp->val);
+                        col = r << 16 | g << 8 | b;
                 }
         }
         uint8_t r = col >> 16;
@@ -67,6 +127,21 @@ template <> __device__ void process_mapping<NDVI>(uint8_t *out, float val)
         out[0] = r;
         out[1] = g;
         out[2] = b;
+}
+template <> __device__ void process_mapping<NDVI>(uint8_t *out, float val)
+{
+        process_mapping_nd(out, val, ramp_ndvi);
+}
+
+template <> __device__ void process_mapping<NDMI>(uint8_t *out, float val)
+{
+        process_mapping_nd(out, val, ramp_ndmi);
+}
+
+
+template <> __device__ void process_mapping<NDWI>(uint8_t *out, float val)
+{
+        process_mapping_nd_interpolate(out, val, ramp_ndwi);
 }
 
 template <enum nd_feature feature>
@@ -127,13 +202,21 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
         int height = out->height;
         dim3 grid((width + block.x - 1) / block.x,
                   (height + block.y - 1) / block.y);
-        if (feature == NDVI) {
-                nd_process<NDVI>
-                    <<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
-        } else {
-                nd_process<ND_UNKNOWN>
-                    <<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
+        auto *fn = nd_process<ND_UNKNOWN>;
+        switch (feature) {
+        case NDVI:
+                fn =  nd_process<NDVI>;
+                break;
+        case NDMI:
+                fn = nd_process<NDMI>;
+                break;
+        case NDWI:
+                fn = nd_process<NDWI>;
+                break;
+        case ND_UNKNOWN: // already set
+                break;
         }
+        fn<<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
         CHECK_CUDA(cudaGetLastError());
         GPU_TIMER_STOP(process_nd_features_cuda);
 }
