@@ -170,6 +170,10 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
 
         struct owned_image *ret = NULL;
 
+        if (s->disabled) {
+                ret = take_ownership(in);
+                goto set_bounds; // avoid running eventual delegates
+        }
         // delegates
         if (is_utm(in->authority)) {
                 ret = rotate_utm(s->rotate_utm, in);
@@ -185,14 +189,13 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
                 WARN_MSG("Unsupported authority: %s!\n", in->authority);
         }
 
+set_bounds:;
         struct coordinate coords[4] = {};
         double bounds[4] = {};
         const double dst_aspect = normalize_coords(in->coords, coords, bounds);
         // rotation won't be performed
         if (dst_aspect == -1) {
                 DEBUG_MSG("Near North/South pole - not rotating\n");
-                ret = take_ownership(in);
-        } else if (s->disabled) { // rotation disabled
                 ret = take_ownership(in);
         } else if (in->is_slc) {
                 WARN_MSG("SLC product detected, not rotating...\n");
