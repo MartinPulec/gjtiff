@@ -4,10 +4,10 @@
 #include <cstdint>
 
 // Device function: bilinear sample at (x, y) in [0..W) × [0..H)
-static __device__ __forceinline__ uint8_t bilinearSample(const uint8_t *src,
-                                                         int W, int w_stride,
-                                                         int H, float x,
-                                                         float y)
+template <typename T>
+static __device__ __forceinline__ T bilinearSample(const T *src, int W,
+                                                   int w_stride, int H, float x,
+                                                   float y)
 {
         // Compute integer bounds
         int x0 = int(floorf(x));

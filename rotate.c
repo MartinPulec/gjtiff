@@ -143,7 +143,7 @@ static struct owned_image *take_ownership(const struct dec_image *in)
 {
         struct owned_image *ret = malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
-        const size_t size = (size_t) in->width * in->height * in->comp_count;
+        const size_t size = (size_t) in->width * in->height * in->comp_count * 2;
         CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
         CHECK_CUDA(
             cudaMemcpy(ret->img.data, in->data, size, cudaMemcpyDefault));

@@ -183,30 +183,21 @@ static __global__ void nd_process(struct dec_image out, struct dec_image in1,
 
         float abs_pos_src_x = rel_pos_src_x * in1.width;
         float abs_pos_src_y = rel_pos_src_y * in1.height;
-        uint8_t alpha1 = bilinearSample(in1.alpha, in1.width, 1, in1.height,
-                                        abs_pos_src_x, abs_pos_src_y);
-        out.alpha[out_x + (out_y * out.width)] =  alpha1;
-        if (alpha1 != 255) {
-                out_p[0] = out_p[1] = out_p[2] = d_fill_color;
-                return;
-        }
+        // uint8_t alpha1 = bilinearSample(in1.alpha, in1.width, 1, in1.height,
+        //                                 abs_pos_src_x, abs_pos_src_y);
+        // out.alpha[out_x + (out_y * out.width)] =  alpha1;
+        // if (alpha1 != 255) {
+        //         out_p[0] = out_p[1] = out_p[2] = d_fill_color;
+        //         return;
+        // }
 
-        float val1 = bilinearSample(
-            in1.data, in1.width, 1, in1.height, abs_pos_src_x, abs_pos_src_y);
+        float val1 = bilinearSample((uint16_t *)in1.data, in1.width, 1,
+                                    in1.height, abs_pos_src_x, abs_pos_src_y);
 
         abs_pos_src_x = rel_pos_src_x * in2.width;
         abs_pos_src_y = rel_pos_src_y * in2.height;
-        float val2 = bilinearSample(
+        float val2 = bilinearSample((uint16_t *)
             in2.data, in2.width, 1, in2.height, abs_pos_src_x, abs_pos_src_y);
-
-        val1 /= 255.0F;
-        val2 /= 255.0F;
-#ifdef GAMMA
-        val1 = pow(val1, 1.0F / GAMMA);
-        val2 = pow(val2, 1.0F / GAMMA);
-#endif
-        val1 *= in1.scale;
-        val2 *= in2.scale;
 
         float res = (val1 - val2) / (val1 + val2 + 0.000000001f);
 
@@ -218,7 +209,7 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                               const struct dec_image *in2, cudaStream_t stream)
 {
         assert(alpha_wanted);
-        assert(in1->alpha != nullptr);
+        // assert(in1->alpha != nullptr);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
         dim3 block(16, 16);
         int width = out->width;
@@ -242,7 +233,10 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
         if (getenv("GRAYSCALE") != nullptr) {
                 fn = nd_process<ND_UNKNOWN>;
         }
+        cudaStreamSynchronize(stream);
+        CHECK_CUDA(cudaGetLastError());
         fn<<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
+        cudaStreamSynchronize(stream);
         CHECK_CUDA(cudaGetLastError());
         GPU_TIMER_STOP(process_nd_features_cuda);
 }
