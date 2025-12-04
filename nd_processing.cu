@@ -59,10 +59,11 @@ __device__ void process_mapping(uint8_t *out, float val);
 
 template <> __device__ void process_mapping<ND_UNKNOWN>(uint8_t *out, float val)
 {
+        val = __saturatef((val + 1.F) / 2.F);
 #ifdef GAMMA
         val = pow(val, GAMMA);
 #endif
-        uint8_t grayscale = 255 * __saturatef((val + 1.F) / 2.F);
+        uint8_t grayscale = 255 * val;
         out[0] = grayscale;
         out[1] = grayscale;
         out[2] = grayscale;
@@ -82,6 +83,11 @@ __device__ static void process_mapping_nd(uint8_t *out, float val,
         uint8_t r = col >> 16;
         uint8_t g = (col >> 8) & 0xff;
         uint8_t b = col & 0xff;
+#ifdef GAMMA
+        // r = 255.0 * pow(r / 255.0, GAMMA);
+        // g = 255.0 * pow(g / 255.0, GAMMA);
+        // b = 255.0 * pow(b / 255.0, GAMMA);
+#endif
         out[0] = r;
         out[1] = g;
         out[2] = b;
@@ -92,6 +98,7 @@ process_mapping_nd_interpolate(uint8_t *out, float val,
                                const struct ramp_item *ramp)
 {
         int col = 0;
+        // val -= 0.1;
         if (val < ramp[0].val) {
                 col = ramp[0].col;
         } else {
@@ -124,6 +131,11 @@ process_mapping_nd_interpolate(uint8_t *out, float val,
         uint8_t r = col >> 16;
         uint8_t g = (col >> 8) & 0xff;
         uint8_t b = col & 0xff;
+#ifdef GAMMA
+        // r = 255.0 * pow(r / 255.0, GAMMA);
+        // g = 255.0 * pow(g / 255.0, GAMMA);
+        // b = 255.0 * pow(b / 255.0, GAMMA);
+#endif
         out[0] = r;
         out[1] = g;
         out[2] = b;
@@ -135,7 +147,7 @@ template <> __device__ void process_mapping<NDVI>(uint8_t *out, float val)
 
 template <> __device__ void process_mapping<NDMI>(uint8_t *out, float val)
 {
-        process_mapping_nd(out, val, ramp_ndmi);
+        process_mapping_nd_interpolate(out, val, ramp_ndmi);
 }
 
 
@@ -186,7 +198,7 @@ static __global__ void nd_process(struct dec_image out, struct dec_image in1,
         val1 *= in1.scale;
         val2 *= in2.scale;
 
-        float res = (val1 - val2) / (val1 + val2 + 0.000001f);
+        float res = (val1 - val2) / (val1 + val2 + 0.000000001f);
 
         process_mapping<feature>(out_p, res);
 }
