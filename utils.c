@@ -395,29 +395,43 @@ struct tie_points tuple6_to_tie_points(unsigned count, const double *tie_points)
             .points = points, .count = count, .grid_width = grid_width};
 }
 
+const static struct {
+        const char *patt1;
+        const char *patt2;
+        enum nd_feature feature;
+        const char *name;
+} nd_feature_map[] = {
+#define F(x) x, #x
+    {"_B08", "_B04", F(NDVI)},
+    {"_B8A", "_B11", F(NDMI)},
+    {"_B03", "_B08", F(NDWI)},
+    {"_B03", "_B11", F(NDSI)},
+#undef F
+};
+
 enum nd_feature get_nd_feature(const char *const filename1,
                                const char *const filename2)
 {
-        struct {
-                const char *patt1;
-                const char *patt2;
-                enum nd_feature feature;
-                const char *name;
-        } feature_map[] = {
-#define F(x) x, #x
-            {"_B08", "_B04", F(NDVI)},
-            {"_B8A", "_B11", F(NDMI)},
-            {"_B03", "_B08", F(NDWI)},
-            {"_B03", "_B11", F(NDSI)},
-        };
 
-        for (unsigned i = 0; i < ARR_SIZE(feature_map); i++) {
-                if (strstr(filename1, feature_map[i].patt1) != nullptr &&
-                    strstr(filename2, feature_map[i].patt2) != nullptr) {
-                        VERBOSE_MSG("Got feature: %s\n", feature_map[i].name);
-                        return feature_map[i].feature;
+        for (unsigned i = 0; i < ARR_SIZE(nd_feature_map); i++) {
+                if (strstr(filename1, nd_feature_map[i].patt1) != nullptr &&
+                    strstr(filename2, nd_feature_map[i].patt2) != nullptr) {
+                        VERBOSE_MSG("Got feature: %s\n", nd_feature_map[i].name);
+                        return nd_feature_map[i].feature;
                 }
         }
         WARN_MSG("Unrecognized Normalized Difference pattern!\n");
+        return ND_UNKNOWN;
+}
+
+enum nd_feature get_nd_feature_from_name(const char *const name)
+{
+        for (unsigned i = 0; i < ARR_SIZE(nd_feature_map); i++) {
+                if (strstr(name, nd_feature_map[i].name) != nullptr) {
+                        VERBOSE_MSG("Parsed feature name: %s\n", nd_feature_map[i].name);
+                        return nd_feature_map[i].feature;
+                }
+        }
+        WARN_MSG("Unrecognized Normalized Difference feature: %s!\n", name);
         return ND_UNKNOWN;
 }

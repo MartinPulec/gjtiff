@@ -310,6 +310,7 @@ static void get_ofname(const char *ifname, char *ofname, size_t buflen,
 
 static struct owned_image *combine_images(const struct ifiles *ifiles,
                                           char *combined_ifname,
+                                          enum nd_feature feature,
                                           cudaStream_t stream)
 {
         assert(ifiles->count == 2 || ifiles->count == 3);
@@ -319,8 +320,10 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         if (ifiles->count == 2) {
-                enum nd_feature feature = get_nd_feature(
-                    ifiles->ifiles[0].ifname, ifiles->ifiles[1].ifname);
+                if (feature == ND_UNKNOWN) {
+                        feature = get_nd_feature(ifiles->ifiles[0].ifname,
+                                                 ifiles->ifiles[1].ifname);
+                }
                 process_nd_features_cuda(&ret->img, feature,
                                          &ifiles->ifiles[0].img->img,
                                          &ifiles->ifiles[1].img->img, stream);
@@ -852,6 +855,20 @@ static void wait_exclusive_run()
         }
 }
 
+static enum nd_feature get_feature_from_prefix(char **ifnames)
+{
+        char *dash = strchr(*ifnames, '-');
+        if (dash == nullptr) {
+                return ND_UNKNOWN;
+        }
+        char s_feature[10];
+        strncpy(s_feature, *ifnames,
+                MIN((ptrdiff_t)sizeof s_feature, dash - *ifnames));
+        s_feature[sizeof s_feature - 1] = '\0';
+        *ifnames = dash + 1;
+        return get_nd_feature_from_name(s_feature);
+}
+
 int main(int argc, char **argv)
 {
         init_term_colors();
@@ -958,6 +975,7 @@ int main(int argc, char **argv)
 
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf, &opts)) {
+                enum nd_feature feature = get_feature_from_prefix(&ifname);
                 struct ifiles ifiles = parse_ifiles(ifname);
                 if (ifiles.count == 0) {
                         ret = EXIT_FAILURE;
@@ -1003,7 +1021,7 @@ int main(int argc, char **argv)
                 if (ifiles.count > 1) {
                         char combined_ifname[PATH_MAX];
                         struct owned_image *combined = combine_images(
-                            &ifiles, combined_ifname, state.stream);
+                            &ifiles, combined_ifname, feature, state.stream);
                         ifiles_destroy(&ifiles);
                         ifiles.ifiles[0].img = combined;
                         snprintf(ifiles.ifiles[0].ifname,
