@@ -1,4 +1,4 @@
-NVCC ?= nvcc
+NVCC != echo "$${CUDACXX:-nvcc}"
 NVCC_DIR := $(shell dirname $$(command -v $(NVCC)))
 GIT_REV != git rev-parse --short HEAD || echo '(unknown)'
 COMMON = $(shell pkg-config --cflags gdal) -g -Wall -Wextra -fopenmp \
@@ -25,7 +25,7 @@ BUILD_DIR ?= .
 ## @todo filtered out CC >= 10.0 - cuspatial is incompatible with that,
 ## compilation yields errors like in
 ## <https://github.com/bitsandbytes-foundation/bitsandbytes/issues/1688>
-CUDAARCHS != for n in $$(nvcc --list-gpu-arch | \
+CUDAARCHS != for n in $$($(NVCC) --list-gpu-arch | \
 	grep -v '[[:digit:]]\{3\}'); \
 	do echo "$$n" | sed -e 's/.*_\([0-9]*\).*/\1/' \
 	-e 's/.*/-gencode arch=compute_&,code=sm_&/'; done | tr '\n' ' '
