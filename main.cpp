@@ -310,7 +310,7 @@ static void get_ofname(const char *ifname, char *ofname, size_t buflen,
 
 static struct owned_image *combine_images(const struct ifiles *ifiles,
                                           char *combined_ifname,
-                                          enum nd_feature feature,
+                                          const enum nd_feature feature,
                                           cudaStream_t stream)
 {
         assert(ifiles->count == 2 || ifiles->count == 3);
@@ -320,11 +320,12 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         if (ifiles->count == 2) {
-                if (feature == ND_UNKNOWN) {
-                        feature = get_nd_feature(ifiles->ifiles[0].ifname,
-                                                 ifiles->ifiles[1].ifname);
-                }
-                process_nd_features_cuda(&ret->img, feature,
+                const enum nd_feature detected_feature =
+                    feature == ND_UNKNOWN
+                        ? get_nd_feature(ifiles->ifiles[0].ifname,
+                                         ifiles->ifiles[1].ifname)
+                        : feature;
+                process_nd_features_cuda(&ret->img, detected_feature,
                                          &ifiles->ifiles[0].img->img,
                                          &ifiles->ifiles[1].img->img, stream);
         } else {
@@ -336,6 +337,11 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         // set new ifname
         combined_ifname[0] = '\0';
         char *const end = combined_ifname + PATH_MAX;
+        if (feature != ND_UNKNOWN) { // prefix if feature prefix was originally
+                combined_ifname += snprintf(combined_ifname,           // given
+                                            end - combined_ifname, "%s-",
+                                            get_nd_feature_name(feature));
+        }
         get_ofname(ifiles->ifiles[0].ifname, combined_ifname,
                    end - combined_ifname, "", &combined_ifname);
         for (int i = 1; i < ifiles->count; ++i) {

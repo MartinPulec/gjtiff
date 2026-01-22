@@ -102,6 +102,7 @@ struct owned_image {
 };
 
 #define ARR_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define countof ARR_SIZE
 #undef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #undef MAX

@@ -435,3 +435,12 @@ enum nd_feature get_nd_feature_from_name(const char *const name)
         WARN_MSG("Unrecognized Normalized Difference feature: %s!\n", name);
         return ND_UNKNOWN;
 }
+
+const char *get_nd_feature_name(enum nd_feature feature) {
+        for (unsigned i = 0; i < countof(nd_feature_map); i++) {
+                if (nd_feature_map[i].feature == feature) {
+                        return nd_feature_map[i].name;
+                }
+        }
+        return "UNKNOWN_FEATURE";
+}
