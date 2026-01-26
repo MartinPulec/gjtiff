@@ -39,20 +39,22 @@ static const __constant__ struct ramp_item ramp_ndvi[] = {
 };
 
 static const __constant__ struct ramp_item ramp_ndmi[] = {
-       {-0.8, 0x800000},
-       {-0.24, 0xff0000},
-       {-0.032, 0xffff00},
-       {0.032, 0x00ffff},
-       {0.24, 0x0000ff},
-       {0.8, 0x000080},
-       {INFINITY, 0x000080},
+    {-INFINITY, 0x800000},
+    {-0.8,      0x800000},
+    {-0.24,     0xff0000},
+    {-0.032,    0xffff00},
+    {0.032,     0x00ffff},
+    {0.24,      0x0000ff},
+    {0.8,       0x000080},
+    {INFINITY,  0x000080},
 };
 
 static const __constant__ struct ramp_item ramp_ndwi[] = {
-       {-0.8, 0x008000},
-       {0, 0xFFFFFF},
-       {0.8, 0x0000CC},
-       {INFINITY, 0x0000CC},
+    {-INFINITY, 0x008000},
+    {-0.8,      0x008000},
+    {0,         0xFFFFFF},
+    {0.8,       0x0000CC},
+    {INFINITY,  0x0000CC},
 };
 
 template <enum nd_feature feature>
@@ -98,40 +100,34 @@ __device__ static void
 process_mapping_nd_interpolate(uint8_t *out, float val,
                                const struct ramp_item *ramp)
 {
-        int col = 0;
         // val -= 0.1;
-        if (val < ramp[0].val) {
-                col = ramp[0].col;
-        } else {
-                while (ramp->val != INFINITY) {
-                        if (val > ramp->val && val <= ramp[1].val) {
-                                break;
-                        }
-                        ramp++;
+        while (ramp->val != INFINITY) {
+                if (val > ramp->val && val <= ramp[1].val) {
+                        break;
                 }
-                if (ramp->val == INFINITY) {
-                        col = ramp->col;
-                } else {
-                        col = ramp->col;
-                        uint8_t r1 = col >> 16;
-                        uint8_t g1 = (col >> 8) & 0xff;
-                        uint8_t b1 = col & 0xff;
-                        col = ramp[1].col;
-                        uint8_t r2 = col >> 16;
-                        uint8_t g2 = (col >> 8) & 0xff;
-                        uint8_t b2 = col & 0xff;
-                        float scale =  ramp[1].val - ramp->val;
-                        val -= ramp->val;
-                        uint8_t r = round(r1 * (scale - val) / scale + r2 * val / scale);
-                        uint8_t g = round(g1 * (scale - val) / scale + g2 * val / scale);
-                        uint8_t b = round(b1 * (scale - val) / scale + b2 * val / scale);
-                        // if (ramp->val == 0) printf("%d %d = %d  %d %d   %f %f   %f\n", b1, b2, r,g,b,  ramp[0].val, ramp[1].val, val + ramp->val);
-                        col = r << 16 | g << 8 | b;
-                }
+                ramp++;
         }
-        uint8_t r = col >> 16;
-        uint8_t g = (col >> 8) & 0xff;
-        uint8_t b = col & 0xff;
+
+        int col1 = ramp[0].col;
+        uint8_t r1 = col1 >> 16;
+        uint8_t g1 = (col1 >> 8) & 0xff;
+        uint8_t b1 = col1 & 0xff;
+        int col2 = ramp[1].col;
+        uint8_t r2 = col2 >> 16;
+        uint8_t g2 = (col2 >> 8) & 0xff;
+        uint8_t b2 = col2 & 0xff;
+        float scale =  ramp[1].val - ramp->val;
+        val -= ramp->val;
+        uint8_t r = round(r1 * (scale - val) / scale + r2 * val / scale);
+        uint8_t g = round(g1 * (scale - val) / scale + g2 * val / scale);
+        uint8_t b = round(b1 * (scale - val) / scale + b2 * val / scale);
+        // if (ramp->val == 0) printf("%d %d = %d  %d %d   %f %f   %f\n", b1, b2, r,g,b,  ramp[0].val, ramp[1].val, val + ramp->val);
+
+        // int col = r << 16 | g << 8 | b;
+
+        // uint8_t r = col >> 16;
+        // uint8_t g = (col >> 8) & 0xff;
+        // uint8_t b = col & 0xff;
 #ifdef GAMMA
         // r = 255.0 * pow(r / 255.0, GAMMA);
         // g = 255.0 * pow(g / 255.0, GAMMA);
