@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstdlib>  // for getenv
 
 #include "cuda_common.cuh"    // for bilinear_sample
 #include "defs.h"
@@ -237,6 +238,9 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                 break;
         case ND_UNKNOWN: // already set
                 break;
+        }
+        if (getenv("GRAYSCALE") != nullptr) {
+                fn = nd_process<ND_UNKNOWN>;
         }
         fn<<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
         CHECK_CUDA(cudaGetLastError());
