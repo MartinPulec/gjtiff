@@ -109,20 +109,31 @@ process_mapping_nd_interpolate(uint8_t *out, float val,
         }
         const struct ramp_item *ramp1 = ramp;
         const struct ramp_item *ramp2 = ramp + 1;
-        int col1 = ramp1->col;
-        uint8_t r1 = col1 >> 16;
-        uint8_t g1 = (col1 >> 8) & 0xff;
-        uint8_t b1 = col1 & 0xff;
-        int col2 = ramp2->col;
-        uint8_t r2 = col2 >> 16;
-        uint8_t g2 = (col2 >> 8) & 0xff;
-        uint8_t b2 = col2 & 0xff;
-        float scale =  ramp2->val - ramp1->val;
-        val -= ramp1->val;
-        uint8_t r = round(r1 * (scale - val) / scale + r2 * val / scale);
-        uint8_t g = round(g1 * (scale - val) / scale + g2 * val / scale);
-        uint8_t b = round(b1 * (scale - val) / scale + b2 * val / scale);
-        // if (ramp->val == 0) printf("%d %d = %d  %d %d   %f %f   %f\n", b1, b2, r,g,b,  ramp[0].val, ramp[1].val, val + ramp->val);
+        uint8_t r = 0;
+        uint8_t g = 0;
+        uint8_t b = 0;
+        if (isinf(ramp1->val) || isinf(ramp2->val)) {
+                const struct ramp_item *cur_ramp = isinf(ramp1->val) ? ramp1 : ramp2;
+                int col = cur_ramp->col;
+                r = col >> 16;
+                g = (col >> 8) & 0xff;
+                b = col & 0xff;
+        } else {
+                int col1 = ramp1->col;
+                uint8_t r1 = col1 >> 16;
+                uint8_t g1 = (col1 >> 8) & 0xff;
+                uint8_t b1 = col1 & 0xff;
+                int col2 = ramp2->col;
+                uint8_t r2 = col2 >> 16;
+                uint8_t g2 = (col2 >> 8) & 0xff;
+                uint8_t b2 = col2 & 0xff;
+                float scale =  ramp2->val - ramp1->val;
+                val -= ramp1->val;
+                r = round(r1 * (scale - val) / scale + r2 * val / scale);
+                g = round(g1 * (scale - val) / scale + g2 * val / scale);
+                b = round(b1 * (scale - val) / scale + b2 * val / scale);
+                // if (val > 0.4) printf("%d %d = %d  %d %d   %f %f   %f\n", b1, b2, r,g,b,  ramp[0].val, ramp[1].val, val);
+        }
 
         // int col = r << 16 | g << 8 | b;
 
