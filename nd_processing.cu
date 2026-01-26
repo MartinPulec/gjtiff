@@ -107,17 +107,18 @@ process_mapping_nd_interpolate(uint8_t *out, float val,
                 }
                 ramp++;
         }
-
-        int col1 = ramp[0].col;
+        const struct ramp_item *ramp1 = ramp;
+        const struct ramp_item *ramp2 = ramp + 1;
+        int col1 = ramp1->col;
         uint8_t r1 = col1 >> 16;
         uint8_t g1 = (col1 >> 8) & 0xff;
         uint8_t b1 = col1 & 0xff;
-        int col2 = ramp[1].col;
+        int col2 = ramp2->col;
         uint8_t r2 = col2 >> 16;
         uint8_t g2 = (col2 >> 8) & 0xff;
         uint8_t b2 = col2 & 0xff;
-        float scale =  ramp[1].val - ramp->val;
-        val -= ramp->val;
+        float scale =  ramp2->val - ramp1->val;
+        val -= ramp1->val;
         uint8_t r = round(r1 * (scale - val) / scale + r2 * val / scale);
         uint8_t g = round(g1 * (scale - val) / scale + g2 * val / scale);
         uint8_t b = round(b1 * (scale - val) / scale + b2 * val / scale);
