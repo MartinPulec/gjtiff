@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>                       // for atoi,getenv
 #include <nppcore.h>
 #include <nppdefs.h>
 #include <nppi_statistics_functions.h>
@@ -167,9 +168,12 @@ static float normalize_cuda(struct dec_image *in, uint8_t *out,
 
         const size_t count = (size_t)in->width * in->height * in->comp_count;
         // scale to 0..\mu+2*\sigma
-        const float scale = MIN(stddev_mean_res[MEAN] +
-                                    SIGMA_COUNT * stddev_mean_res[STDDEV],
-                                max_res);
+        float scale = MIN(stddev_mean_res[MEAN] +
+                              SIGMA_COUNT * stddev_mean_res[STDDEV],
+                          max_res);
+        if (getenv("SCALE") != nullptr) {
+                scale = atoi(getenv("SCALE"));
+        }
         kernel_normalize<typename t::nv_type>
             <<<dim3((count + 255) / 256), dim3(256), 0, stream>>>(
                 (typename t::nv_type *)in->data, out, count, scale);
