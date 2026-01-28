@@ -34,7 +34,7 @@ __global__ void kernel_normalize(t *in, uint8_t *out, size_t count, float scale)
 
 enum {
         MEAN_STDDEV,
-        MAX,
+        MIN_MAX,
         NB_STATS,
 };
 
@@ -63,8 +63,8 @@ struct normalize_8b {
         constexpr static auto mean_stddev_size =
             nppiMeanStdDevGetBufferHostSize_8u_C1R_Ctx;
         constexpr static auto mean_stddev = nppiMean_StdDev_8u_C1R_Ctx;
-        constexpr static auto max_size = nppiMaxGetBufferHostSize_8u_C1R_Ctx;
-        constexpr static auto max = nppiMax_8u_C1R_Ctx;
+        constexpr static auto min_max_size = nppiMinMaxGetBufferHostSize_8u_C1R_Ctx;
+        constexpr static auto min_max = nppiMinMax_8u_C1R_Ctx;
 };
 
 struct normalize_16b {
@@ -72,8 +72,8 @@ struct normalize_16b {
         constexpr static auto mean_stddev_size =
             nppiMeanStdDevGetBufferHostSize_16u_C1R_Ctx;
         constexpr static auto mean_stddev = nppiMean_StdDev_16u_C1R_Ctx;
-        constexpr static auto max_size = nppiMaxGetBufferHostSize_16u_C1R_Ctx;
-        constexpr static auto max = nppiMax_16u_C1R_Ctx;
+        constexpr static auto min_max_size = nppiMinMaxGetBufferHostSize_16u_C1R_Ctx;
+        constexpr static auto min_max = nppiMinMax_16u_C1R_Ctx;
 };
 
 template <typename t>
@@ -81,9 +81,11 @@ static float normalize_cuda(struct dec_image *in, uint8_t *out,
                             cudaStream_t stream)
 {
         enum {
-                MEAN = 0,
-                STDDEV = 1,
-                MEAN_STDDEV_RES_COUNT = STDDEV + 1,
+                MEAN_IDX = 0,
+                MIN_IDX = 0,
+                STDDEV_IDX = 1,
+                MAX_IDX = 1,
+                RES_COUNT = STDDEV_IDX + 1, // both minmax and meanstddev
                 SIGMA_COUNT = 2, // nultiple of sigma to be added to the mean to
                                  // obtain scale
         };
@@ -107,8 +109,8 @@ static float normalize_cuda(struct dec_image *in, uint8_t *out,
         // int in NPP 12.3 while size_t in 12.6
         size_param_t<typename std::remove_pointer<decltype(t::mean_stddev_size)>::type>
             stddev_scratch_len_req = 0;
-        size_param_t<typename std::remove_pointer<decltype(t::max_size)>::type>
-            max_scratch_len_req = 0;
+        size_param_t<typename std::remove_pointer<decltype(t::min_max_size)>::type>
+            min_max_scratch_len_req = 0;
 
         // GetBufferHostSize_16s_C1R_Ctx(ROI, &BufferSize, NppStreamContext);
         CHECK_NPP(
@@ -120,49 +122,51 @@ static float normalize_cuda(struct dec_image *in, uint8_t *out,
                                    stddev_scratch_len_req));
                 state.stat[MEAN_STDDEV].len = (int)stddev_scratch_len_req;
         }
-        CHECK_NPP(t::max_size(ROI, &max_scratch_len_req, nppStreamCtx));
-        if ((int)max_scratch_len_req > state.stat[MAX].len) {
-                CHECK_CUDA(cudaFreeHost(state.stat[MAX].data));
-                CHECK_CUDA(cudaMallocHost((void **)(&state.stat[MAX].data),
-                                          max_scratch_len_req));
-                state.stat[MAX].len = (int)max_scratch_len_req;
+        CHECK_NPP(t::min_max_size(ROI, &min_max_scratch_len_req, nppStreamCtx));
+        if ((int)min_max_scratch_len_req > state.stat[MIN_MAX].len) {
+                CHECK_CUDA(cudaFreeHost(state.stat[MIN_MAX].data));
+                CHECK_CUDA(cudaMallocHost((void **)(&state.stat[MIN_MAX].data),
+                                          min_max_scratch_len_req));
+                state.stat[MIN_MAX].len = (int)min_max_scratch_len_req;
         }
         // printf("%d\n", BufferSize);
         if (state.stat[MEAN_STDDEV].d_res == nullptr) {
                 CHECK_CUDA(cudaMalloc((void **)(&state.stat[MEAN_STDDEV].d_res),
-                                      MEAN_STDDEV_RES_COUNT * sizeof(Npp64f)));
+                                      RES_COUNT * sizeof(Npp64f)));
         }
-        if (state.stat[MAX].d_res == nullptr) {
-                CHECK_CUDA(cudaMalloc((void **)(&state.stat[MAX].d_res),
-                                      sizeof(Npp16u)));
+        if (state.stat[MIN_MAX].d_res == nullptr) {
+                CHECK_CUDA(cudaMalloc((void **)(&state.stat[MIN_MAX].d_res),
+                                      RES_COUNT * sizeof(Npp16u)));
         }
         CHECK_NPP(t::mean_stddev(
             (typename t::nv_type *)in->data, ROI.width * bps, ROI,
             (Npp8u *)state.stat[MEAN_STDDEV].data,
-            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[MEAN],
-            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[STDDEV], nppStreamCtx));
-        Npp64f stddev_mean_res[MEAN_STDDEV_RES_COUNT];
+            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[MEAN_IDX],
+            &((Npp64f *)state.stat[MEAN_STDDEV].d_res)[STDDEV_IDX], nppStreamCtx));
+        Npp64f stddev_mean_res[RES_COUNT];
         CHECK_CUDA(cudaMemcpyAsync(
             stddev_mean_res, state.stat[MEAN_STDDEV].d_res,
             sizeof stddev_mean_res, cudaMemcpyDeviceToHost, stream));
 
-        CHECK_NPP(t::max((typename t::nv_type *)in->data, ROI.width * bps, ROI,
-                         (Npp8u *)state.stat[MAX].data,
-                         (typename t::nv_type *)state.stat[MAX].d_res,
-                         nppStreamCtx));
-        typename t::nv_type max_res = 0;
-        CHECK_CUDA(cudaMemcpyAsync(&max_res, state.stat[MAX].d_res,
-                                   sizeof max_res, cudaMemcpyDeviceToHost,
-                                   stream));
+        CHECK_NPP(t::min_max(
+            (typename t::nv_type *)in->data, ROI.width * bps, ROI,
+            &((typename t::nv_type *)state.stat[MIN_MAX].d_res)[MIN_IDX],
+            &((typename t::nv_type *)state.stat[MIN_MAX].d_res)[MAX_IDX],
+            (Npp8u *)state.stat[MIN_MAX].data, nppStreamCtx));
+        typename t::nv_type min_max_res[RES_COUNT] = {};
+        CHECK_CUDA(cudaMemcpyAsync(min_max_res, state.stat[MIN_MAX].d_res,
+                                   sizeof min_max_res,
+                                   cudaMemcpyDeviceToHost, stream));
 
-        VERBOSE_MSG("MEAN: %f STDDEV: %f MAX: %hu\n", stddev_mean_res[MEAN],
-                    stddev_mean_res[STDDEV], max_res);
+        VERBOSE_MSG("MEAN: %f STDDEV: %f MIN: %hu MAX: %hu\n",
+                    stddev_mean_res[MEAN_IDX], stddev_mean_res[STDDEV_IDX],
+                    min_max_res[MIN_IDX], min_max_res[MAX_IDX]);
 
         const size_t count = (size_t)in->width * in->height * in->comp_count;
         // scale to 0..\mu+2*\sigma
-        float scale = MIN(stddev_mean_res[MEAN] +
-                              SIGMA_COUNT * stddev_mean_res[STDDEV],
-                          max_res);
+        float scale = MIN(stddev_mean_res[MEAN_IDX] +
+                              SIGMA_COUNT * stddev_mean_res[STDDEV_IDX],
+                          min_max_res[MAX_IDX]);
         if (getenv("SCALE") != nullptr) {
                 scale = atoi(getenv("SCALE"));
         }
