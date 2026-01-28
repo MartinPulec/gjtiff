@@ -32,21 +32,22 @@ __global__ void kernel_normalize(t *in, uint8_t *out, size_t count, float scale)
         out[position] = normalized * 255;
 }
 
+enum {
+        MEAN_STDDEV,
+        MAX,
+        NB_STATS,
+};
+
 static struct {
         struct {
-                void *data;
-                int len;
+                void *data;  // scratchpad
+                int len;     // scartchpad size
                 void *d_res;
-        } stat[2];
+        } stat[NB_STATS];
 
         uint8_t *d_yuv420;
         size_t d_yuv420_allocated;
 } state;
-/// indices to state.scratch
-enum {
-        MEAN_STDDEV = 0,
-        MAX = 1,
-};
 
 template <typename T> struct second_param;
 template <typename Ret, typename T1, typename T2, typename... Args>
