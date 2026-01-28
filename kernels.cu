@@ -71,7 +71,7 @@ struct normalize_8b {
         constexpr static auto mean_stddev = NPP_CONTEXTIZE(
             nppiMean_StdDev_8u_C1R);
         constexpr static auto max_size = NPP_CONTEXTIZE(
-            nppiMeanStdDevGetBufferHostSize_8u_C1R);
+            nppiMaxGetBufferHostSize_8u_C1R);
         constexpr static auto max = NPP_CONTEXTIZE(nppiMax_8u_C1R);
 };
 
@@ -82,7 +82,7 @@ struct normalize_16b {
         constexpr static auto mean_stddev = NPP_CONTEXTIZE(
             nppiMean_StdDev_16u_C1R);
         constexpr static auto max_size = NPP_CONTEXTIZE(
-            nppiMeanStdDevGetBufferHostSize_16u_C1R);
+            nppiMaxGetBufferHostSize_16u_C1R);
         constexpr static auto max = NPP_CONTEXTIZE(nppiMax_16u_C1R);
 };
 
