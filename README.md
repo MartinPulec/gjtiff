@@ -26,22 +26,26 @@ parallel tile decoding
 
 Build:
 
-- CUDA toolkit + C++ compiler + make
+- CUDA toolkit (version at least 12), NPP (distributed in CUDA)
+- C++ compiler, make, pkg-config/pkgconf
 - [GPUJPEG](https://github.com/CESNET/GPUJPEG)
 - [nvJPEG2000](https://developer.nvidia.com/nvjpeg2000-downloads)
 - [nvTIFF](https://developer.nvidia.com/nvtiff-downloads)
 - [libTIFF](https://libtiff.gitlab.io/libtiff)
+- [cuspatial](https://github.com/rapidsai/cuspatial)
 
 Runtime:
 
-- NVIDIA proprietary drivers
+- NVIDIA proprietary drivers (supporting CUDA >= 12)
 - the libraries of the build deps unless linked with static versions
-- [nvCOMP](https://developer.nvidia.com/nvcomp-download) library for DEFLATE
+- [nvCOMP](https://developer.nvidia.com/nvcomp-download) library for
+DEFLATE suppot in nvTIFF
 
 ## Hardware
 
-- CUDA-capable device - GPUJPEG requires approximately 60 B of memory for a
-pixel, so 16K x 16K requires approximately 16 GB RAM.
+- CUDA >= 12 capable device (Maxwell microarchitecture onwards)
+- GPUJPEG requires approximately 60 B of memory for RGB pixel, so 16K x
+16K requires approximately 16 GB VRAM
 
 # Build and running
 
