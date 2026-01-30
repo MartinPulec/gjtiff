@@ -8,7 +8,7 @@
 #include <cstddef>  // for size_t
 #endif
 
-#define GAMMA 2
+// #define GAMMA 2
 
 enum {
         LL_REALLY_QUIET = -2,

@@ -6,6 +6,9 @@
 #include <nppcore.h>
 #include <nppdefs.h>
 #include <nppi_statistics_functions.h>
+#include <thrust/device_vector.h>
+#include <thrust/transform.h>
+#include <thrust/functional.h>
 #include <type_traits>
 
 #include "cuda_common.cuh"
@@ -574,4 +577,27 @@ void cleanup_cuda_kernels()
                 CHECK_CUDA(cudaFree(state.stat[i].d_res));
         }
         CHECK_CUDA(cudaFree(state.d_yuv420));
+}
+
+struct subtract_offset {
+        __host__ __device__ void operator()(uint16_t &x) const
+        {
+                constexpr uint16_t val = 2000;
+                x = x > val ? x - val : 0;
+        }
+};
+
+void thrust_substract_offset(uint16_t *d_ptr, size_t count, cudaStream_t stream)
+{
+        thrust::for_each(thrust::cuda::par.on(stream), d_ptr, d_ptr + count,
+                         subtract_offset{});
+}
+struct extend_15b {
+        __host__ __device__ void operator()(uint16_t &x) const { x <<= 1; }
+};
+
+void thrust_extend_15b(uint16_t *d_ptr, size_t count, cudaStream_t stream)
+{
+        thrust::for_each(thrust::cuda::par.on(stream), d_ptr, d_ptr + count,
+                         extend_15b{});
 }

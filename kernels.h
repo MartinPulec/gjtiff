@@ -47,6 +47,10 @@ void rotate_set_alpha(struct dec_image *in, double aDstQuad[4][2],
 
 void cleanup_cuda_kernels(void);
 
+void thrust_extend_15b(uint16_t *d_ptr, size_t count, cudaStream_t stream);
+void thrust_substract_offset(uint16_t *d_ptr, size_t count,
+                             cudaStream_t stream);
+
 #ifdef __cplusplus
 }
 #endif
