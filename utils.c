@@ -444,3 +444,14 @@ const char *get_nd_feature_name(enum nd_feature feature) {
         }
         return "UNKNOWN_FEATURE";
 }
+
+void write_raw_gpu_image(void *d_ptr, size_t len)
+{
+        char *h_ptr = nullptr;
+        CHECK_CUDA(cudaMallocHost((void **)&h_ptr, len));
+        CHECK_CUDA(cudaMemcpy(h_ptr, d_ptr, len, cudaMemcpyDefault));
+        FILE *out = fopen("out.raw", "wb");
+        fwrite(h_ptr, len, 1, out);
+        fclose(out);
+        CHECK_CUDA(cudaFreeHost(h_ptr));
+}
