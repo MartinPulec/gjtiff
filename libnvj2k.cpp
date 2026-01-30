@@ -53,7 +53,8 @@ struct nvj2k_state {
 
 // prototypes
 static void print_j2k_info(const nvjpeg2kImageInfo_t *image_info,
-                           const nvjpeg2kImageComponentInfo_t *image_comp_info);
+                           const nvjpeg2kImageComponentInfo_t *image_comp_info,
+                           nvjpeg2kColorSpace_t color_space);
 static bool
 validate_equal_comps(const nvjpeg2kImageInfo_t *image_info,
                      const nvjpeg2kImageComponentInfo_t *image_comp_info);
@@ -220,17 +221,20 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                                                     &image_comp_info[c], c);
         }
 
+        nvjpeg2kColorSpace_t color_space = NVJPEG2K_COLORSPACE_UNKNOWN;
+        nvjpeg2kStreamGetColorSpace(s->nvjpeg2k_stream, &color_space);
+
         if (!validate_equal_comps(&image_info, image_comp_info)) {
                 ERROR_MSG("%s: inequal components:\n", fname);
-                print_j2k_info(&image_info, image_comp_info);
+                print_j2k_info(&image_info, image_comp_info, color_space);
                 return {};
         }
         if (image_comp_info[0].sgn != 0) {
                 ERROR_MSG("%s: signed samples not yet supported!\n", fname);
-                print_j2k_info(&image_info, image_comp_info);
+                print_j2k_info(&image_info, image_comp_info, color_space);
         }
         if (log_level >= LL_DEBUG) {
-                print_j2k_info(&image_info, image_comp_info);
+                print_j2k_info(&image_info, image_comp_info, color_space);
         }
 
         nvjpeg2kImage_t output_image;
@@ -376,14 +380,25 @@ void nvj2k_destroy(struct nvj2k_state *s) {
 }
 
 static void print_j2k_info(const nvjpeg2kImageInfo_t *image_info,
-                           const nvjpeg2kImageComponentInfo_t *image_comp_info)
+                           const nvjpeg2kImageComponentInfo_t *image_comp_info,
+                           nvjpeg2kColorSpace_t color_space)
 {
-        INFO_MSG("Image size: %" PRIu32 "x%" PRIu32 ", tile size: %" PRIu32 "x%" PRIu32
-               ", num tiles: %" PRIu32 "x%" PRIu32 ", components: %" PRIu32 "\n",
-               image_info->image_width, image_info->image_height,
-               image_info->tile_width, image_info->tile_height,
-               image_info->num_tiles_x, image_info->num_tiles_y,
-               image_info->num_components);
+        const char *cs_name = "ERROR";
+        switch (color_space) {
+        case NVJPEG2K_COLORSPACE_NOT_SUPPORTED: cs_name = "unsupp"; break;
+        case NVJPEG2K_COLORSPACE_UNKNOWN:       cs_name = "unknown"; break;
+        case NVJPEG2K_COLORSPACE_SRGB:          cs_name = "sRGB"; break;
+        case NVJPEG2K_COLORSPACE_GRAY:          cs_name = "gray"; break;
+        case NVJPEG2K_COLORSPACE_SYCC:          cs_name = "SYCC"; break;
+        }
+
+        INFO_MSG("Image size: %" PRIu32 "x%" PRIu32 ", tile size: %" PRIu32
+                 "x%" PRIu32 ", num tiles: %" PRIu32 "x%" PRIu32
+                 ", components: %" PRIu32 ", color space: %s\n",
+                 image_info->image_width, image_info->image_height,
+                 image_info->tile_width, image_info->tile_height,
+                 image_info->num_tiles_x, image_info->num_tiles_y,
+                 image_info->num_components, cs_name);
         for (unsigned i = 0; i < image_info->num_components; ++i) {
                 INFO_MSG("\tcomponent #%u size %" PRIu32 "x%" PRIu32
                        ", precision: %" PRIu8 ", sgn: %" PRIu8 "\n",
