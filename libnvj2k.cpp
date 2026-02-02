@@ -353,15 +353,10 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                     (int)(image_comp_info[0].component_width * image_info.num_components),
                     (int)s->pitch_in_bytes, (int)image_comp_info[0].component_height,
                     s->cuda_stream);
-                if (image_comp_info[0].precision == 15) {
-                        thrust_extend_15b((uint16_t *)s->converted, sample_count,
-                                          s->cuda_stream);
-                }
-                if (ret.comp_count == 1) {
-                        // write_raw_gpu_image(s->converted, sample_count * 2);
-                        thrust_substract_offset((uint16_t *)s->converted,
-                                                sample_count, s->cuda_stream);
-                }
+                thrust_process_s2((uint16_t *)s->converted, sample_count,
+                                        s->cuda_stream);
+                // write_raw_gpu_image(s->converted, ret.width, ret.height, bps);
+
                 // ret.scale = convert_16_8_normalize_cuda(
                 //     &ret, s->converted + conv_size / 3 * 2, s->cuda_stream);
                 // ret.data = s->converted + conv_size / 3 * 2;

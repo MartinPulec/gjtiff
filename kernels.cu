@@ -579,25 +579,17 @@ void cleanup_cuda_kernels()
         CHECK_CUDA(cudaFree(state.d_yuv420));
 }
 
-struct subtract_offset {
-        __host__ __device__ void operator()(uint16_t &x) const
+struct process_s2 {
+        __device__ void operator()(uint16_t &x) const
         {
-                constexpr uint16_t val = 2000;
-                x = x > val ? x - val : 0;
+                constexpr uint16_t offset = 1000;
+                x = x > offset ? x - offset : 0;
+                x = __saturatef(x / 10000.F) * 65535.0;
         }
 };
 
-void thrust_substract_offset(uint16_t *d_ptr, size_t count, cudaStream_t stream)
+void thrust_process_s2(uint16_t *d_ptr, size_t count, cudaStream_t stream)
 {
         thrust::for_each(thrust::cuda::par.on(stream), d_ptr, d_ptr + count,
-                         subtract_offset{});
-}
-struct extend_15b {
-        __host__ __device__ void operator()(uint16_t &x) const { x <<= 1; }
-};
-
-void thrust_extend_15b(uint16_t *d_ptr, size_t count, cudaStream_t stream)
-{
-        thrust::for_each(thrust::cuda::par.on(stream), d_ptr, d_ptr + count,
-                         extend_15b{});
+                         process_s2{});
 }
