@@ -95,8 +95,6 @@ struct dec_image {
         bool is_slc;
 
         struct tie_points tie_points;
-
-        float scale; ///< scale that was equalized to
 };
 
 struct owned_image {

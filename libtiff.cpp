@@ -151,8 +151,8 @@ libtiff_state::decode_stripped_complex(TIFF *tif, struct tiff_info *tiffinfo)
         convert_complex_int_to_uint16(
             (int16_t *)d_decoded, (uint16_t *)d_converted, decsize / 4, stream);
         ret.data = d_converted;
-        ret.scale = convert_16_8_normalize_cuda(
-            &ret, d_converted + converted_16b_size, stream);
+        convert_16_8_normalize_cuda(&ret, d_converted + converted_16b_size,
+                                    stream);
         ret.data = d_converted + converted_16b_size;
         return ret;
 }
@@ -229,7 +229,7 @@ libtiff_state::decode_tiled(TIFF *tif, struct tiff_info *tiffinfo)
         }
         // convert_complex_int(d_decoded, d_converted, decsize, stream);
         ret.data = d_decoded;
-        ret.scale = convert_16_8_normalize_cuda(&ret, d_converted, stream);
+        convert_16_8_normalize_cuda(&ret, d_converted, stream);
         ret.data = d_converted;
         return ret;
 }

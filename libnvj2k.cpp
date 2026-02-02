@@ -347,8 +347,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
                 if (ret.comp_count == 3) {
                         return ret;
                 }
-                ret.scale = normalize_8(&ret, s->converted + conv_size / 2,
-                                        s->cuda_stream);
+                normalize_8(&ret, s->converted + conv_size / 2, s->cuda_stream);
                 ret.data = s->converted + conv_size / 2;
         } else {
                 convert_remove_pitch_16(
@@ -366,10 +365,6 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
                         ret.is_16b = false;
                 }
                 // write_raw_gpu_image(s->converted, ret.width, ret.height, bps);
-
-                // ret.scale = convert_16_8_normalize_cuda(
-                //     &ret, s->converted + conv_size / 3 * 2, s->cuda_stream);
-                // ret.data = s->converted + conv_size / 3 * 2;
         }
 
         return ret;
