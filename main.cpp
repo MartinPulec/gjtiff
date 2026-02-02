@@ -857,15 +857,15 @@ static void wait_exclusive_run()
 
 static enum nd_feature get_feature_from_prefix(char **ifnames)
 {
-        char *dash = strchr(*ifnames, '-');
-        if (dash == nullptr) {
+        char *space = strchr(*ifnames, ' ');
+        if (space == nullptr) {
                 return ND_UNKNOWN;
         }
         char s_feature[10];
         strncpy(s_feature, *ifnames,
-                MIN((ptrdiff_t)sizeof s_feature, dash - *ifnames));
+                MIN((ptrdiff_t)sizeof s_feature, space - *ifnames));
         s_feature[sizeof s_feature - 1] = '\0';
-        *ifnames = dash + 1;
+        *ifnames = space + 1;
         return get_nd_feature_from_name(s_feature);
 }
 
