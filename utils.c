@@ -390,7 +390,7 @@ struct tie_points tuple6_to_tie_points(unsigned count, const double *tie_points)
             .points = points, .count = count, .grid_width = grid_width};
 }
 
-const static struct {
+static const struct {
         const char *patt1;
         const char *patt2;
         enum nd_feature feature;
