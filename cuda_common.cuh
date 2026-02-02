@@ -4,8 +4,8 @@
 #include <cstdint>
 
 // Device function: bilinear sample at (x, y) in [0..W) × [0..H)
-template <typename T>
-static __device__ __forceinline__ T bilinearSample(const T *src, int W,
+template <typename T, typename Ret = T>
+static __device__ __forceinline__ Ret bilinearSample(const T *src, int W,
                                                    int w_stride, int H, float x,
                                                    float y)
 {

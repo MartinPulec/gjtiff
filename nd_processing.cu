@@ -191,13 +191,15 @@ static __global__ void nd_process(struct dec_image out, struct dec_image in1,
         //         return;
         // }
 
-        float val1 = bilinearSample((uint16_t *)in1.data, in1.width, 1,
-                                    in1.height, abs_pos_src_x, abs_pos_src_y);
+        float val1 = bilinearSample<uint16_t, float>(
+            (uint16_t *)in1.data, in1.width, 1, in1.height, abs_pos_src_x,
+            abs_pos_src_y);
 
         abs_pos_src_x = rel_pos_src_x * in2.width;
         abs_pos_src_y = rel_pos_src_y * in2.height;
-        float val2 = bilinearSample((uint16_t *)
-            in2.data, in2.width, 1, in2.height, abs_pos_src_x, abs_pos_src_y);
+        float val2 = bilinearSample<uint16_t, float>(
+            (uint16_t *)in2.data, in2.width, 1, in2.height, abs_pos_src_x,
+            abs_pos_src_y);
 
         float res = (val1 - val2) / (val1 + val2 + 0.000000001f);
 
