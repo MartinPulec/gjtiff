@@ -48,6 +48,8 @@ void rotate_set_alpha(struct dec_image *in, double aDstQuad[4][2],
 void cleanup_cuda_kernels(void);
 
 void thrust_process_s2(uint16_t *d_ptr, size_t count, cudaStream_t stream);
+void thrust_16b_to_8b(uint16_t *d_in, uint8_t *d_out, size_t count,
+                      cudaStream_t stream);
 
 #ifdef __cplusplus
 }

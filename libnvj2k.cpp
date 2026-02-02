@@ -168,7 +168,9 @@ static void set_coords_from_j2k(const char *fname, struct dec_image *image)
 }
 */
 
-struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
+struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
+                              bool decode_16b)
+{
         FILE *f = fopen(fname, "rb");
         if (f == nullptr) {
                 ERROR_MSG("Unable to open file %s: %s\n", fname, strerror(errno));
@@ -336,6 +338,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         const size_t sample_count = (size_t) ret.width * ret.height;
 
         if (bps == 1) {
+                assert(!decode_16b);
                 convert_remove_pitch(
                     s->decode_output, s->converted,
                     (int)(image_comp_info[0].component_width * image_info.num_components),
@@ -356,6 +359,12 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
                     s->cuda_stream);
                 thrust_process_s2((uint16_t *)s->converted, sample_count,
                                         s->cuda_stream);
+                if (!decode_16b) {
+                        ret.data = s->converted + conv_size / 3 * 2;
+                        thrust_16b_to_8b((uint16_t *)s->converted, ret.data,
+                                         sample_count, s->cuda_stream);
+                        ret.is_16b = false;
+                }
                 // write_raw_gpu_image(s->converted, ret.width, ret.height, bps);
 
                 // ret.scale = convert_16_8_normalize_cuda(

@@ -404,20 +404,20 @@ const static struct {
 #undef F
 };
 
-enum nd_feature get_nd_feature(const char *const filename1,
-                               const char *const filename2)
-{
+// enum nd_feature get_nd_feature(const char *const filename1,
+//                                const char *const filename2)
+// {
 
-        for (unsigned i = 0; i < ARR_SIZE(nd_feature_map); i++) {
-                if (strstr(filename1, nd_feature_map[i].patt1) != nullptr &&
-                    strstr(filename2, nd_feature_map[i].patt2) != nullptr) {
-                        VERBOSE_MSG("Got feature: %s\n", nd_feature_map[i].name);
-                        return nd_feature_map[i].feature;
-                }
-        }
-        WARN_MSG("Unrecognized Normalized Difference pattern!\n");
-        return ND_UNKNOWN;
-}
+//         for (unsigned i = 0; i < ARR_SIZE(nd_feature_map); i++) {
+//                 if (strstr(filename1, nd_feature_map[i].patt1) != nullptr &&
+//                     strstr(filename2, nd_feature_map[i].patt2) != nullptr) {
+//                         VERBOSE_MSG("Got feature: %s\n", nd_feature_map[i].name);
+//                         return nd_feature_map[i].feature;
+//                 }
+//         }
+//         WARN_MSG("Unrecognized Normalized Difference pattern!\n");
+//         return ND_UNKNOWN;
+// }
 
 enum nd_feature get_nd_feature_from_name(const char *const name)
 {

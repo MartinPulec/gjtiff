@@ -593,3 +593,16 @@ void thrust_process_s2(uint16_t *d_ptr, size_t count, cudaStream_t stream)
         thrust::for_each(thrust::cuda::par.on(stream), d_ptr, d_ptr + count,
                          process_s2{});
 }
+
+struct convert_16b_to_8b {
+        __device__ uint8_t operator()(const uint16_t &x) const
+        {
+                return x >> 8;
+        }
+};
+
+void thrust_16b_to_8b(uint16_t *d_in, uint8_t *d_out, size_t count,
+                      cudaStream_t stream) {
+        thrust::transform(thrust::cuda::par.on(stream), d_in, d_in + count, d_out,
+                         convert_16b_to_8b{});
+}

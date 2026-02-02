@@ -197,6 +197,7 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                               const struct dec_image *in2, cudaStream_t stream)
 {
         assert(alpha_wanted);
+        assert(feature != ND_UNKNOWN);
         assert(in1->alpha != nullptr);
         assert(in1->is_16b && in2->is_16b);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);

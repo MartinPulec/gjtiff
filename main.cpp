@@ -194,7 +194,8 @@ static dec_image decode_tiff(struct state_gjtiff *s, const char *fname)
         return libtiff_decode(s->state_libtiff, fname);
 }
 
-static dec_image decode(struct state_gjtiff *s, const char *fname)
+static dec_image decode(struct state_gjtiff *s, const char *fname,
+                        bool decode_16b)
 {
         INFO_MSG("\n%s"
                "==================================================================\n"
@@ -202,8 +203,9 @@ static dec_image decode(struct state_gjtiff *s, const char *fname)
                "==================================================================%s\n",
                 fg_bold, fname, term_reset);
         if (strstr(fname, ".jp2") == fname + strlen(fname) - 4) {
-                return nvj2k_decode(s->state_nvj2k, fname);
+                return nvj2k_decode(s->state_nvj2k, fname, decode_16b);
         }
+        assert(!decode_16b);
         return decode_tiff(s, fname);
 }
 
@@ -321,12 +323,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         if (ifiles->count == 2) {
-                const enum nd_feature detected_feature =
-                    feature == ND_UNKNOWN
-                        ? get_nd_feature(ifiles->ifiles[0].ifname,
-                                         ifiles->ifiles[1].ifname)
-                        : feature;
-                process_nd_features_cuda(&ret->img, detected_feature,
+                process_nd_features_cuda(&ret->img, feature,
                                          &ifiles->ifiles[0].img->img,
                                          &ifiles->ifiles[1].img->img, stream);
         } else {
@@ -990,8 +987,12 @@ int main(int argc, char **argv)
                         continue;
                 }
                 if (ifiles.count == 2) {
+                        assert(feature != ND_UNKNOWN);
                         alpha_wanted = true;
+                } else {
+                        assert(feature == ND_UNKNOWN);
                 }
+                bool decode_16b = feature != ND_UNKNOWN;
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
                 for (int i = 0; i < ifiles.count; ++i) {
@@ -1000,7 +1001,8 @@ int main(int argc, char **argv)
                         snprintf(cmd, sizeof cmd, "cp %s /tmp", ifiles.ifiles[i].ifname);
                         system(cmd);
 #endif
-                        struct dec_image dec = decode(&state, ifiles.ifiles[i].ifname);
+                        struct dec_image dec = decode(
+                            &state, ifiles.ifiles[i].ifname, decode_16b);
                         if (dec.data == nullptr) {
                                 ret = ERR_SOME_FILES_NOT_TRANSCODED;
                                 err = true;
