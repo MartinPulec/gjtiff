@@ -4,8 +4,10 @@
 #ifndef __cplusplus
 #include <stdbool.h>
 #include <stddef.h>  // for size_t
+#include <stdint.h>  // for uint8_t
 #else
 #include <cstddef>  // for size_t
+#include <cstdint>  // for uint8_t
 #endif
 
 // #define GAMMA 2
@@ -19,12 +21,12 @@ enum {
 };
 enum out_format { OUTF_NONE, OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
 
-// defined in main.c
+// defined in main.cpp
 extern int log_level;
 extern size_t gpu_memory;
 extern long long mem_limit;
 extern bool alpha_wanted;
-extern int fill_color;
+extern uint8_t fill_color;
 
 enum rc {
         ERR_SOME_FILES_NOT_TRANSCODED = 2,

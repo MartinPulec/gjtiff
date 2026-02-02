@@ -69,7 +69,7 @@ int log_level = 0;
 size_t gpu_memory = 0;
 cudaEvent_t cuda_event_start;
 cudaEvent_t cuda_event_stop;
-int fill_color = 0;
+uint8_t fill_color = 0;
 
 int interpolation = 0;
 long long mem_limit = 0;
