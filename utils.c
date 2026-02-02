@@ -445,13 +445,22 @@ const char *get_nd_feature_name(enum nd_feature feature) {
         return "UNKNOWN_FEATURE";
 }
 
-void write_raw_gpu_image(void *d_ptr, size_t len)
+void write_raw_gpu_image(void *d_ptr, unsigned width, unsigned height, int bps)
 {
+        assert(bps == 2);
         char *h_ptr = nullptr;
+        const size_t len = (size_t) width * height * bps;
         CHECK_CUDA(cudaMallocHost((void **)&h_ptr, len));
         CHECK_CUDA(cudaMemcpy(h_ptr, d_ptr, len, cudaMemcpyDefault));
-        FILE *out = fopen("out.raw", "wb");
-        fwrite(h_ptr, len, 1, out);
+        FILE *out = fopen("out.pnm", "wb");
+        fprintf(out, "P5\n%u %u\n65535\n", width, height);
+        char *ptr = h_ptr;
+        while (ptr < h_ptr + len - 1) {
+                putc(ptr[1], out);
+                putc(ptr[0], out);
+                ptr += 2;
+        }
+        // fwrite(h_ptr, len, 1, out);
         fclose(out);
         CHECK_CUDA(cudaFreeHost(h_ptr));
 }

@@ -170,7 +170,7 @@ enum nd_feature get_nd_feature(const char *filename1, const char *filename2);
 enum nd_feature get_nd_feature_from_name(const char *name);
 const char *get_nd_feature_name(enum nd_feature feature);
 
-void write_raw_gpu_image(void *d_ptr, size_t len);
+void write_raw_gpu_image(void *d_ptr, unsigned width, unsigned height, int bps);
 
 #ifdef __cplusplus
 }
