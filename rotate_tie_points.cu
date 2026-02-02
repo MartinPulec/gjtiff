@@ -346,8 +346,8 @@ kernel_tie_points(const uint8_t *d_in, uint8_t *d_out, uint8_t *d_out_alpha,
 struct owned_image *rotate_tie_points(struct rotate_tie_points_state *s, const struct dec_image *in)
 {
         if (in->e3857_sug_w == 0 || in->e3857_sug_h == 0) {
-                WARN_MSG("Suggested size set to 0, skipping rotate_tie_points...\n");
-                return nullptr;
+                ERROR_MSG("Suggested size set to 0, skipping rotate_tie_points...\n");
+                abort();
         }
         GPU_TIMER_START(rotate_geotff, LL_DEBUG, s->stream);
         struct dec_image dst_desc = *in;

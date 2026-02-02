@@ -198,15 +198,16 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         OGRCoordinateTransformationH transform = OCTNewCoordinateTransformation(
             s->src_srs, s->dst_srs);
         if (transform == nullptr) {
-                ERROR_MSG("Cannot create transform!\n");
-                return nullptr;
+                ERROR_MSG("[roate_utm] Cannot create transform!\n");
+                abort();
         }
         bool succeed = adjust_dst_bounds(XLEFT, YTOP, &src_bounds, &dst_bounds, transform);
         succeed &= adjust_dst_bounds(XRIGHT, YTOP, &src_bounds, &dst_bounds, transform);
         succeed &= adjust_dst_bounds(XRIGHT, YBOTTOM, &src_bounds, &dst_bounds, transform);
         succeed &= adjust_dst_bounds(XLEFT, YBOTTOM, &src_bounds, &dst_bounds, transform);
         if (!succeed) {
-                return nullptr;
+                ERROR_MSG("[rotate_utm] Failed to adjust dst bounds!\n");
+                abort();
         }
         double dst_ratio = (dst_bounds.bound[XRIGHT] - dst_bounds.bound[XLEFT]) /
                            (dst_bounds.bound[YBOTTOM] - dst_bounds.bound[YTOP]);
