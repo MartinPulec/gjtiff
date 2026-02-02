@@ -77,8 +77,9 @@ struct dec_image {
         int width;
         int height;
         int comp_count;
+        bool is_16b;
         unsigned char *data;
-        unsigned char *alpha;
+        unsigned char *alpha;   // always in 8 bits
 
         /// order: uppper left, upper right, lower right, lower left
         /// (@sa coord_pos_name)

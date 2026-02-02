@@ -331,6 +331,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname) {
         ret.height = (int)image_comp_info[0].component_height;
         ret.comp_count = (int) image_info.num_components;
         ret.data = s->converted;
+        ret.is_16b = bps == 2;
         set_coords_from_gdal(fname, &ret);
         const size_t sample_count = (size_t) ret.width * ret.height;
 

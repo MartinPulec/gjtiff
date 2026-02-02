@@ -73,14 +73,16 @@ struct bounds {
 };
 using device_projection = cuproj::device_projection<cuproj::vec_2d<float>>;
 
-template <int components, bool alpha>
+template <typename T, int components, bool alpha>
 static __global__ void
-kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
-                           uint8_t *d_out, uint8_t *d_out_alpha, int in_width,
+kernel_utm_to_web_mercator(device_projection const d_proj, const void *d_in_v,
+                           void *d_out_v, uint8_t *d_out_alpha, int in_width,
                            int in_height, int out_width, int out_height,
                            struct bounds src_bounds, struct bounds dst_bounds,
                            int fill_color)
 {
+        const auto *d_in = (T const *)d_in_v;
+        auto *d_out = (T *)d_out_v;
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
 
@@ -114,7 +116,8 @@ kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
         if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
             rel_pos_src_y < 0 || rel_pos_src_y > 1) {
                 for (int i = 0; i < components; ++i) {
-                        d_out[components * (out_x + out_y * out_width) + i] = fill_color;
+                        d_out[(components * (out_x + out_y * out_width)) +
+                              i] = fill_color << ((sizeof(T) - 1) * CHAR_BIT);
                 }
                 if (alpha) {
                         d_out_alpha[out_x + (out_y * out_width)] = 0;
@@ -132,7 +135,7 @@ kernel_utm_to_web_mercator(device_projection const d_proj, const uint8_t *d_in,
         float abs_pos_src_y = rel_pos_src_y * in_height;
 
         for (int i = 0; i < components; ++i) {
-                d_out[components * (out_x + out_y * out_width) + i] =
+                d_out[(components * (out_x + out_y * out_width)) + i] =
                     bilinearSample(d_in + i, in_width, components, in_height,
                                    abs_pos_src_x, abs_pos_src_y);
         }
@@ -241,18 +244,21 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         int width = dst_desc.width;
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-        decltype(kernel_utm_to_web_mercator<1, true>) *kernel = nullptr;
+        decltype(kernel_utm_to_web_mercator<uint8_t, 1, true>) *kernel = nullptr;
+#define GET_KERNEL(comp_count, alpha)                                          \
+        (in->is_16b ? kernel_utm_to_web_mercator<uint16_t, comp_count, alpha>  \
+                    : kernel_utm_to_web_mercator<uint8_t, comp_count, alpha>)
         if (alpha_wanted) {
                 if (in->comp_count == 1) {
-                        kernel = kernel_utm_to_web_mercator<1, true>;
+                        kernel = GET_KERNEL(1, true);
                 } else {
-                        kernel = kernel_utm_to_web_mercator<3, true>;
+                        kernel = GET_KERNEL(3, true);
                 }
         } else {
                 if (in->comp_count == 1) {
-                        kernel = kernel_utm_to_web_mercator<1, false>;
+                        kernel = GET_KERNEL(1, false);
                 } else {
-                        kernel = kernel_utm_to_web_mercator<3, false>;
+                        kernel = GET_KERNEL(3, false);
                 }
         }
         kernel<<<grid, block, 0, s->stream>>>(

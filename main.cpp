@@ -882,7 +882,6 @@ int main(int argc, char **argv)
 
         char ofdir[PATH_MAX] = "./";
         struct options global_opts = OPTIONS_INIT;
-        global_opts.norotate = true;
         bool no_whole_image = false;
 
         int opt = 0;

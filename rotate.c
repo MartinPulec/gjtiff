@@ -134,20 +134,13 @@ static double normalize_coords(const struct coordinate src_coords[static 4],
         return lon_range / lat_range;
 }
 
-static void release_owned_image(struct owned_image *img) {
-        CHECK_CUDA(cudaFree(img->img.data));
-        free(img);
-}
-
 static struct owned_image *take_ownership(const struct dec_image *in)
 {
-        struct owned_image *ret = malloc(sizeof *ret);
-        memcpy(&ret->img, in, sizeof *in);
-        const size_t size = (size_t) in->width * in->height * in->comp_count * 2;
-        CHECK_CUDA(cudaMalloc((void **)&ret->img.data, size));
+        struct owned_image *ret=  new_cuda_owned_image(in);
+        const size_t size = (size_t)in->width * in->height * in->comp_count *
+                            (in->is_16b ? 2 : 1);
         CHECK_CUDA(
             cudaMemcpy(ret->img.data, in->data, size, cudaMemcpyDefault));
-        ret->free = release_owned_image;
         return ret;
 }
 
@@ -178,6 +171,7 @@ struct owned_image *rotate(struct rotate_state *s, const struct dec_image *in)
         if (is_utm(in->authority)) {
                 return rotate_utm(s->rotate_utm, in);
         }
+        assert(!in->is_16b);
         if (in->tie_points.count > 0) {
                 return rotate_tie_points(s->rotate_tp, in);
         }
