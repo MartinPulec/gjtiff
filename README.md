@@ -104,6 +104,10 @@ doesn't take place because those seem to represent visual-range data
 (as a grayscale) and it also undergoes the equalization (by default).
 
 
+# Notes and issues
+
+- NDVI rendering doesn't use reference scale (see the '@^{/fix NDVI}' commit)
+
 # Sample images' notes
 
 - Copernicus/download/Landsat-8/OLI_TIRS/L1TP semm to be in visible range

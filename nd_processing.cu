@@ -15,26 +15,12 @@ struct ramp_item {
 
 static const __constant__ struct ramp_item ramp_ndvi[] = {
     {-INFINITY, 0x0c0c0c},
-    {-0.5,      0x0c0c0c}, // val for      < -0.5
-    {-0.2,      0xbfbfbf}, //  "   "  (-0.5, -0.2]
-    {-0.1,      0xdbdbdb},
+    {-1,        0x0c0c0c},
+    {-0.5,      0xbfbfbf},
+    {-0.2,      0xdbdbdb},
     {0,         0xeaeaea},
-    {0.025,     0xfff9cc},
-    {0.05,      0xede8b5},
-    {0.075,     0xddd89b},
     {0.1,       0xccc682},
-    {0.125,     0xbcb76b},
-    {0.15,      0xafc160},
-    {0.175,     0xa3cc59},
     {0.2,       0x91bf51},
-    {0.25,      0x7fb247},
-    {0.3,       0x70a33f},
-    {0.35,      0x609635},
-    {0.4,       0x4f892d},
-    {0.45,      0x3f7c23},
-    {0.5,       0x306d1c},
-    {0.55,      0x216011},
-    {0.6,       0x0f540a},
     {1,         0x004400},
     {INFINITY,  0x004400},
 };
@@ -73,29 +59,29 @@ template <> __device__ void process_mapping<ND_UNKNOWN>(uint8_t *out, float val)
         out[2] = grayscale;
 }
 
-__device__ static void process_mapping_nd(uint8_t *out, float val,
-                                          const struct ramp_item *ramp)
-{
-        int col = ramp[0].col;
-        while (ramp->val != INFINITY) {
-                if (val > ramp->val && val <= ramp[1].val) {
-                        col = ramp[1].col;
-                        break;
-                }
-                ramp++;
-        }
-        uint8_t r = col >> 16;
-        uint8_t g = (col >> 8) & 0xff;
-        uint8_t b = col & 0xff;
-#ifdef GAMMA
-        // r = 255.0 * pow(r / 255.0, GAMMA);
-        // g = 255.0 * pow(g / 255.0, GAMMA);
-        // b = 255.0 * pow(b / 255.0, GAMMA);
-#endif
-        out[0] = r;
-        out[1] = g;
-        out[2] = b;
-}
+// __device__ static void process_mapping_nd(uint8_t *out, float val,
+//                                           const struct ramp_item *ramp)
+// {
+//         int col = ramp[0].col;
+//         while (ramp->val != INFINITY) {
+//                 if (val > ramp->val && val <= ramp[1].val) {
+//                         col = ramp[1].col;
+//                         break;
+//                 }
+//                 ramp++;
+//         }
+//         uint8_t r = col >> 16;
+//         uint8_t g = (col >> 8) & 0xff;
+//         uint8_t b = col & 0xff;
+// #ifdef GAMMA
+//         // r = 255.0 * pow(r / 255.0, GAMMA);
+//         // g = 255.0 * pow(g / 255.0, GAMMA);
+//         // b = 255.0 * pow(b / 255.0, GAMMA);
+// #endif
+//         out[0] = r;
+//         out[1] = g;
+//         out[2] = b;
+// }
 
 __device__ static void
 process_mapping_nd_interpolate(uint8_t *out, float val,
@@ -152,7 +138,7 @@ process_mapping_nd_interpolate(uint8_t *out, float val,
 }
 template <> __device__ void process_mapping<NDVI>(uint8_t *out, float val)
 {
-        process_mapping_nd(out, val, ramp_ndvi);
+        process_mapping_nd_interpolate(out, val, ramp_ndvi);
 }
 
 template <> __device__ void process_mapping<NDMI>(uint8_t *out, float val)
