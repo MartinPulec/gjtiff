@@ -198,6 +198,7 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
 {
         assert(alpha_wanted);
         assert(in1->alpha != nullptr);
+        assert(in1->is_16b && in2->is_16b);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
         dim3 block(16, 16);
         int width = out->width;

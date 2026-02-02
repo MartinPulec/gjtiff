@@ -87,6 +87,7 @@ static void downscale_int(struct downscaler_state *s, int new_width,
 struct dec_image downscale(struct downscaler_state *s, int downscale_factor,
                            const struct dec_image *in)
 {
+        assert(!in->is_16b);
         struct dec_image downscaled = *in;
         downscaled.comp_count = in->comp_count;
         downscaled.width = in->width / downscale_factor;

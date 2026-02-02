@@ -317,6 +317,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
 
         struct dec_image dst_desc = ifiles->ifiles[0].img->img;
         dst_desc.comp_count = 3;
+        dst_desc.is_16b = false;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         if (ifiles->count == 2) {
@@ -329,6 +330,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
                                          &ifiles->ifiles[0].img->img,
                                          &ifiles->ifiles[1].img->img, stream);
         } else {
+                assert(!ifiles->ifiles[0].img->img.is_16b); // neither [1] nor [2]
                 combine_images_cuda(&ret->img, &ifiles->ifiles[0].img->img,
                                     &ifiles->ifiles[1].img->img,
                                     &ifiles->ifiles[2].img->img, stream);
@@ -1035,6 +1037,7 @@ int main(int argc, char **argv)
                                  combined_ifname);
                         ifiles.count = 1;
                 }
+                assert(!ifiles.ifiles[0].img->img.is_16b);
                 if (global_opts.zoom_levels[0] == -1) {
                         get_ofname(ifiles.ifiles[0].ifname, ofdir + d_pref_len,
                                    sizeof ofdir - d_pref_len,
