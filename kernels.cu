@@ -15,6 +15,12 @@
 #include "defs.h"
 #include "utils.h"
 
+// defined in MTD_MSIL2A.xml for B0-B12
+constexpr uint16_t BOA_ADD_OFFSET = -1000;
+// https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l1c/ and also in the
+// above XML
+constexpr float BOA_QUANTIFICATION_VALUE = 10000;
+
 /*                                   _ _         
  *   _ __   ___  _ __ _ __ ___   __ _| (_)_______ 
  *  | '_ \ / _ \| '__| '_ ` _ \ / _` | | |_  / _ \
@@ -578,9 +584,9 @@ void cleanup_cuda_kernels()
 struct process_s2 {
         __device__ void operator()(uint16_t &x) const
         {
-                constexpr uint16_t offset = 1000;
-                x = x > offset ? x - offset : 0;
-                x = __saturatef(x / 10000.F) * 65535.0;
+                constexpr uint16_t offset = BOA_ADD_OFFSET;
+                x = x > (uint16_t) -offset ? x + offset : 0;
+                x = __saturatef(x / BOA_QUANTIFICATION_VALUE) * 65535.0;
         }
 };
 
