@@ -62,6 +62,30 @@ docker run --gpus all --rm -v ~/data:/data gjtiff_image gjtiff -o /data /data/im
 **Note:** _nvidia-container-toolkit_ should be installed (Debian) to
 pass-through the NVIDIA GPU.
 
+# Usage
+
+In case of the combined features (RGB mapped, normalized differential),
+the input tiles/pictures must be single channel.
+
+## Combined features - RGB mapped
+
+Input files format (in plae of input file name): `fname1,fname2,fname3`
+output is `oname1-COMMA-oname2-COMMA-oname3.ext` where onameX=$(basename
+${fnameX%.*}) (just filename without path and extension); _ext_ is jpeg
+or webp. There must be **3** input files.
+
+## Combined features - normalized differential
+
+(S2 only)
+
+Currently supported features are **NDVI**, **NDWI** and **NDMI**
+and generic **ND_UNSPEC** (rendered as a grayscale).  All of them
+currently require 2 file names, the syntax is `feature@fname1,fname2`
+where  the feature name is one of the above. Output file name is
+`feature-oname1-COMMA-oname2.ext` where the oname is specified in
+previous section (**note** between _feature_ and _oname1_ is '-'
+not at-sign).
+
 # Supported input formats
 
 - TIFF (decodable either by nvtiff or libtiff as a fallback)
