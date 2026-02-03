@@ -336,7 +336,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         // set new ifname
         combined_ifname[0] = '\0';
         char *const end = combined_ifname + PATH_MAX;
-        if (feature != ND_UNKNOWN) { // prefix if feature prefix was originally
+        if (feature != ND_NONE) { // prefix if feature prefix was originally
                 combined_ifname += snprintf(combined_ifname,           // given
                                             end - combined_ifname, "%s-",
                                             get_nd_feature_name(feature));
@@ -864,7 +864,7 @@ static enum nd_feature get_feature_from_prefix(char **ifnames)
 {
         char *at_sign = strchr(*ifnames, '@');
         if (at_sign == nullptr) {
-                return ND_UNKNOWN;
+                return ND_NONE;
         }
         char s_feature[10];
         strncpy(s_feature, *ifnames,
@@ -987,12 +987,12 @@ int main(int argc, char **argv)
                         continue;
                 }
                 if (ifiles.count == 2) {
-                        assert(feature != ND_UNKNOWN);
+                        assert(feature != ND_NONE);
                         alpha_wanted = true;
                 } else {
-                        assert(feature == ND_UNKNOWN);
+                        assert(feature == ND_NONE);
                 }
-                bool decode_16b = feature != ND_UNKNOWN;
+                bool decode_16b = feature != ND_NONE;
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
                 for (int i = 0; i < ifiles.count; ++i) {

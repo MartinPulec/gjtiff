@@ -47,7 +47,7 @@ static const __constant__ struct ramp_item ramp_ndwi[] = {
 template <enum nd_feature feature>
 __device__ void process_mapping(uint8_t *out, float val);
 
-template <> __device__ void process_mapping<ND_UNKNOWN>(uint8_t *out, float val)
+template <> __device__ void process_mapping<ND_UNSPEC>(uint8_t *out, float val)
 {
         val = __saturatef((val + 1.F) / 2.F);
 #ifdef GAMMA
@@ -197,7 +197,6 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                               const struct dec_image *in2, cudaStream_t stream)
 {
         assert(alpha_wanted);
-        assert(feature != ND_UNKNOWN);
         assert(in1->alpha != nullptr);
         assert(in1->is_16b && in2->is_16b);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
@@ -206,8 +205,10 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
         int height = out->height;
         dim3 grid((width + block.x - 1) / block.x,
                   (height + block.y - 1) / block.y);
-        auto *fn = nd_process<ND_UNKNOWN>;
+        auto *fn = nd_process<ND_UNSPEC>;
         switch (feature) {
+        case ND_NONE:
+                abort();
         case NDVI:
                 fn =  nd_process<NDVI>;
                 break;
@@ -217,11 +218,11 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
         case NDWI:
                 fn = nd_process<NDWI>;
                 break;
-        case ND_UNKNOWN: // already set
+        case ND_UNSPEC: // already set
                 break;
         }
         if (getenv("GRAYSCALE") != nullptr) {
-                fn = nd_process<ND_UNKNOWN>;
+                fn = nd_process<ND_UNSPEC>;
         }
         fn<<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
         CHECK_CUDA(cudaGetLastError());

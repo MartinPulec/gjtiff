@@ -401,6 +401,7 @@ static const struct {
     {"_B8A", "_B11", F(NDMI)},
     {"_B03", "_B08", F(NDWI)},
     {"_B03", "_B11", F(NDSI)},
+    {"", "", F(ND_UNSPEC)},
 #undef F
 };
 
@@ -428,7 +429,7 @@ enum nd_feature get_nd_feature_from_name(const char *const name)
                 }
         }
         WARN_MSG("Unrecognized Normalized Difference feature: %s!\n", name);
-        return ND_UNKNOWN;
+        return ND_NONE;
 }
 
 const char *get_nd_feature_name(enum nd_feature feature) {
