@@ -20,7 +20,7 @@ LIBS += -lcudart -lgpujpeg -lm \
 	-ltiff \
 	-lwebp
 	# -lgrok
-BUILD_DIR ?= .
+BUILD_DIR ?= build
 ## build for all supported CUDA architectures
 ## @todo filtered out CC >= 10.0 - cuspatial is incompatible with that,
 ## compilation yields errors like in
@@ -34,13 +34,16 @@ CUDAFLAGS ?= $(CUDAARCHS)
 
 all: $(BUILD_DIR)/gjtiff
 
-$(BUILD_DIR)/%.o: %.cpp $(wildcard *.h *.hpp)
+$(BUILD_DIR)/%.o: src/%.cpp $(wildcard *.h *.hpp)
+	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
-$(BUILD_DIR)/%.o: %.c $(wildcard *.h)
+$(BUILD_DIR)/%.o: src/%.c $(wildcard *.h)
+	mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -c -o $@
 
-$(BUILD_DIR)/%.o: %.cu $(wildcard *.cuh *.h *.hpp)
+$(BUILD_DIR)/%.o: src/%.cu $(wildcard *.cuh *.h *.hpp)
+	mkdir -p $(BUILD_DIR)
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
 $(BUILD_DIR)/gjtiff: \
