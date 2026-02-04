@@ -19,6 +19,8 @@ static const __constant__ struct ramp_item ramp_ndvi[] = {
     {-0.5,      0xbfbfbf},
     {-0.2,      0xdbdbdb},
     {0,         0xeaeaea},
+    {0.025,     0xfff9cc},
+    {0.075,     0xddd89b},
     {0.1,       0xccc682},
     {0.2,       0x91bf51},
     {1,         0x004400},
