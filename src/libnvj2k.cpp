@@ -337,7 +337,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
         set_coords_from_gdal(fname, &ret);
         const size_t sample_count = (size_t) ret.width * ret.height;
 
-        if (bps == 1) {
+        if (bps == 1) { // just TCI ?
                 assert(!decode_16b);
                 convert_remove_pitch(
                     s->decode_output, s->converted,
@@ -347,25 +347,28 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
                 if (ret.comp_count == 3) {
                         return ret;
                 }
+                // this may not happen becuase 8-bit seem to curtrently be
+                // only the S2 TCI band
                 normalize_8(&ret, s->converted + conv_size / 2, s->cuda_stream);
                 ret.data = s->converted + conv_size / 2;
-        } else {
-                convert_remove_pitch_16(
-                    (uint16_t *)s->decode_output,
-                    (uint16_t *)s->converted,
-                    (int)(image_comp_info[0].component_width * image_info.num_components),
-                    (int)s->pitch_in_bytes, (int)image_comp_info[0].component_height,
-                    s->cuda_stream);
-                thrust_process_s2((uint16_t *)s->converted, sample_count,
-                                        s->cuda_stream);
-                if (!decode_16b) {
-                        ret.data = s->converted + conv_size / 3 * 2;
-                        thrust_16b_to_8b((uint16_t *)s->converted, ret.data,
-                                         sample_count, s->cuda_stream);
-                        ret.is_16b = false;
-                }
-                // write_raw_gpu_image(s->converted, ret.width, ret.height, bps);
+                return ret;
         }
+
+        const uint32_t out_line_width = image_comp_info[0].component_width *
+                                        image_info.num_components;
+        convert_remove_pitch_16(
+            (uint16_t *)s->decode_output, (uint16_t *)s->converted,
+            (int)out_line_width, (int)s->pitch_in_bytes,
+            (int)image_comp_info[0].component_height, s->cuda_stream);
+        thrust_process_s2((uint16_t *)s->converted, sample_count,
+                          s->cuda_stream);
+        if (!decode_16b) {
+                ret.data = s->converted + conv_size / 3 * 2;
+                thrust_16b_to_8b((uint16_t *)s->converted, ret.data,
+                                 sample_count, s->cuda_stream);
+                ret.is_16b = false;
+        }
+        // write_raw_gpu_image(s->converted, ret.width, ret.height, bps);
 
         return ret;
 }
