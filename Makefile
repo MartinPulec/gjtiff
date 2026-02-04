@@ -34,15 +34,19 @@ CUDAFLAGS ?= $(CUDAARCHS)
 
 all: $(BUILD_DIR)/gjtiff
 
-$(BUILD_DIR)/%.o: src/%.cpp $(wildcard *.h *.hpp)
+C_HEADERS != find src -name '*.h'
+CPP_HEADERS != find src -name '*.hpp'
+CU_HEADERS != find src -name '*.cuh'
+
+$(BUILD_DIR)/%.o: src/%.cpp $(C_HEADERS) $(CPP_HEADERS)
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
-$(BUILD_DIR)/%.o: src/%.c $(wildcard *.h)
+$(BUILD_DIR)/%.o: src/%.c $(C_HEADERS)
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -c -o $@
 
-$(BUILD_DIR)/%.o: src/%.cu $(wildcard *.cuh *.h *.hpp)
+$(BUILD_DIR)/%.o: src/%.cu $(C_HEADERS) $(CPP_HEADERS) $(CU_HEADERS)
 	mkdir -p $(BUILD_DIR)
 	$(NVCC) $(CUDAFLAGS) -Xcompiler -fPIC -Xcompiler "$(CXXFLAGS)" -c $< -o $@
 
