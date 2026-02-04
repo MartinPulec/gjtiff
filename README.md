@@ -14,6 +14,9 @@ instead.
 ## 2026-02
 
 - [S2] add some normalized-differential features - NDVI, NDWI, NDMI
+- for S2 features, the source areas without significant data (NODATA)
+are set transparent if WebP is output (alternatively in case of JPEG,
+it will be colored according to the user-selected fill-color)
 - **changed** the equalization of S2 features from _auto-equalize_
 (still used for S1) to the defined range (valid range 1000-11000 for
 B bands as defined by the MTD_MSIL2A.xml - _BOA_ADD_OFFSET_=-1000 and

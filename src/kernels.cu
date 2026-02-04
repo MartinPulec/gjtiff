@@ -581,6 +581,14 @@ void cleanup_cuda_kernels()
         CHECK_CUDA(cudaFree(state.d_yuv420));
 }
 
+struct set_s2_alpha {
+        /// @retuns 0 if source sample has value 0, which is defined
+        /// as special value NODATA; 255 otherwise
+        __device__ uint8_t operator()(const uint16_t &x) const
+        {
+                return x == 0 ? 0 : 255;
+        }
+};
 struct process_s2 {
         __device__ void operator()(uint16_t &x) const
         {
@@ -589,9 +597,11 @@ struct process_s2 {
                     65535.0;
         }
 };
-
-void thrust_process_s2(uint16_t *d_ptr, size_t count, cudaStream_t stream)
+void thrust_process_s2_band(uint16_t *d_ptr, uint8_t *d_alpha, size_t count,
+                            cudaStream_t stream)
 {
+        thrust::transform(thrust::cuda::par.on(stream), d_ptr, d_ptr + count,
+                          d_alpha, set_s2_alpha{});
         thrust::for_each(thrust::cuda::par.on(stream), d_ptr, d_ptr + count,
                          process_s2{});
 }

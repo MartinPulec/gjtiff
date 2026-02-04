@@ -1,7 +1,6 @@
 #include "rotate_utm.h"
 
 #include <algorithm>
-#include <cassert>
 #include <cmath>
 #include <cuda_runtime.h>
 
@@ -14,6 +13,9 @@
 #include <cuproj/projection_factories.cuh>
 #include <cuproj/vec_2d.hpp>
 #endif
+// must be included also after transitive assert.h inclusion through cuproj/*h
+#include <cassert> // if NDEBUG temporarily defined for asserts to be evaluated
+
 #include <errno.h>
 #include <limits.h> // PATH_MAX
 #include <npp.h>
@@ -73,10 +75,10 @@ struct bounds {
 };
 using device_projection = cuproj::device_projection<cuproj::vec_2d<float>>;
 
-template <typename T, int components, bool alpha>
+template <typename T, int components>
 static __global__ void
 kernel_utm_to_web_mercator(device_projection const d_proj, const void *d_in_v,
-                           void *d_out_v, uint8_t *d_out_alpha, int in_width,
+                           void *d_out_v, uint8_t *d_src_alpha, uint8_t *d_out_alpha, int in_width,
                            int in_height, int out_width, int out_height,
                            struct bounds src_bounds, struct bounds dst_bounds,
                            int fill_color)
@@ -113,26 +115,27 @@ kernel_utm_to_web_mercator(device_projection const d_proj, const void *d_in_v,
         float rel_pos_src_y = (pos_utm.y - src_bounds.bound[YTOP]) /
                               (src_bounds.bound[YBOTTOM] - src_bounds.bound[YTOP]);
 
-        if (rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
-            rel_pos_src_y < 0 || rel_pos_src_y > 1) {
+        float abs_pos_src_x = rel_pos_src_x * in_width;
+        float abs_pos_src_y = rel_pos_src_y * in_height;
+
+        const bool out_of_bound = rel_pos_src_x < 0 || rel_pos_src_x > 1 ||
+                                  rel_pos_src_y < 0 || rel_pos_src_y > 1;
+        // inherit src alpha if interpolated <255 (eventually can be == 0)
+        const bool src_transparent = bilinearSample(d_src_alpha, in_width, 1,
+                                                    in_height, abs_pos_src_x,
+                                                    abs_pos_src_y) < 255;
+        if (out_of_bound || src_transparent) {
                 for (int i = 0; i < components; ++i) {
                         d_out[(components * (out_x + out_y * out_width)) +
                               i] = fill_color << ((sizeof(T) - 1) * CHAR_BIT);
                 }
-                if (alpha) {
-                        d_out_alpha[out_x + (out_y * out_width)] = 0;
-                }
+                d_out_alpha[out_x + (out_y * out_width)] = 0;
                 return;
         }
-        if (alpha) {
-                d_out_alpha[out_x + (out_y * out_width)] = 255;
-        }
+        d_out_alpha[out_x + (out_y * out_width)] = 255;
         // if (out_y == 0) {
         //         printf("%f %f\n" , rel_pos_src_x, rel_pos_src_y);
         // }
-
-        float abs_pos_src_x = rel_pos_src_x * in_width;
-        float abs_pos_src_y = rel_pos_src_y * in_height;
 
         for (int i = 0; i < components; ++i) {
                 d_out[(components * (out_x + out_y * out_width)) + i] =
@@ -179,6 +182,8 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
                                const struct dec_image *in)
 {
         GPU_TIMER_START(utm_to_epsg_3857, LL_DEBUG, s->stream);
+
+        assert(in->alpha != nullptr);
 
         if (in->comp_count != 1 && in->comp_count != 3) {
                 ERROR_MSG("unsupporeted component count %d!", in->comp_count);
@@ -233,7 +238,6 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
                 }
         }
 
-        dst_desc.alpha = alpha_wanted ? (unsigned char *) 1 : nullptr;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
         snprintf(ret->img.authority, sizeof ret->img.authority, "%s", "EPSG:3857");
         for (unsigned i = 0; i < ARR_SIZE(dst_bounds.bound); ++i) {
@@ -244,25 +248,12 @@ struct owned_image *rotate_utm(struct rotate_utm_state *s,
         int width = dst_desc.width;
         int height = dst_desc.height;
         dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-        decltype(kernel_utm_to_web_mercator<uint8_t, 1, true>) *kernel = nullptr;
-#define GET_KERNEL(comp_count, alpha)                                          \
-        (in->is_16b ? kernel_utm_to_web_mercator<uint16_t, comp_count, alpha>  \
-                    : kernel_utm_to_web_mercator<uint8_t, comp_count, alpha>)
-        if (alpha_wanted) {
-                if (in->comp_count == 1) {
-                        kernel = GET_KERNEL(1, true);
-                } else {
-                        kernel = GET_KERNEL(3, true);
-                }
-        } else {
-                if (in->comp_count == 1) {
-                        kernel = GET_KERNEL(1, false);
-                } else {
-                        kernel = GET_KERNEL(3, false);
-                }
-        }
+#define GET_KERNEL(comp_count)                                          \
+        (in->is_16b ? kernel_utm_to_web_mercator<uint16_t, comp_count>  \
+                    : kernel_utm_to_web_mercator<uint8_t, comp_count>)
+        auto *kernel = in->comp_count == 1 ? GET_KERNEL(1) : GET_KERNEL(3);
         kernel<<<grid, block, 0, s->stream>>>(
-            d_proj, in->data, ret->img.data, ret->img.alpha, in->width,
+            d_proj, in->data, ret->img.data, in->alpha, ret->img.alpha, in->width,
             in->height, width, height, src_bounds, dst_bounds, fill_color);
         CHECK_CUDA(cudaGetLastError());
 

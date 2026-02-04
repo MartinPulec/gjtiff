@@ -49,6 +49,9 @@ struct nvj2k_state {
 
         uint8_t *converted;
         size_t converted_allocated;
+
+        uint8_t *alpha;
+        size_t alpha_allocated;
 };
 
 // prototypes
@@ -337,6 +340,13 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
         set_coords_from_gdal(fname, &ret);
         const size_t sample_count = (size_t) ret.width * ret.height;
 
+        if (s->alpha_allocated < sample_count) {
+                CHECK_CUDA(cudaFree(s->alpha));
+                CHECK_CUDA(cudaMalloc((void **)&s->alpha, sample_count));
+                s->alpha_allocated = sample_count;
+        }
+        ret.alpha = s->alpha;
+
         if (bps == 1) { // just TCI ?
                 assert(!decode_16b);
                 convert_remove_pitch(
@@ -344,6 +354,8 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
                     (int)(image_comp_info[0].component_width * image_info.num_components),
                     (int)s->pitch_in_bytes, (int)image_comp_info[0].component_height,
                     s->cuda_stream);
+                CHECK_CUDA(cudaMemsetAsync(ret.alpha, sample_count, 255,
+                                           s->cuda_stream));
                 if (ret.comp_count == 3) {
                         return ret;
                 }
@@ -360,8 +372,8 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
             (uint16_t *)s->decode_output, (uint16_t *)s->converted,
             (int)out_line_width, (int)s->pitch_in_bytes,
             (int)image_comp_info[0].component_height, s->cuda_stream);
-        thrust_process_s2((uint16_t *)s->converted, sample_count,
-                          s->cuda_stream);
+        thrust_process_s2_band((uint16_t *)s->converted, ret.alpha,
+                               sample_count, s->cuda_stream);
         if (!decode_16b) {
                 ret.data = s->converted + conv_size / 3 * 2;
                 thrust_16b_to_8b((uint16_t *)s->converted, ret.data,
@@ -375,6 +387,7 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
 
 void nvj2k_destroy(struct nvj2k_state *s) {
         CHECK_CUDA(cudaFreeHost(s->bitstream_buffer));
+        CHECK_CUDA(cudaFree(s->alpha));
         CHECK_CUDA(cudaFree(s->decode_output));
         CHECK_CUDA(cudaFree(s->converted));
         CHECK_NVJPEG2K(nvjpeg2kDecodeParamsDestroy(s->decode_params), );
