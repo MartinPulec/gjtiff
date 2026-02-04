@@ -11,6 +11,22 @@ instead.
 
 # NEWS
 
+## 2026-02
+
+- [S2] add some normalized-differential features - NDVI, NDWI, NDMI
+- **changed** the equalization of S2 features from _auto-equalize_
+(still used for S1) to the defined range (valid range 1000-11000 for
+B bands as defined by the MTD_MSIL2A.xml - _BOA_ADD_OFFSET_=-1000 and
+_BOA_QUANTIFICATION_VALUE_=10000; the later value is mentioned also in
+<https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l1c/>)
+- **changed** gamma-correction is no longer applied to S2 to get
+cannonical representation (see previous point)
+- **changed** gamma-correction is no longer applied to S1, neither,
+after the auto-equalization - the decision to use gamma-correction is
+somehow arbitrary so it was changed to align with S2
+
+## Older
+
 - 12th Nov '25 - add parameter `-W` for encoding tiles as WebP and whole as JPG
 - 11th Nov '25 - add parameter `-F` to change fill-color from black to eg. white
 - Oct '25 - support for more correct S1 repositioning to WebP (using
@@ -85,6 +101,15 @@ where  the feature name is one of the above. Output file name is
 `feature-oname1-COMMA-oname2.ext` where the oname is specified in
 previous section (**note** between _feature_ and _oname1_ is '-'
 not at-sign).
+
+Required bands for features:
+- **NDVI¹**: _B08_ (NIR - near infra red), _B04_ (red)
+- **NDWI**: _B03_ (green), _B08_ (NIR)
+- **NDMI**: _B8A_ (Narrow NIR), _B11_ (SWIR - short wave infrared)
+- **ND_GENERIC**: any1, any2
+
+**¹** the ramp for **NDVI** used by _gjtiff_ differs from the one
+described [here](https://custom-scripts.sentinel-hub.com/sentinel-2/ndvi/)
 
 # Supported input formats
 
