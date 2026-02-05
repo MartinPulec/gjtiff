@@ -9,6 +9,27 @@ DEFLATE decompress.
 If nvTIFF isn't capable to decompress the picture _libtiff_ is used
 instead.
 
+# Table of Contents
+
+- [NEWS](#news)
+  * [2026-02](#2026-02)
+  * [Older](#older)
+- [Requirements](#requirements)
+  * [Software](#software)
+  * [Hardware](#hardware)
+- [Build and running](#build-and-running)
+- [Usage](#usage)
+  * [Combined features - RGB mapped](#combined-features---rgb-mapped)
+  * [Combined features - normalized differential](#combined-features---normalized-differential)
+- [Supported input formats](#supported-input-formats)
+- [Performance](#performance)
+- [TODO](#todo)
+- [Postprocess - output normalization/equalization](#postprocess---output-normalizationequalization)
+- [Notes and issues](#notes-and-issues)
+- [Sample images' notes](#sample-images-notes)
+
+<!-- gen with https://github.com/jonschlinkert/markdown-toc -->
+
 # NEWS
 
 ## 2026-02
