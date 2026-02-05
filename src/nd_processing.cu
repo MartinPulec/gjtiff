@@ -1,4 +1,4 @@
-#include "nd_processing.cuh"
+#include "nd_processing.h"
 
 #include <cassert>
 #include <cmath>
@@ -155,8 +155,8 @@ template <> __device__ void process_mapping<NDWI>(uint8_t *out, float val)
 }
 
 template <enum nd_feature feature>
-static __global__ void nd_process(struct dec_image out, struct dec_image in1,
-                                  struct dec_image in2, int d_fill_color)
+static __global__ void nd_process(struct dec_image out, struct nd_data d,
+                                  int d_fill_color)
 {
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
         int out_y = blockIdx.y * blockDim.y + threadIdx.y; // row index
@@ -169,25 +169,26 @@ static __global__ void nd_process(struct dec_image out, struct dec_image in1,
         float rel_pos_src_x = (out_x + 0.5) / out.width;
         float rel_pos_src_y = (out_y + 0.5) / out.height;
 
-        float abs_pos_src_x = rel_pos_src_x * in1.width;
-        float abs_pos_src_y = rel_pos_src_y * in1.height;
-        uint8_t alpha1 = bilinearSample(in1.alpha, in1.width, 1, in1.height,
-                                        abs_pos_src_x, abs_pos_src_y);
-        out.alpha[out_x + (out_y * out.width)] =  alpha1;
+        float abs_pos_src_x = rel_pos_src_x * d.img[0].width;
+        float abs_pos_src_y = rel_pos_src_y * d.img[0].height;
+        uint8_t alpha1 = bilinearSample(d.img[0].alpha, d.img[0].width, 1,
+                                        d.img[0].height, abs_pos_src_x,
+                                        abs_pos_src_y);
+        out.alpha[out_x + (out_y * out.width)] = alpha1;
         if (alpha1 != 255) {
                 out_p[0] = out_p[1] = out_p[2] = d_fill_color;
                 return;
         }
 
         float val1 = bilinearSample<uint16_t, float>(
-            (uint16_t *)in1.data, in1.width, 1, in1.height, abs_pos_src_x,
-            abs_pos_src_y);
+            (uint16_t *)d.img[0].data, d.img[0].width, 1, d.img[0].height,
+            abs_pos_src_x, abs_pos_src_y);
 
-        abs_pos_src_x = rel_pos_src_x * in2.width;
-        abs_pos_src_y = rel_pos_src_y * in2.height;
+        abs_pos_src_x = rel_pos_src_x * d.img[1].width;
+        abs_pos_src_y = rel_pos_src_y * d.img[1].height;
         float val2 = bilinearSample<uint16_t, float>(
-            (uint16_t *)in2.data, in2.width, 1, in2.height, abs_pos_src_x,
-            abs_pos_src_y);
+            (uint16_t *)d.img[1].data, d.img[1].width, 1, d.img[1].height,
+            abs_pos_src_x, abs_pos_src_y);
 
         float res = (val1 - val2) / (val1 + val2 + 0.000000001f);
 
@@ -195,12 +196,10 @@ static __global__ void nd_process(struct dec_image out, struct dec_image in1,
 }
 
 void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
-                              const struct dec_image *in1,
-                              const struct dec_image *in2, cudaStream_t stream)
+                              const struct nd_data *in, cudaStream_t stream)
 {
-        assert(alpha_wanted);
-        assert(in1->alpha != nullptr);
-        assert(in1->is_16b && in2->is_16b);
+        assert(in->count == 2);
+        assert(in->img[0].alpha != nullptr);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
         dim3 block(16, 16);
         int width = out->width;
@@ -226,7 +225,7 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
         if (getenv("GRAYSCALE") != nullptr) {
                 fn = nd_process<ND_UNSPEC>;
         }
-        fn<<<grid, block, 0, stream>>>(*out, *in1, *in2, fill_color);
+        fn<<<grid, block, 0, stream>>>(*out, *in, fill_color);
         CHECK_CUDA(cudaGetLastError());
         GPU_TIMER_STOP(process_nd_features_cuda);
 }

@@ -45,7 +45,7 @@
 #include "libnvj2k.h"
 #include "libnvtiff.h"
 #include "libtiff.hpp"
-#include "nd_processing.cuh"
+#include "nd_processing.h"
 #include "pam.h"
 #include "rotate.h"
 #include "utils.h"
@@ -323,9 +323,18 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         if (ifiles->count == 2) {
-                process_nd_features_cuda(&ret->img, feature,
-                                         &ifiles->ifiles[0].img->img,
-                                         &ifiles->ifiles[1].img->img, stream);
+                struct nd_data d{};
+                assert((unsigned)ifiles->count <= countof(d.img));
+                d.count = ifiles->count;
+                for (int i = 0; i < ifiles->count; ++i) {
+                        assert(ifiles->ifiles[0].img->img.data != nullptr);
+                        assert(ifiles->ifiles[0].img->img.is_16b);
+                        d.img[i].width  = ifiles->ifiles[i].img->img.width;
+                        d.img[i].height = ifiles->ifiles[i].img->img.height;
+                        d.img[i].data   = ifiles->ifiles[i].img->img.data;
+                        d.img[i].alpha  = ifiles->ifiles[i].img->img.alpha;
+                }
+                process_nd_features_cuda(&ret->img, feature, &d, stream);
         } else {
                 assert(!ifiles->ifiles[0].img->img.is_16b); // neither [1] nor [2]
                 combine_images_cuda(&ret->img, &ifiles->ifiles[0].img->img,

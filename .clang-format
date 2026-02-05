@@ -4,6 +4,7 @@ IndentWidth: 8
 # UseTab: Always
 BreakBeforeBraces: Linux
 AlignArrayOfStructures: Left
+AlignConsecutiveAssignments: true
 AlignConsecutiveShortCaseStatements:
     Enabled: true
 AllowShortIfStatementsOnASingleLine: false
