@@ -154,6 +154,38 @@ template <> __device__ void process_mapping<NDWI>(uint8_t *out, float val)
         process_mapping_nd_interpolate(out, val, ramp_ndwi);
 }
 
+static __device__ void process_ndsi(uint8_t *out, float val, float g,
+                                    const struct nd_data *d,
+                                    float rel_pos_src_x, float rel_pos_src_y)
+{
+        if (val > 0.42) {
+                out[0] = 0;
+                out[1] = 0.8f * 255;
+                out[2] = 255;
+                return;
+        }
+        enum {
+                R_B04_IDX = 2,
+                B_B02_IDX = 3,
+        };
+        float abs_pos_src_x = rel_pos_src_x * d->img[R_B04_IDX].width;
+        float abs_pos_src_y = rel_pos_src_y * d->img[R_B04_IDX].height;
+        float r             = bilinearSample<uint16_t, float>(
+            (uint16_t *)d->img[R_B04_IDX].data, d->img[R_B04_IDX].width, 1,
+            d->img[R_B04_IDX].height, abs_pos_src_x, abs_pos_src_y);
+        abs_pos_src_x = rel_pos_src_x * d->img[B_B02_IDX].width;
+        abs_pos_src_y = rel_pos_src_y * d->img[B_B02_IDX].height;
+        float b       = bilinearSample<uint16_t, float>(
+            (uint16_t *)d->img[B_B02_IDX].data, d->img[B_B02_IDX].width, 1,
+            d->img[B_B02_IDX].height, abs_pos_src_x, abs_pos_src_y);
+        r /= 65535.0f;
+        b /= 65535.0f;
+
+        out[0] = __saturatef(r * 2.5f) * 255;
+        out[1] = __saturatef(g * 2.5f) * 255;
+        out[2] = __saturatef(b * 2.5f) * 255;
+}
+
 template <enum nd_feature feature>
 static __global__ void nd_process(struct dec_image out, struct nd_data d,
                                   int d_fill_color)
@@ -192,13 +224,19 @@ static __global__ void nd_process(struct dec_image out, struct nd_data d,
 
         float res = (val1 - val2) / (val1 + val2 + 0.000000001f);
 
-        process_mapping<feature>(out_p, res);
+        if constexpr (feature == NDSI) {
+                float g = val1 / 65535.0f;
+                process_ndsi(out_p, res, g, &d, rel_pos_src_x, rel_pos_src_y);
+        } else {
+                process_mapping<feature>(out_p, res);
+        }
 }
 
 void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                               const struct nd_data *in, cudaStream_t stream)
 {
-        assert(in->count == 2);
+        assert(feature != NDSI || in->count == 4); //  NDSI -> count=4
+        assert(feature == NDSI || in->count == 2); // !NDSI -> count=2
         assert(in->img[0].alpha != nullptr);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
         dim3 block(16, 16);
@@ -218,6 +256,9 @@ void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
                 break;
         case NDWI:
                 fn = nd_process<NDWI>;
+                break;
+        case NDSI:
+                fn = nd_process<NDSI>;
                 break;
         case ND_UNSPEC: // already set
                 break;

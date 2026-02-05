@@ -213,7 +213,7 @@ struct ifiles {
         struct {
                 char ifname[PATH_MAX];
                 struct owned_image *img;
-        } ifiles[3];
+        } ifiles[4];
         int count;
 };
 
@@ -315,14 +315,14 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
                                           const enum nd_feature feature,
                                           cudaStream_t stream)
 {
-        assert(ifiles->count == 2 || ifiles->count == 3);
+        assert(ifiles->count > 1);
 
         struct dec_image dst_desc = ifiles->ifiles[0].img->img;
         dst_desc.comp_count = 3;
         dst_desc.is_16b = false;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
-        if (ifiles->count == 2) {
+        if (feature != ND_NONE) {
                 struct nd_data d{};
                 assert((unsigned)ifiles->count <= countof(d.img));
                 d.count = ifiles->count;
@@ -799,17 +799,14 @@ static ifiles parse_ifiles(const char *ifnames)
         char *item = nullptr;
         char *tmp = copy;
         while ((item = strtok_r(tmp, ",", &saveptr)) != nullptr) {
-                if (ret.count == ARR_SIZE(ret.ifiles)) {
-                        ERROR_MSG("More than 3 images not supported!\n");
+                if (ret.count == countof(ret.ifiles)) {
+                        ERROR_MSG("More than %zu images not supported!\n",
+                                  countof(ret.ifiles));
                         return {};
                 }
                 snprintf(ret.ifiles[ret.count++].ifname,
                          sizeof ret.ifiles[0].ifname, "%s", item);
                 tmp = nullptr;
-        }
-        if (ret.count > 3) {
-                ERROR_MSG("Combination of more than 3 bands unsupported!\n");
-                return {};
         }
         return ret;
 }
@@ -995,11 +992,8 @@ int main(int argc, char **argv)
                         ret = EXIT_FAILURE;
                         continue;
                 }
-                if (ifiles.count == 2) {
-                        assert(feature != ND_NONE);
+                if (feature != ND_NONE) {
                         alpha_wanted = true;
-                } else {
-                        assert(feature == ND_NONE);
                 }
                 bool decode_16b = feature != ND_NONE;
                 TIMER_START(transcode, LL_VERBOSE);

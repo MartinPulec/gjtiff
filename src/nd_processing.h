@@ -12,7 +12,7 @@ struct nd_data {
                 int height;
                 void *data;
                 unsigned char *alpha;
-        } img[2];
+        } img[4];
 };
 
 void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,

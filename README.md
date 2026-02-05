@@ -34,7 +34,7 @@ instead.
 
 ## 2026-02
 
-- [S2] add some normalized-differential features - NDVI, NDWI, NDMI
+- [S2] add some normalized-differential features - NDVI, NDWI, NDMI, NDSI
 - for S2 features, the source areas without significant data (NODATA)
 are set transparent if WebP is output (alternatively in case of JPEG,
 it will be colored according to the user-selected fill-color)
@@ -118,7 +118,7 @@ or webp. There must be **3** input files.
 
 (S2 only)
 
-Currently supported features are **NDVI**, **NDWI** and **NDMI**
+Currently supported features are **NDVI**, **NDWI**, **NDMI**, **NDSI**
 and generic **ND_UNSPEC** (rendered as a grayscale).  All of them
 currently require 2 file names, the syntax is `feature@fname1,fname2`
 where  the feature name is one of the above. Output file name is
@@ -130,6 +130,7 @@ Required bands for features:
 - **NDVI¹**: _B08_ (NIR - near infra red), _B04_ (red)
 - **NDWI**: _B03_ (green), _B08_ (NIR)
 - **NDMI**: _B8A_ (Narrow NIR), _B11_ (SWIR - short wave infrared)
+- **NDSI**: _B03_ (green), _B11_ (SWIR), _B04_ (red) , _B02_ (blue)
 - **ND_GENERIC**: any1, any2
 
 **¹** the ramp for **NDVI** used by _gjtiff_ differs from the one
