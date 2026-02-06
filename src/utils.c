@@ -302,7 +302,7 @@ struct owned_image *copy_img_from_device(const struct dec_image *in,
                                       cudaMemcpyDefault));
                 return ret;
         }
-        uint8_t *d_data = ret->img.data;
+        uint8_t *d_data = in->data;
         if (output_format == OUTF_WEBP) {
                 assert(in->comp_count == 1);
                 d_data = convert_y_full_to_limited(in, stream);
