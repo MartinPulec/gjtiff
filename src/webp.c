@@ -17,6 +17,7 @@ enum {
 struct webp_encoder {
         int quality;
         unsigned char chroma[(MAX_WEBP_DIMENSION + 1) / 2];
+        int req_method;
 };
 
 static int my_write(const uint8_t *data, size_t data_size,
@@ -31,6 +32,12 @@ struct webp_encoder *webp_encoder_create(int quality)
         struct webp_encoder *enc = calloc(1, sizeof *enc);
         enc->quality = quality == -1 ? DEFAULT_WEBP_QUALITY : quality;
         memset(enc->chroma, CBCR_GRAY, sizeof enc->chroma);
+
+        enc->req_method = 2;    // 0 = fast (fails for bigger imgs+quality), 4 - default
+        const char *const req_method = getenv("WEBP_METHOD");
+        if (req_method != nullptr) {
+                enc->req_method = atoi(req_method);
+        }
 
         return enc;
 }
@@ -72,7 +79,7 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         int ok = WebPConfigInit(&webp_config);
         if (ok) {
                 webp_config.quality = enc->quality;
-                webp_config.method = 2;   // 0 = fast (fails for bigger imgs), 4 - default
+                webp_config.method = enc->req_method;
                 webp_config.segments = 1; // 4 - max
                 webp_config.partitions = 3;
                 webp_config.thread_level = 1;
