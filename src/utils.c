@@ -428,8 +428,8 @@ enum combined_feature get_nd_feature_from_name(const char *const name)
                         return nd_feature_map[i].feature;
                 }
         }
-        WARN_MSG("Unrecognized Normalized Difference feature: %s!\n", name);
-        return ND_NONE;
+        ERROR_MSG("Unrecognized Normalized Difference feature: %s!\n", name);
+        abort();
 }
 
 const char *get_nd_feature_name(enum combined_feature feature) {
