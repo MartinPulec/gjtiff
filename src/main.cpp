@@ -312,7 +312,7 @@ static void get_ofname(const char *ifname, char *ofname, size_t buflen,
 
 static struct owned_image *combine_images(const struct ifiles *ifiles,
                                           char *combined_ifname,
-                                          const enum nd_feature feature,
+                                          const enum combined_feature feature,
                                           cudaStream_t stream)
 {
         assert(ifiles->count > 1);
@@ -323,7 +323,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
         if (feature != ND_NONE) {
-                struct nd_data d{};
+                struct conbimend_data d{};
                 assert((unsigned)ifiles->count <= countof(d.img));
                 d.count = ifiles->count;
                 for (int i = 0; i < ifiles->count; ++i) {
@@ -866,7 +866,7 @@ static void wait_exclusive_run()
         }
 }
 
-static enum nd_feature get_feature_from_prefix(char **ifnames)
+static enum combined_feature get_feature_from_prefix(char **ifnames)
 {
         char *at_sign = strchr(*ifnames, '@');
         if (at_sign == nullptr) {
@@ -986,7 +986,7 @@ int main(int argc, char **argv)
 
         while (char *ifname = get_next_ifname(fname_from_stdin, &argv, path_buf,
                                               sizeof path_buf, &opts)) {
-                enum nd_feature feature = get_feature_from_prefix(&ifname);
+                enum combined_feature feature = get_feature_from_prefix(&ifname);
                 struct ifiles ifiles = parse_ifiles(ifname);
                 if (ifiles.count == 0) {
                         ret = EXIT_FAILURE;

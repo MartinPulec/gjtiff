@@ -5,7 +5,7 @@
 
 #include "defs.h"
 
-struct nd_data {
+struct conbimend_data {
         unsigned count;
         struct {
                 int width;
@@ -15,7 +15,8 @@ struct nd_data {
         } img[4];
 };
 
-void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
-                              const struct nd_data *in, cudaStream_t stream);
+void process_nd_features_cuda(struct dec_image *out,
+                              enum combined_feature feature,
+                              const struct conbimend_data *in, cudaStream_t stream);
 
 #endif

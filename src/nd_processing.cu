@@ -46,7 +46,7 @@ static const __constant__ struct ramp_item ramp_ndwi[] = {
     {INFINITY,  0x0000CC},
 };
 
-template <enum nd_feature feature>
+template <enum combined_feature feature>
 __device__ void process_mapping(uint8_t *out, float val);
 
 template <> __device__ void process_mapping<ND_UNSPEC>(uint8_t *out, float val)
@@ -155,7 +155,7 @@ template <> __device__ void process_mapping<NDWI>(uint8_t *out, float val)
 }
 
 static __device__ void process_ndsi(uint8_t *out, float val, float g,
-                                    const struct nd_data *d,
+                                    const struct conbimend_data *d,
                                     float rel_pos_src_x, float rel_pos_src_y)
 {
         if (val > 0.42) {
@@ -186,8 +186,8 @@ static __device__ void process_ndsi(uint8_t *out, float val, float g,
         out[2] = __saturatef(b * 2.5f) * 255;
 }
 
-template <enum nd_feature feature>
-static __global__ void nd_process(struct dec_image out, struct nd_data d,
+template <enum combined_feature feature>
+static __global__ void nd_process(struct dec_image out, struct conbimend_data d,
                                   int d_fill_color)
 {
         int out_x = blockIdx.x * blockDim.x + threadIdx.x; // column index
@@ -232,8 +232,8 @@ static __global__ void nd_process(struct dec_image out, struct nd_data d,
         }
 }
 
-void process_nd_features_cuda(struct dec_image *out, enum nd_feature feature,
-                              const struct nd_data *in, cudaStream_t stream)
+void process_nd_features_cuda(struct dec_image *out, enum combined_feature feature,
+                              const struct conbimend_data *in, cudaStream_t stream)
 {
         assert(feature != NDSI || in->count == 4); //  NDSI -> count=4
         assert(feature == NDSI || in->count == 2); // !NDSI -> count=2

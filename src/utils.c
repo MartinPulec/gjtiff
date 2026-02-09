@@ -393,7 +393,7 @@ struct tie_points tuple6_to_tie_points(unsigned count, const double *tie_points)
 static const struct {
         const char *patt1;
         const char *patt2;
-        enum nd_feature feature;
+        enum combined_feature feature;
         const char *name;
 } nd_feature_map[] = {
 #define F(x) x, #x
@@ -420,7 +420,7 @@ static const struct {
 //         return ND_UNKNOWN;
 // }
 
-enum nd_feature get_nd_feature_from_name(const char *const name)
+enum combined_feature get_nd_feature_from_name(const char *const name)
 {
         for (unsigned i = 0; i < ARR_SIZE(nd_feature_map); i++) {
                 if (strstr(name, nd_feature_map[i].name) != nullptr) {
@@ -432,7 +432,7 @@ enum nd_feature get_nd_feature_from_name(const char *const name)
         return ND_NONE;
 }
 
-const char *get_nd_feature_name(enum nd_feature feature) {
+const char *get_nd_feature_name(enum combined_feature feature) {
         for (unsigned i = 0; i < countof(nd_feature_map); i++) {
                 if (nd_feature_map[i].feature == feature) {
                         return nd_feature_map[i].name;

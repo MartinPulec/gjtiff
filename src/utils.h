@@ -166,9 +166,9 @@ bool gj_adjust_size(int *width, int *height, int comp_count);
 struct tie_points tuple6_to_tie_points(unsigned count,
                                        const double *tie_points);
 
-enum nd_feature get_nd_feature(const char *filename1, const char *filename2);
-enum nd_feature get_nd_feature_from_name(const char *name);
-const char *get_nd_feature_name(enum nd_feature feature);
+enum combined_feature get_nd_feature(const char *filename1, const char *filename2);
+enum combined_feature get_nd_feature_from_name(const char *name);
+const char *get_nd_feature_name(enum combined_feature feature);
 
 void write_raw_gpu_image(void *d_ptr, unsigned width, unsigned height, int bps);
 

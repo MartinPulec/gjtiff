@@ -114,7 +114,7 @@ struct owned_image {
 #endif
 
 /// normalized difference feature (feat1-feat2)/(feat1+feat2)
-enum nd_feature {
+enum combined_feature {
         ND_NONE,
         NDVI, ///< Normalized Difference Vegetation Index (B8, B4)
         NDMI, ///< Normalized Difference Moisture Index (B8A, B11)
