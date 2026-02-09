@@ -171,6 +171,12 @@ static __device__ auto get_sample(const struct input_band *band,
         }
 }
 
+static __device__ void process_hons(uint8_t *out, float r, float g, float b) {
+        out[0] = __saturatef(cbrtf(0.6F * r - 0.035F)) * 255;
+        out[1] = __saturatef(cbrtf(0.6F * g - 0.035F)) * 255;
+        out[2] = __saturatef(cbrtf(0.6F * b - 0.035F)) * 255;
+}
+
 static __device__ void process_ndsi(uint8_t *out, float val, float g,
                                     const struct conbimend_data *d,
                                     float rel_pos_src_x, float rel_pos_src_y)
@@ -225,7 +231,14 @@ static __global__ void nd_process(struct dec_image out, struct conbimend_data d,
 
         float res = (val1 - val2) / (val1 + val2 + 0.000000001f);
 
-        if constexpr (feature == NDSI) {
+        if constexpr (feature == HONS) {
+                float r = val1 / 65535.0f;
+                float g = val2 / 65535.0f;
+                float b = get_sample<false>(&d.img[2], rel_pos_src_x,
+                                            rel_pos_src_y) /
+                          65535.0f;
+                process_hons(out_p, r, g, b);
+        } else if constexpr (feature == NDSI) {
                 float g = val1 / 65535.0f;
                 process_ndsi(out_p, res, g, &d, rel_pos_src_x, rel_pos_src_y);
         } else {
@@ -236,8 +249,9 @@ static __global__ void nd_process(struct dec_image out, struct conbimend_data d,
 void process_nd_features_cuda(struct dec_image *out, enum combined_feature feature,
                               const struct conbimend_data *in, cudaStream_t stream)
 {
+        assert(feature != HONS || in->count == 3); //  HONS -> count=3
         assert(feature != NDSI || in->count == 4); //  NDSI -> count=4
-        assert(feature == NDSI || in->count == 2); // !NDSI -> count=2
+        assert((feature == HONS || feature == NDSI) || in->count == 2); // !NDSI and !HONS -> count=2
         assert(in->img[0].alpha != nullptr);
         GPU_TIMER_START(process_nd_features_cuda, LL_DEBUG, stream);
         dim3 block(16, 16);
@@ -247,8 +261,11 @@ void process_nd_features_cuda(struct dec_image *out, enum combined_feature featu
                   (height + block.y - 1) / block.y);
         auto *fn = nd_process<ND_UNSPEC>;
         switch (feature) {
-        case ND_NONE:
+        case FEAT_NONE:
                 abort();
+        case HONS:
+                fn =  nd_process<HONS>;
+                break;
         case NDVI:
                 fn =  nd_process<NDVI>;
                 break;

@@ -34,7 +34,7 @@ instead.
 
 ## 2026-02
 
-- [S2] add some normalized-differential features - NDVI, NDWI, NDMI, NDSI
+- [S2] add some normalized-differential features - HONS, NDVI, NDWI, NDMI, NDSI
 - for S2 features, the source areas without significant data (NODATA)
 are set transparent if WebP is output (alternatively in case of JPEG,
 it will be colored according to the user-selected fill-color)
@@ -118,23 +118,44 @@ or webp. There must be **3** input files.
 
 (S2 only)
 
-Currently supported features are **NDVI**, **NDWI**, **NDMI**, **NDSI**
-and generic **ND_UNSPEC** (rendered as a grayscale).  All of them
-currently require 2 file names, the syntax is `feature@fname1,fname2`
-where  the feature name is one of the above. Output file name is
-`feature-oname1-COMMA-oname2.ext` where the oname is specified in
-previous section (**note** between _feature_ and _oname1_ is '-'
-not at-sign).
+Currently supported features are **HONS¹**, **NDVI²**, **NDWI**,
+**NDMI**, **NDSI** and generic **ND_UNSPEC** (rendered as a
+grayscale).  All of them currently require 2 file names, the syntax
+is `feature@fname1,fname2` where  the feature name is one of the
+above. Output file name is `feature-oname1-COMMA-oname2.ext` where
+the oname is specified in previous section (**note** between _feature_
+and _oname1_ is '-' not at-sign).
 
 Required bands for features:
-- **NDVI¹**: _B08_ (NIR - near infra red), _B04_ (red)
+- **HONS¹**: __B04__ (red), __B03__ (green), __B02__ (blue)
+- **NDVI²**: _B08_ (NIR - near infra red), _B04_ (red)
 - **NDWI**: _B03_ (green), _B08_ (NIR)
 - **NDMI**: _B8A_ (Narrow NIR), _B11_ (SWIR - short wave infrared)
 - **NDSI**: _B03_ (green), _B11_ (SWIR), _B04_ (red) , _B02_ (blue)
 - **ND_GENERIC**: any1, any2
 
-**¹** the ramp for **NDVI** used by _gjtiff_ differs from the one
+**¹** the output differs from Copernicus browser but when using the formula:
+```
+return [Math.cbrt(0.6*B04 - 0.035),
+        Math.cbrt(0.6*B03 - 0.035),
+        Math.cbrt(0.6*B02 - 0.035)]
+```
+literallly:
+<https://browser.dataspace.copernicus.eu/?zoom=13&lat=48.89548&lng=16.663&themeId=DEFAULT-THEME&visualizationUrl=U2FsdGVkX18S0RU3ThQ5S1NI8XgRpm%2BIRCtsv%2FYiPKPMfauXlTOD0N%2FUzNe%2Bm60vDu4LEPZ%2F8KmzgickbVvzr%2F2sgbQJ116mzufvaf8P7POn8caCfyTmwJv9%2B12IJZRn&evalscript=Ly9WRVJTSU9OPTMKZnVuY3Rpb24gc2V0dXAoKSB7CiAgcmV0dXJuIHsKICAgIGlucHV0OiBbIkIwNCIsIkIwMyIsIkIwMiJdLAogICAgb3V0cHV0OiB7IGJhbmRzOiAzIH0KICB9Owp9CgpmdW5jdGlvbiBldmFsdWF0ZVBpeGVsKHNhbXBsZSkgewogIHJldHVybiBbTWF0aC5jYnJ0KDAuNiAqIHNhbXBsZS5CMDQgLSAwLjAzNSksCiAgICAgICAgTWF0aC5jYnJ0KDAuNiAqIHNhbXBsZS5CMDMgLSAwLjAzNSksCiAgICAgICAgTWF0aC5jYnJ0KDAuNiAqIHNhbXBsZS5CMDIgLSAwLjAzNSldCn0%3D&datasetId=S2_L1C_CDAS&fromTime=2025-11-04T00%3A00%3A00.000Z&toTime=2025-11-04T23%3A59%3A59.999Z&handlePositions=0%2C1&gradient=0x000000%2C0xffffff&demSource3D=%22MAPZEN%22&cloudCoverage=30&dateMode=SINGLE#custom-script>
+
+we got the exactly same results but the reference:
+<https://browser.dataspace.copernicus.eu/?zoom=13&lat=48.89548&lng=16.663&themeId=DEFAULT-THEME&visualizationUrl=U2FsdGVkX197JuTNIb0OFC0iBRgrbH3B%2BfOVyuMETBegSUmTYfepKBxy0JXjoN4e2Q3%2BJReC%2BHgdIBOYFsFlmLFRqw%2Bg%2BoA7qa8CgCuSEZ9U%2Fgagt4fGf%2BLMFIKi48s6&datasetId=S2_L1C_CDAS&fromTime=2025-11-04T00%3A00%3A00.000Z&toTime=2025-11-04T23%3A59%3A59.999Z&layerId=2_TONEMAPPED_NATURAL_COLOR&demSource3D=%22MAPZEN%22&cloudCoverage=30&dateMode=SINGLE>
+differs.
+
+**²** the ramp for **NDVI** used by _gjtiff_ differs from the one
 described [here](https://custom-scripts.sentinel-hub.com/sentinel-2/ndvi/)
+
+It seems like the Copernicus browser isn't using that exactly, eg:
+<https://browser.dataspace.copernicus.eu/?zoom=13&lat=48.88351&lng=16.62918&themeId=DEFAULT-THEME&visualizationUrl=U2FsdGVkX1%2Fs1%2B6lSY5DGIzAzp0k9IuA2HWSsjBYAzM2HhVye%2BeoO%2Fjzb4iaqY5zqA5CL5%2BDuE6w%2BdQ8K3ya%2BWtf21PNhkeey7jW0W5NQUfhNJNNOsfo%2BwUo1vnFwRsD&evalscript=Ly9WRVJTSU9OPTMKZnVuY3Rpb24gc2V0dXAoKSB7CiAgcmV0dXJuIHsKICAgIGlucHV0OiBbIkIwNCIsIkIwOCIsIkIxMSIsICJCOEEiXSwKICAgIG91dHB1dDogeyBiYW5kczogNCB9CiAgfTsKfQoKZnVuY3Rpb24gZXZhbHVhdGVQaXhlbChzYW1wbGUpIHsKICB2YWw9KHNhbXBsZS5CMDgtc2FtcGxlLkIwNCkvKHNhbXBsZS5CMDgrc2FtcGxlLkIwNCkvMiArIDAuNQogIHZhbCA9IHZhbCA8IC4yNSA%2FIDAgOiAxCgogIHJldHVybiBbdmFsLCB2YWwsdmFsICwgMV07Cn0%3D&datasetId=S2_L2A_CDAS&fromTime=2025-11-04T00%3A00%3A00.000Z&toTime=2025-11-04T23%3A59%3A59.999Z&handlePositions=0%2C1&gradient=0x000000%2C0xffffff&demSource3D=%22MAPZEN%22&cloudCoverage=30&dateMode=SINGLE#custom-script>
+shows that almost all area of Novomlýnské nádrže has the value <0.25, which
+is < -0.5 if range is [-1,1], so that it should be all black according to the scale
+but it isn't in the reference NDVI render:
+<https://browser.dataspace.copernicus.eu/?zoom=13&lat=48.88351&lng=16.62918&themeId=DEFAULT-THEME&visualizationUrl=U2FsdGVkX1%2F9BT1QzDTrEyynQPU1mLZ92ge5e7gGxYW47%2F5lpyVIYO42IzCwh7cFEiXO5r4VkCtck4%2BKgUWkHtbp9v8%2BjbAjeQvzot6QRBvvwoU1S%2FC7%2BXerYW6lej1U&datasetId=S2_L2A_CDAS&fromTime=2025-11-04T00%3A00%3A00.000Z&toTime=2025-11-04T23%3A59%3A59.999Z&layerId=3_NDVI&demSource3D=%22MAPZEN%22&cloudCoverage=30&dateMode=SINGLE>
 
 # Supported input formats
 

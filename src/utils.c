@@ -391,17 +391,18 @@ struct tie_points tuple6_to_tie_points(unsigned count, const double *tie_points)
 }
 
 static const struct {
-        const char *patt1;
-        const char *patt2;
+        // const char *patt1;
+        // const char *patt2;
         enum combined_feature feature;
         const char *name;
 } nd_feature_map[] = {
 #define F(x) x, #x
-    {"_B08", "_B04", F(NDVI)},
-    {"_B8A", "_B11", F(NDMI)},
-    {"_B03", "_B08", F(NDWI)},
-    {"_B03", "_B11", F(NDSI)},
-    {"", "", F(ND_UNSPEC)},
+    {/* "_B08", "_B04", */ F(HONS)},
+    {/* "_B08", "_B04", */ F(NDVI)},
+    {/* "_B8A", "_B11", */ F(NDMI)},
+    {/* "_B03", "_B08", */ F(NDWI)},
+    {/* "_B03", "_B11", */ F(NDSI)},
+    {/* "",     "",     */ F(ND_UNSPEC)},
 #undef F
 };
 

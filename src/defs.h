@@ -115,11 +115,13 @@ struct owned_image {
 
 /// normalized difference feature (feat1-feat2)/(feat1+feat2)
 enum combined_feature {
-        ND_NONE,
-        NDVI, ///< Normalized Difference Vegetation Index (B8, B4)
-        NDMI, ///< Normalized Difference Moisture Index (B8A, B11)
-        NDWI, ///< Normalized Difference Water Index (B3, B8)
-        NDSI, ///< Normalised Difference Snow Index (B3, B11)
+        FEAT_NONE,
+        NDVI,      ///< Normalized Difference Vegetation Index (B8, B4)
+        NDMI,      ///< Normalized Difference Moisture Index (B8A, B11)
+        NDWI,      ///< Normalized Difference Water Index (B3, B8)
+        NDSI,      ///< Normalised Difference Snow Index (B3, B11i; additionally
+                   ///< B04+B02 /red + blue/ for true color)
+        HONS,      ///< Highlight Optimized Natural Color Script (B04, B03, B02)
         ND_UNSPEC, ///< generic ND, will render as a grayscale
 };
 

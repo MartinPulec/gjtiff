@@ -322,7 +322,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         dst_desc.is_16b = false;
         struct owned_image *ret = new_cuda_owned_image(&dst_desc);
 
-        if (feature != ND_NONE) {
+        if (feature != FEAT_NONE) {
                 struct conbimend_data d{};
                 assert((unsigned)ifiles->count <= countof(d.img));
                 d.count = ifiles->count;
@@ -345,7 +345,7 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
         // set new ifname
         combined_ifname[0] = '\0';
         char *const end = combined_ifname + PATH_MAX;
-        if (feature != ND_NONE) { // prefix if feature prefix was originally
+        if (feature != FEAT_NONE) { // prefix if feature prefix was originally
                 combined_ifname += snprintf(combined_ifname,           // given
                                             end - combined_ifname, "%s-",
                                             get_nd_feature_name(feature));
@@ -870,7 +870,7 @@ static enum combined_feature get_feature_from_prefix(char **ifnames)
 {
         char *at_sign = strchr(*ifnames, '@');
         if (at_sign == nullptr) {
-                return ND_NONE;
+                return FEAT_NONE;
         }
         char s_feature[10];
         strncpy(s_feature, *ifnames,
@@ -992,10 +992,10 @@ int main(int argc, char **argv)
                         ret = EXIT_FAILURE;
                         continue;
                 }
-                if (feature != ND_NONE) {
+                if (feature != FEAT_NONE) {
                         alpha_wanted = true;
                 }
-                bool decode_16b = feature != ND_NONE;
+                bool decode_16b = feature != FEAT_NONE;
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
                 for (int i = 0; i < ifiles.count; ++i) {
