@@ -15,7 +15,7 @@
 #include "defs.h"
 #include "utils.h"
 
-// defined in MTD_MSIL2A.xml for B0-B12
+// defined in doc/MTD_MSIL2A.xml for B0-B12
 constexpr float BOA_ADD_OFFSET = -1000;
 // https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l1c/ and also in the
 // above XML
