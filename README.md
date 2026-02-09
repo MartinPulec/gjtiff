@@ -48,6 +48,8 @@ cannonical representation (see previous point)
 - **changed** gamma-correction is no longer applied to S1, neither,
 after the auto-equalization - the decision to use gamma-correction is
 somehow arbitrary so it was changed to align with S2
+- **added** possibility for different tiles and whole image format
+(arbitrary combination, see help)
 
 ## Older
 

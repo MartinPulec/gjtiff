@@ -746,7 +746,9 @@ static void show_help(const char *progname)
         INFO_MSG("\t-q <q>   - JPEG quality\n");
         INFO_MSG("\t-s <d>   - downscale factor\n");
         INFO_MSG("\t-v[v]    - be verbose (2x for more messages)\n");
-        INFO_MSG("\t-w|-W    - WebP encode (use uppercase for WebP tiles and JPG whole)\n");
+        INFO_MSG("\t-j|-J    - JPEG encode (use uppercase for just the JPEG whole)\n");
+        INFO_MSG("\t-p|-P    - PNG  encode (use uppercase for just the PNG whole)\n");
+        INFO_MSG("\t-w|-W    - WebP encode (use uppercase for just the WebP whole)\n");
         INFO_MSG("\t-z <zlevel>- zoom level\n");
         INFO_MSG("\n");
         INFO_MSG("Input must be in TIFF or JP2.\"\n");
@@ -759,6 +761,9 @@ static void show_help(const char *progname)
         INFO_MSG("Input filename (both cmdline argument or from pipe) can be suffixed with opts,\n");
         INFO_MSG("syntax:\n");
         INFO_MSG("\tfname[:q=<JPEG_q>][:s=<downscale_factor>]\n");
+        INFO_MSG("\n");
+        INFO_MSG("Output format can be set independently for whole image "
+                 "(upprecase -J/-P/-W) and tiles (lowercase).\n");
 }
 
 static char *parse_fname_opts(char *buf, struct options *opts)
@@ -903,7 +908,7 @@ int main(int argc, char **argv)
         bool no_whole_image = false;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+D:F:I:M:NQVWdhnno:pq:rs:vwz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+D:F:I:JM:NPQVWdhjlno:pq:rs:vwz:")) != -1) {
                 switch (opt) {
                 case 'D':
                         CHECK_CUDA(cudaSetDevice(strtol(optarg, nullptr, 0)));
@@ -928,6 +933,12 @@ int main(int argc, char **argv)
                 case 'h':
                         show_help(argv[0]);
                         return EXIT_SUCCESS;
+                case 'j':
+                        global_opts.output_format = OUTF_JPEG;
+                        break;
+                case 'J':
+                        global_opts.whole_image_fmt = OUTF_JPEG;
+                        break;
                 case 'l':
                         global_opts.use_libtiff = true;
                         break;
@@ -942,6 +953,9 @@ int main(int argc, char **argv)
                         break;
                 case 'p':
                         global_opts.output_format = OUTF_PNG;
+                        break;
+                case 'P':
+                        global_opts.whole_image_fmt = OUTF_PNG;
                         break;
                 case 'q':
                         global_opts.req_quality = (int)strtol(
@@ -963,8 +977,7 @@ int main(int argc, char **argv)
                         global_opts.output_format = OUTF_WEBP;
                         break;
                 case 'W':
-                        global_opts.output_format = OUTF_WEBP;
-                        global_opts.whole_image_fmt = OUTF_JPEG;
+                        global_opts.whole_image_fmt = OUTF_WEBP;
                         break;
                 case 'z':
                         parse_zoom_levels(global_opts.zoom_levels, optarg);
