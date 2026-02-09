@@ -3,7 +3,7 @@ NVCC_DIR := $(shell dirname $$(command -v $(NVCC)))
 GIT_REV != git rev-parse --short HEAD || echo '(unknown)'
 COMMON = $(shell pkg-config --cflags gdal) -g -Wall -Wextra -fopenmp \
 	-I$(NVCC_DIR)/../include -DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE \
-	-DGIT_REV=$(GIT_REV) -O3
+	-DGIT_REV=$(GIT_REV) -O3 -march=native
 CFLAGS += $(COMMON)
 CXXFLAGS += $(COMMON)
 INSTALL = install
@@ -52,6 +52,7 @@ $(BUILD_DIR)/%.o: src/%.cu $(C_HEADERS) $(CPP_HEADERS) $(CU_HEADERS)
 
 $(BUILD_DIR)/gjtiff: \
 	$(BUILD_DIR)/downscaler.o \
+	$(BUILD_DIR)/fpng.o \
 	$(BUILD_DIR)/gdal_coords.o \
 	$(BUILD_DIR)/kernels.o \
 	$(BUILD_DIR)/libnvj2k.o \
