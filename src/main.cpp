@@ -493,11 +493,11 @@ static bool encode_tiles_z(struct state_gjtiff *s,
         const int scale = 1<<zoom_level;
         int x_first = floor(uncomp->bounds[XLEFT] * scale);
         int x_end = ceil(uncomp->bounds[XRIGHT] * scale);
-        int dst_xpitch = x_end - x_first;
+        int scale_xpitch = x_end - x_first;
         int y_first = floor(uncomp->bounds[YTOP] * scale);
         int y_end = ceil(uncomp->bounds[YBOTTOM] * scale);
         int dst_lines = y_end - y_first;
-        dst_xpitch *= 256 * uncomp->comp_count;
+        scale_xpitch *= 256 * uncomp->comp_count;
         dst_lines *= 256;
         /// @todo roundf below?
         int x_off = ((uncomp->bounds[XLEFT] * scale) - x_first) * 256.;
@@ -512,7 +512,7 @@ static bool encode_tiles_z(struct state_gjtiff *s,
                          256.;
 
         struct owned_image *scaled = scale_pitch(
-            s->downscaler, new_width, x_off, dst_xpitch, new_height, y_off,
+            s->downscaler, new_width, x_off, scale_xpitch, new_height, y_off,
             dst_lines, uncomp, uncomp->width);
         const struct dec_image *src = &scaled->img;
         struct owned_image *in_ram = nullptr;
@@ -521,6 +521,9 @@ static bool encode_tiles_z(struct state_gjtiff *s,
                                               s->opts.output_format, s->stream);
                 src = &in_ram->img;
         }
+
+        // comp_count can be 4 now if out is PNG (uncomp doesn't count alpha)
+        int src_xpitch = scale_xpitch / uncomp->comp_count * src->comp_count;
 
         // disable MT via OMP for JPEG
         omp_set_num_threads(s->opts.output_format == OUTF_JPEG ? 1
@@ -532,22 +535,22 @@ static bool encode_tiles_z(struct state_gjtiff *s,
                 const size_t path_len = strlen(path);
 #pragma omp parallel for
                 for (int y = 0; y < y_end - y_first; ++y) {
-                        struct dec_image tile = scaled->img; // copy metadata
+                        struct dec_image tile = *src; // copy metadata
                         tile.width = tile.height = 256;
                         auto *fpath = (char *)malloc(PATH_MAX);
                         snprintf(fpath, PATH_MAX, "%s", path);
                         char *end = fpath + path_len;
                         snprintf(end, PATH_MAX - (end - fpath), "/%d%s",
                                  y_first + y, get_ext(s->opts.output_format));
-                        size_t off = ((ptrdiff_t)y * 256 * dst_xpitch) +
-                                     (x * 256 * uncomp->comp_count);
+                        size_t off = ((ptrdiff_t)y * 256 * src_xpitch) +
+                                     (x * 256 * src->comp_count);
                         tile.data = src->data + off;
                         if (src->alpha != nullptr) {
                                 tile.alpha = src->alpha +
-                                            off / uncomp->comp_count;
+                                            off / src->comp_count;
                         }
                         size_t len = encode_file(
-                            s, &tile, dst_xpitch - 256 * uncomp->comp_count,
+                            s, &tile, src_xpitch - 256 * src->comp_count,
                             fpath, src, s->opts.output_format);
                         if (len != 0) {
                                 // printf(", \"%s\"", path);

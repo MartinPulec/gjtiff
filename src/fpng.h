@@ -45,11 +45,11 @@ namespace fpng
 	// pImage: pointer to RGB or RGBA image pixels, R first in memory, B/A last.
 	// w/h - image dimensions. Image's row pitch in bytes must is w*num_chans.
 	// num_chans must be 3 or 4. 
-	bool fpng_encode_image_to_memory(const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, std::vector<uint8_t>& out_buf, uint32_t flags = 0);
+	bool fpng_encode_image_to_memory(const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, std::vector<uint8_t>& out_buf, int width_padding, uint32_t flags = 0);
 
 #ifndef FPNG_NO_STDIO
 	// Fast PNG encoding to the specified file.
-	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags = 0);
+	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, int width_padding, uint32_t flags = 0);
 #endif
 
 	// ---- Decompression

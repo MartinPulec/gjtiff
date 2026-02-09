@@ -288,6 +288,8 @@ static struct owned_image *convert_for_png(const struct dec_image *in,
         ret->img.comp_count = 4;
         ret->free         = release_owned_host_image;
 
+        /// @todo  1 channel
+
         uint8_t *d_buf = convert_to_rgba(in, stream);
         CHECK_CUDA(cudaMemcpy(ret->img.data, d_buf, size, cudaMemcpyDefault));
         return ret;

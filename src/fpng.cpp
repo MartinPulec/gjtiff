@@ -1659,7 +1659,7 @@ do_literals:
 		}
 	}
 
-	bool fpng_encode_image_to_memory(const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, std::vector<uint8_t>& out_buf, uint32_t flags)
+	bool fpng_encode_image_to_memory(const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, std::vector<uint8_t>& out_buf, int wp, uint32_t flags)
 	{
 		if (!endian_check())
 		{
@@ -1688,8 +1688,8 @@ do_literals:
 
 		for (y = 0; y < h; ++y)
 		{
-			const uint8_t* pSrc = (uint8_t*)pImage + y * bpl;
-			const uint8_t* pPrev_src = y ? ((uint8_t*)pImage + (y - 1) * bpl) : nullptr;
+			const uint8_t* pSrc = (uint8_t*)pImage + y * (bpl + wp);
+			const uint8_t* pPrev_src = y ? ((uint8_t*)pImage + (y - 1) * (bpl + wp)) : nullptr;
 
 			uint8_t* pDst = &temp_buf[temp_buf_ofs];
 
@@ -1733,7 +1733,7 @@ do_literals:
 
 			for (y = 0; y < h; ++y)
 			{
-				const uint8_t* pSrc = (uint8_t*)pImage + y * bpl;
+				const uint8_t* pSrc = (uint8_t*)pImage + y * (bpl + wp);
 
 				uint8_t* pDst = &temp_buf[temp_buf_ofs];
 
@@ -1803,10 +1803,10 @@ do_literals:
 	}
 
 #ifndef FPNG_NO_STDIO
-	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags)
+	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, int width_padding, uint32_t flags)
 	{
 		std::vector<uint8_t> out_buf;
-		if (!fpng_encode_image_to_memory(pImage, w, h, num_chans, out_buf, flags))
+		if (!fpng_encode_image_to_memory(pImage, w, h, num_chans, out_buf, width_padding, flags))
 			return false;
 
 		FILE* pFile = nullptr;
