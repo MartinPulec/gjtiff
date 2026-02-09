@@ -408,6 +408,7 @@ static struct owned_image *scale_webp(struct state_gjtiff *s,
 static size_t encode_gpu(struct state_gjtiff *s, const struct dec_image *uncomp,
                          const char *ofname, enum out_format out_fmt)
 {
+        TIMER_START(encode_whole, LL_VERBOSE);
         struct owned_image *in_ram = nullptr;
         if (out_fmt != OUTF_JPEG) {
                 // handle WebP >= 16k*16k
@@ -431,6 +432,7 @@ static size_t encode_gpu(struct state_gjtiff *s, const struct dec_image *uncomp,
         if (in_ram != nullptr) {
                 in_ram->free(in_ram);
         }
+        TIMER_STOP(encode_whole);
         return len;
 }
 
@@ -661,6 +663,7 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
                          const char *ifname, const char *prefix,
                          int *zoom_levels)
 {
+        TIMER_START(encode_tiles, LL_VERBOSE);
         bool ret = true;
         char whole[PATH_MAX];
         snprintf(whole, sizeof whole, "%s", prefix);
@@ -689,6 +692,7 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         printf("\t}");
         INFO_MSG("%s encoded %ssuccessfully\n", whole,
                (ret ? "" : "un"));
+        TIMER_STOP(encode_tiles);
         return ret;
 }
 

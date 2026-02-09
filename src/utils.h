@@ -34,12 +34,12 @@
         if (name##_enabled)                                                     \
                 timespec_get(&t0_##name, TIME_UTC)
 #define TIMER_STOP(name)                                                       \
-        if (name##_enabled) {                                                   \
+        if (name##_enabled) {                                                  \
                 timespec_get(&t1_##name, TIME_UTC);                            \
                 fprintf(stderr, #name " duration %f s\n",                      \
                         t1_##name.tv_sec - t0_##name.tv_sec +                  \
-                            (t1_##name.tv_nsec - t0_##name.tv_nsec) /          \
-                                1000000000.0);                                 \
+                            ((t1_##name.tv_nsec - t0_##name.tv_nsec) /         \
+                             1000000000.0));                                   \
         }
 
 #define GPU_TIMER_START(name, req_ll, stream)                                  \
