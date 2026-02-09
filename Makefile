@@ -61,6 +61,7 @@ $(BUILD_DIR)/gjtiff: \
 	$(BUILD_DIR)/main.o \
 	$(BUILD_DIR)/nd_processing.o \
 	$(BUILD_DIR)/pam.o \
+	$(BUILD_DIR)/png.o \
 	$(BUILD_DIR)/rotate.o \
 	$(BUILD_DIR)/rotate_tie_points.o \
 	$(BUILD_DIR)/rotate_utm.o \

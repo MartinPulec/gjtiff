@@ -277,10 +277,29 @@ struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 //         return ret;
 // }
 
+static struct owned_image *convert_for_png(const struct dec_image *in,
+                                           cudaStream_t stream)
+{
+        struct owned_image *ret = malloc(sizeof *ret);
+        memcpy(&ret->img, in, sizeof *in);
+        const size_t size = (size_t)in->width * in->height * 4;
+        ret->img.alpha    = nullptr;
+        ret->img.data     = malloc(size);
+        ret->img.comp_count = 4;
+        ret->free         = release_owned_host_image;
+
+        uint8_t *d_buf = convert_to_rgba(in, stream);
+        CHECK_CUDA(cudaMemcpy(ret->img.data, d_buf, size, cudaMemcpyDefault));
+        return ret;
+}
+
 struct owned_image *copy_img_from_device(const struct dec_image *in,
                                          enum out_format output_format,
                                          cudaStream_t stream)
 {
+        if (output_format == OUTF_PNG) {
+                return convert_for_png(in, stream);
+        }
         struct owned_image *ret = malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
         const size_t size = (size_t)in->width * in->height * in->comp_count;

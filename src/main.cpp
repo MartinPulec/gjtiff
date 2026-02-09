@@ -47,6 +47,7 @@
 #include "libtiff.hpp"
 #include "nd_processing.h"
 #include "pam.h"
+#include "png.h"
 #include "rotate.h"
 #include "utils.h"
 #include "webp.h"
@@ -117,6 +118,8 @@ static const char *get_ext(enum out_format output_format)
                 return ".webp";
         case OUTF_RAW:
                 return ".pnm";
+        case OUTF_PNG:
+                return ".png";
         }
         abort();
 }
@@ -375,6 +378,8 @@ static size_t encode_file(struct state_gjtiff *s,
                 return encode_jpeg(s, *uncomp, width_padding, ofname);
         case OUTF_WEBP:
                 return encode_webp(s->webp_enc, uncomp, width_padding, ofname, orig_img);
+        case OUTF_PNG:
+                return encode_png(uncomp, width_padding, ofname);
         case OUTF_RAW:
                 return pam_write(ofname, uncomp->width,
                                  uncomp->width + width_padding, uncomp->height,
@@ -888,13 +893,14 @@ int main(int argc, char **argv)
 {
         init_term_colors();
         GDALAllRegister();
+        png_init();
 
         char ofdir[PATH_MAX] = "./";
         struct options global_opts = OPTIONS_INIT;
         bool no_whole_image = false;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+D:F:I:M:NQVWdhnno:q:rs:vwz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+D:F:I:M:NQVWdhnno:pq:rs:vwz:")) != -1) {
                 switch (opt) {
                 case 'D':
                         CHECK_CUDA(cudaSetDevice(strtol(optarg, nullptr, 0)));
@@ -930,6 +936,9 @@ int main(int argc, char **argv)
                         break;
                 case 'o':
                         snprintf(ofdir, sizeof ofdir, "%s/", optarg);
+                        break;
+                case 'p':
+                        global_opts.output_format = OUTF_PNG;
                         break;
                 case 'q':
                         global_opts.req_quality = (int)strtol(
@@ -971,8 +980,8 @@ int main(int argc, char **argv)
         if (not no_whole_image && global_opts.whole_image_fmt == OUTF_NONE) {
                 global_opts.whole_image_fmt = global_opts.output_format;
         }
-        alpha_wanted = global_opts.output_format == OUTF_WEBP ||
-                       global_opts.whole_image_fmt == OUTF_WEBP;
+        alpha_wanted = FORMAT_SUPPORTS_ALPHA(global_opts.output_format) ||
+                       FORMAT_SUPPORTS_ALPHA(global_opts.whole_image_fmt);
 
         wait_exclusive_run();
 

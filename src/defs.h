@@ -19,7 +19,16 @@ enum {
         LL_VERBOSE = 1,
         LL_DEBUG = 2,
 };
-enum out_format { OUTF_NONE, OUTF_JPEG, OUTF_RAW, OUTF_WEBP };
+enum out_format {
+        OUTF_NONE,
+        OUTF_JPEG,
+        OUTF_RAW,
+        OUTF_WEBP,
+        OUTF_PNG,
+};
+
+#define FORMAT_SUPPORTS_ALPHA(out_format)                                      \
+        ((out_format) == OUTF_WEBP || (out_format) == OUTF_PNG)
 
 // defined in main.cpp
 extern int log_level;

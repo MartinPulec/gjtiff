@@ -56,6 +56,8 @@ static struct {
 
         uint8_t *d_yuv420;
         size_t d_yuv420_allocated;
+        uint8_t *d_rgba;
+        size_t d_rgba_allocated;
 } state;
 
 template <typename T> struct second_param;
@@ -482,6 +484,45 @@ uint8_t *convert_rgb_to_yuv420(const struct dec_image *in, cudaStream_t stream)
         return state.d_yuv420;
 }
 
+struct rgb_to_rgba_converter {
+    const uint8_t* rgb_ptr;
+    const uint8_t *alpha_ptr;
+    uint8_t *rgba_ptr;
+
+    rgb_to_rgba_converter(const uint8_t *rgb, const uint8_t *alpha,
+                          uint8_t *rgba)
+        : rgb_ptr(rgb), alpha_ptr(alpha), rgba_ptr(rgba)
+    {
+    }
+
+    __device__ void operator()(size_t pixel_index) const
+    {
+            size_t rgb_idx         = pixel_index * 3;
+            size_t rgba_idx        = pixel_index * 4;
+            rgba_ptr[rgba_idx + 0] = rgb_ptr[rgb_idx + 0];   // R
+            rgba_ptr[rgba_idx + 1] = rgb_ptr[rgb_idx + 1];   // G
+            rgba_ptr[rgba_idx + 2] = rgb_ptr[rgb_idx + 2];   // B
+            rgba_ptr[rgba_idx + 3] = alpha_ptr[pixel_index]; // A
+    }
+};
+
+uint8_t *convert_to_rgba(const struct dec_image *in, cudaStream_t stream)
+{
+        assert(in->alpha != nullptr);
+        size_t len = ((size_t) in->width * in->height * 4);
+        if (len > state.d_rgba_allocated) {
+                CHECK_CUDA(cudaFree(state.d_rgba));
+                CHECK_CUDA(cudaMalloc(&state.d_rgba, len));
+                state.d_rgba_allocated = len;
+        }
+        assert(in->comp_count == 3);
+        thrust::for_each(
+            thrust::cuda::par.on(stream), thrust::counting_iterator<size_t>(0),
+            thrust::counting_iterator<size_t>((size_t)in->width * in->height),
+            rgb_to_rgba_converter(in->data, in->alpha, state.d_rgba));
+        return state.d_rgba;
+}
+
 static __global__ void kernel_y(const uint8_t *d_in, uint8_t *d_out, size_t count)
 {
         int pos = blockIdx.x * blockDim.x + threadIdx.x;
@@ -579,6 +620,7 @@ void cleanup_cuda_kernels()
                 CHECK_CUDA(cudaFree(state.stat[i].d_res));
         }
         CHECK_CUDA(cudaFree(state.d_yuv420));
+        CHECK_CUDA(cudaFree(state.d_rgba));
 }
 
 struct set_s2_alpha {
