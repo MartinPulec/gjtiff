@@ -1,10 +1,11 @@
 # GJTIFF
 
-Tool to convert _TIFF_ files to _JPEGs_ on the CUDA-capable **GPU**
-utilizing [GPUJPEG](https://github.com/CESNET/GPUJPEG) and
-[nvTIFF](https://developer.nvidia.com/nvtiff-downloads).
+Tool to convert Copernicus S1 (TIFF) and S2 (jp2) files to _JPEGs_ on the CUDA-capable
+**GPU** utilizing [GPUJPEG](https://github.com/CESNET/GPUJPEG)
+and [nvTIFF](https://developer.nvidia.com/nvtiff-downloads).
 [nvCOMP](https://developer.nvidia.com/nvcomp) is also required for
-DEFLATE decompress.
+DEFLATE decompress. **PNG** and **WebP** outputs are also supported
+(although using CPU encoders).
 
 If nvTIFF isn't capable to decompress the picture _libtiff_ is used
 instead.
@@ -186,7 +187,6 @@ than calling it for a single image to amortize the initialization cost.
 
 - improved nvjpeg2000 decoding performance if needed
 <https://developer.nvidia.com/blog/accelerating-jpeg-2000-decoding-for-digital-pathology-and-satellite-images-using-the-nvjpeg2000-library/>
-- option to select CUDA device
 - various performance optimizations - eg. when image sizes change
 often, which is slow due to GPUJPEG reconfiguration
 - cudaMalloc/Free Async version should be used when used within
