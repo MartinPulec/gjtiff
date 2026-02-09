@@ -154,6 +154,23 @@ template <> __device__ void process_mapping<NDWI>(uint8_t *out, float val)
         process_mapping_nd_interpolate(out, val, ramp_ndwi);
 }
 
+template<bool is_alpha>
+static __device__ auto get_sample(const struct input_band *band,
+                                   float rel_pos_src_x, float rel_pos_src_y)
+{
+        const float abs_pos_src_x = rel_pos_src_x * band->width;
+        const float abs_pos_src_y = rel_pos_src_y * band->height;
+        if constexpr (is_alpha) {
+                return bilinearSample<uint8_t>((uint8_t *)band->alpha,
+                                               band->width, 1, band->height,
+                                               abs_pos_src_x, abs_pos_src_y);
+        } else {
+                return bilinearSample<uint16_t, float>(
+                    (uint16_t *)band->data, band->width, 1, band->height,
+                    abs_pos_src_x, abs_pos_src_y);
+        }
+}
+
 static __device__ void process_ndsi(uint8_t *out, float val, float g,
                                     const struct conbimend_data *d,
                                     float rel_pos_src_x, float rel_pos_src_y)
@@ -168,16 +185,10 @@ static __device__ void process_ndsi(uint8_t *out, float val, float g,
                 R_B04_IDX = 2,
                 B_B02_IDX = 3,
         };
-        float abs_pos_src_x = rel_pos_src_x * d->img[R_B04_IDX].width;
-        float abs_pos_src_y = rel_pos_src_y * d->img[R_B04_IDX].height;
-        float r             = bilinearSample<uint16_t, float>(
-            (uint16_t *)d->img[R_B04_IDX].data, d->img[R_B04_IDX].width, 1,
-            d->img[R_B04_IDX].height, abs_pos_src_x, abs_pos_src_y);
-        abs_pos_src_x = rel_pos_src_x * d->img[B_B02_IDX].width;
-        abs_pos_src_y = rel_pos_src_y * d->img[B_B02_IDX].height;
-        float b       = bilinearSample<uint16_t, float>(
-            (uint16_t *)d->img[B_B02_IDX].data, d->img[B_B02_IDX].width, 1,
-            d->img[B_B02_IDX].height, abs_pos_src_x, abs_pos_src_y);
+        float r = get_sample<false>(&d->img[R_B04_IDX], rel_pos_src_x,
+                                    rel_pos_src_y);
+        float b = get_sample<false>(&d->img[B_B02_IDX], rel_pos_src_x,
+                                    rel_pos_src_y);
         r /= 65535.0f;
         b /= 65535.0f;
 
@@ -201,26 +212,16 @@ static __global__ void nd_process(struct dec_image out, struct conbimend_data d,
         float rel_pos_src_x = (out_x + 0.5) / out.width;
         float rel_pos_src_y = (out_y + 0.5) / out.height;
 
-        float abs_pos_src_x = rel_pos_src_x * d.img[0].width;
-        float abs_pos_src_y = rel_pos_src_y * d.img[0].height;
-        uint8_t alpha1 = bilinearSample(d.img[0].alpha, d.img[0].width, 1,
-                                        d.img[0].height, abs_pos_src_x,
-                                        abs_pos_src_y);
+        uint8_t alpha1 = get_sample<true>(&d.img[0], rel_pos_src_x,
+                                          rel_pos_src_y);
         out.alpha[out_x + (out_y * out.width)] = alpha1;
         if (alpha1 != 255) {
                 out_p[0] = out_p[1] = out_p[2] = d_fill_color;
                 return;
         }
 
-        float val1 = bilinearSample<uint16_t, float>(
-            (uint16_t *)d.img[0].data, d.img[0].width, 1, d.img[0].height,
-            abs_pos_src_x, abs_pos_src_y);
-
-        abs_pos_src_x = rel_pos_src_x * d.img[1].width;
-        abs_pos_src_y = rel_pos_src_y * d.img[1].height;
-        float val2 = bilinearSample<uint16_t, float>(
-            (uint16_t *)d.img[1].data, d.img[1].width, 1, d.img[1].height,
-            abs_pos_src_x, abs_pos_src_y);
+        float val1 = get_sample<false>(&d.img[0], rel_pos_src_x, rel_pos_src_y);
+        float val2 = get_sample<false>(&d.img[1], rel_pos_src_x, rel_pos_src_y);
 
         float res = (val1 - val2) / (val1 + val2 + 0.000000001f);
 

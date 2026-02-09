@@ -5,18 +5,21 @@
 
 #include "defs.h"
 
+struct input_band {
+        int width;
+        int height;
+        void *data;
+        unsigned char *alpha;
+};
+
 struct conbimend_data {
         unsigned count;
-        struct {
-                int width;
-                int height;
-                void *data;
-                unsigned char *alpha;
-        } img[4];
+        struct input_band img[4];
 };
 
 void process_nd_features_cuda(struct dec_image *out,
                               enum combined_feature feature,
-                              const struct conbimend_data *in, cudaStream_t stream);
+                              const struct conbimend_data *in,
+                              cudaStream_t stream);
 
 #endif
