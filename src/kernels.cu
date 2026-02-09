@@ -1,6 +1,7 @@
 #include "kernels.h"
 
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>                       // for atoi,getenv
 #include <nppcore.h>
@@ -484,6 +485,7 @@ uint8_t *convert_rgb_to_yuv420(const struct dec_image *in, cudaStream_t stream)
         return state.d_yuv420;
 }
 
+template<int in_comp_count>
 struct rgb_to_rgba_converter {
     const uint8_t* rgb_ptr;
     const uint8_t *alpha_ptr;
@@ -497,11 +499,18 @@ struct rgb_to_rgba_converter {
 
     __device__ void operator()(size_t pixel_index) const
     {
-            size_t rgb_idx         = pixel_index * 3;
+            size_t rgb_idx         = pixel_index * in_comp_count;
             size_t rgba_idx        = pixel_index * 4;
-            rgba_ptr[rgba_idx + 0] = rgb_ptr[rgb_idx + 0];   // R
-            rgba_ptr[rgba_idx + 1] = rgb_ptr[rgb_idx + 1];   // G
-            rgba_ptr[rgba_idx + 2] = rgb_ptr[rgb_idx + 2];   // B
+            if (in_comp_count == 1) {
+                    uint8_t val = rgb_ptr[rgb_idx];
+                    rgba_ptr[rgba_idx + 0] = val;   // R
+                    rgba_ptr[rgba_idx + 1] = val;   // G
+                    rgba_ptr[rgba_idx + 2] = val;   // B
+            } else {
+                    rgba_ptr[rgba_idx + 0] = rgb_ptr[rgb_idx + 0];   // R
+                    rgba_ptr[rgba_idx + 1] = rgb_ptr[rgb_idx + 1];   // G
+                    rgba_ptr[rgba_idx + 2] = rgb_ptr[rgb_idx + 2];   // B
+            }
             rgba_ptr[rgba_idx + 3] = alpha_ptr[pixel_index]; // A
     }
 };
@@ -515,11 +524,22 @@ uint8_t *convert_to_rgba(const struct dec_image *in, cudaStream_t stream)
                 CHECK_CUDA(cudaMalloc(&state.d_rgba, len));
                 state.d_rgba_allocated = len;
         }
-        assert(in->comp_count == 3);
-        thrust::for_each(
-            thrust::cuda::par.on(stream), thrust::counting_iterator<size_t>(0),
-            thrust::counting_iterator<size_t>((size_t)in->width * in->height),
-            rgb_to_rgba_converter(in->data, in->alpha, state.d_rgba));
+        assert(in->comp_count == 1 || in->comp_count == 3);
+        if (in->comp_count == 1) {
+                thrust::for_each(thrust::cuda::par.on(stream),
+                                 thrust::counting_iterator<size_t>(0),
+                                 thrust::counting_iterator<size_t>(
+                                     (size_t)in->width * in->height),
+                                 rgb_to_rgba_converter<1>(in->data, in->alpha,
+                                                          state.d_rgba));
+        } else {
+                thrust::for_each(thrust::cuda::par.on(stream),
+                                 thrust::counting_iterator<size_t>(0),
+                                 thrust::counting_iterator<size_t>(
+                                     (size_t)in->width * in->height),
+                                 rgb_to_rgba_converter<3>(in->data, in->alpha,
+                                                          state.d_rgba));
+        }
         return state.d_rgba;
 }
 
