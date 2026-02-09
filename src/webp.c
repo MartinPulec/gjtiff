@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <webp/encode.h>
 
 #include "defs.h" // dec_image
@@ -160,6 +161,11 @@ retry:
         }
         fclose(outfile);
 
+        struct stat file_info;
+        if (stat(ofname, &file_info) == 0) {
+                return file_info.st_size;
+        }
+        // weird if stat fails here but we can return uncompressed size
         return len;
 }
 void webp_encoder_destroy(struct webp_encoder *enc)
