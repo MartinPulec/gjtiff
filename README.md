@@ -52,6 +52,7 @@ after the auto-equalization - the decision to use gamma-correction is
 somehow arbitrary so it was changed to align with S2
 - **added** possibility for different tiles and whole image format
 (arbitrary combination, see help)
+- **added** PNG encoder (using fpnge)
 
 ## Older
 
@@ -195,22 +196,47 @@ not that it has really just **2** channels. Actually it is the opposite -
 _WebP_ doesn't support grayscale and the _fPNG_ encoder neither (although
 PNG itself does).
 
-| config               | encode (s) | duration (altogether) | size (MB, excluding tiles) |
-| -------------------- | ---------- | --------------------- | -------------------------- |
-| -p green             | 0.71       | 1.54                  | 152.22                     |
-| -p -z 15 green       | 2.18       | 3.06                  | 152.22                     |
-| -p HONS              | 0.64       | 2.17                  | 205.68                     |
-| -p -z 15 HONS        | 2.17       | 3.78                  | 205.68                     |
-|                      |            |                       |                            |
-| -w -q 82 green       | 0.78       | 1.70                  |   4.91                     |
-| -w -q 82 -z 15 green | 2.00       | 2.85                  |   4.91                     |
-| -w -q 82 HONS        | 1.31       | 2.72                  |  16.33                     |
-| -w -q 82 -z 15 HONS  | 2.46       | 3.98                  |  16.33                     |
+| config               | encode (s) | duration (altogether) | size (MB, excluding tiles**¹**) |
+| -------------------- | ---------- | --------------------- | ------------------------------- |
+| **PNG**              |            |                       |                                 |
+| -p green             | 0.13       | 1.03                  |  61.91                          |
+| -p -z 15 green       | 1.14       | 2.01                  |  61.91                          |
+| -p HONS              | 0.33       | 1.77                  | 181.01                          |
+| -p -z 15 HONS        | 2.19       | 3.69                  | 181.01                          |
+| **WebP**             |            |                       |                                 |
+| -w -q 82 green       | 0.78       | 1.70                  |   4.91                          |
+| -w -q 82 -z 15 green | 2.00       | 2.85                  |   4.91                          |
+| -w -q 82 HONS        | 1.31       | 2.72                  |  16.33                          |
+| -w -q 82 -z 15 HONS  | 2.46       | 3.98                  |  16.33                          |
 
+
+**¹** for zoom-level=15, the tiles take approximately 7x more space than the image itself
+
+**PNG** is using [fpnge](https://github.com/animetosho/fpnge) encoder,
+[fpng](https://github.com/richgel999/fpng) can be also used by setting
+environment variable _PNG_BACKEND=fpng_.
+
+<details>
+<summary>PNG results with fpng backend</summary>
+<table>
+<tr><th> config               <th> encode (s) <th> duration (altogether) <th> size (MB, excluding tiles)
+<tbody>
+<tr><td> -p green             <td> 0.71       <td> 1.54                  <td> 152.22
+<tr><td> -p -z 15 green       <td> 2.18       <td> 3.06                  <td> 152.22
+<tr><td> -p HONS              <td> 0.64       <td> 2.17                  <td> 205.68
+<tr><td> -p -z 15 HONS        <td> 2.17       <td> 3.78                  <td> 205.68
+</table>
+</details>
 
 As **PNG** encoders, _stb_image_writer_ and libpng were also considered, especially
 for the grayscale+alpha case. But in the best settings were slower, eg. for the green
 libpng took 2.5 sec and stb 3.5.
+
+The whole image and individual tiles are compressed in parallel. Basically,
+if using tiles, the encode time is the duration of encoding tiles for z=15.
+The compression of the whole and tiles takes approximately the same at z=14
+using the AMD Ryzen 9 7900X processor (so that at lower zoom level, the
+whole image will become the critical path).
 
 # TODO
 
