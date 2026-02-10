@@ -747,13 +747,13 @@ static void show_help(const char *progname)
         INFO_MSG("\t-h       - show help\n");
         INFO_MSG("\t-l       - use libtiff if nvCOMP not available\n");
         INFO_MSG("\t-n       - do not adjust to natural rotation/prooprotion\n");
-        INFO_MSG("\t-r       - write raw PNM instead of JPEG\n");
         INFO_MSG("\t-o <dir> - output JPEG directory\n");
         INFO_MSG("\t-q <q>   - JPEG quality\n");
         INFO_MSG("\t-s <d>   - downscale factor\n");
         INFO_MSG("\t-v[v]    - be verbose (2x for more messages)\n");
         INFO_MSG("\t-j|-J    - JPEG encode (use uppercase for just the JPEG whole)\n");
         INFO_MSG("\t-p|-P    - PNG  encode (use uppercase for just the PNG whole)\n");
+        INFO_MSG("\t-r|-R    - write raw PNM (uppercase for the whole image only)\n");
         INFO_MSG("\t-w|-W    - WebP encode (use uppercase for just the WebP whole)\n");
         INFO_MSG("\t-z <zlevel>- zoom level\n");
         INFO_MSG("\n");
@@ -914,7 +914,7 @@ int main(int argc, char **argv)
         bool no_whole_image = false;
 
         int opt = 0;
-        while ((opt = getopt(argc, argv, "+D:F:I:JM:NPQVWdhjlno:pq:rs:vwz:")) != -1) {
+        while ((opt = getopt(argc, argv, "+D:F:I:JM:NPRQVWdhjlno:pq:rs:vwz:")) != -1) {
                 switch (opt) {
                 case 'D':
                         CHECK_CUDA(cudaSetDevice(strtol(optarg, nullptr, 0)));
@@ -969,6 +969,9 @@ int main(int argc, char **argv)
                         break;
                 case 'r':
                         global_opts.output_format = OUTF_RAW;
+                        break;
+                case 'R':
+                        global_opts.whole_image_fmt = OUTF_RAW;
                         break;
                 case 's':
                         ERROR_MSG("probably no longer working - will be likely upscaled later again (suggested size)!\n");
