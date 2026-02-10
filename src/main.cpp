@@ -29,6 +29,7 @@
 #include <cstring>
 #include <cuda_runtime.h>
 #include <fcntl.h>        // for fcntl
+#include <future>
 #include <gdal.h>         // for GDALAllRegister
 #include <libgpujpeg/gpujpeg_common.h>
 #include <libgpujpeg/gpujpeg_encoder.h>
@@ -677,13 +678,17 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
                    get_ext(s->opts.whole_image_fmt), nullptr);
-        size_t len = 0;
+
+        decltype(std::async(std::launch::deferred, encode_gpu, s, uncomp, whole,
+                            s->opts.whole_image_fmt)) a;
         if (s->opts.whole_image_fmt != OUTF_NONE) {
-                len = encode_gpu(s, uncomp, whole, s->opts.whole_image_fmt);
-                if (len == 0) {
-                        return false;
-                }
+                auto policy = s->opts.whole_image_fmt == OUTF_JPEG
+                                  ? std::launch::deferred // GPUJPEG isn't MT-safe
+                                  : std::launch::async;
+                a           = std::async(policy, encode_gpu, s, uncomp, whole,
+                                         s->opts.whole_image_fmt);
         }
+
         if (!s->first) {
                 printf(",\n");
         }
@@ -699,6 +704,14 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         printf("\n");
         // printf(",\n"); print_bbox(uncomp->coords);
         printf("\t}");
+
+        size_t len = 0;
+        if (s->opts.whole_image_fmt != OUTF_NONE) {
+                len = a.get();
+                if (len == 0) {
+                        return false;
+                }
+        }
 
         char buf[UINT64_ASCII_LEN + 1];
         INFO_MSG("%s (%dx%d; %s B) encoded %ssuccessfully\n", whole,
