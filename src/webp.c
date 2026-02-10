@@ -150,7 +150,7 @@ retry:;
         WebPEncode(&webp_config, &webp_picture);
         if (webp_picture.error_code == VP8_ENC_ERROR_PARTITION0_OVERFLOW &&
             webp_config.method < 4) {
-                webp_config.method += 1;
+                webp_config.method += webp_config.method == 0 ? 2 : 1;
                 VERBOSE_MSG("[web] resetting, setting the method to %d\n",
                             webp_config.method);
                 fclose(outfile);
