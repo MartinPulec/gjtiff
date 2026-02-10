@@ -38,6 +38,10 @@ C_HEADERS != find src -name '*.h'
 CPP_HEADERS != find src -name '*.hpp'
 CU_HEADERS != find src -name '*.cuh'
 
+$(BUILD_DIR)/%.o: src/%.cc $(C_HEADERS) $(CPP_HEADERS)
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $< -c -o $@
+
 $(BUILD_DIR)/%.o: src/%.cpp $(C_HEADERS) $(CPP_HEADERS)
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $< -c -o $@
@@ -53,6 +57,7 @@ $(BUILD_DIR)/%.o: src/%.cu $(C_HEADERS) $(CPP_HEADERS) $(CU_HEADERS)
 $(BUILD_DIR)/gjtiff: \
 	$(BUILD_DIR)/downscaler.o \
 	$(BUILD_DIR)/fpng.o \
+	$(BUILD_DIR)/fpnge.o \
 	$(BUILD_DIR)/gdal_coords.o \
 	$(BUILD_DIR)/kernels.o \
 	$(BUILD_DIR)/libnvj2k.o \
