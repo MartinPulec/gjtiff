@@ -24,6 +24,7 @@ instead.
   * [Combined features - normalized differential](#combined-features---normalized-differential)
 - [Supported input formats](#supported-input-formats)
 - [Performance](#performance)
+  * [Output format comparison](#output-format-comparison)
 - [TODO](#todo)
 - [Postprocess - output normalization/equalization](#postprocess---output-normalizationequalization)
 - [Notes and issues](#notes-and-issues)
@@ -182,6 +183,34 @@ Using _AMD Ryzen 9 7900X_ and _NVIDIA GeForce RTX 4080_:
 
 As with GPUJPEG, it is advisable to process multiple images in a batch
 than calling it for a single image to amortize the initialization cost.
+
+## Output format comparison
+
+Used images:
+- **T33UXQ_20251104T095211_B03_10m.jp2** - green band, _grayscale output_ (with alpha)
+- **HONS@T33UXQ_20251104T095211_B04,T33UXQ_20251104T095211_B03,T33UXQ_20251104T095211_B02** - Highlight Optimized Natural Color, _RGBA output_
+
+**Note:** Grayscale+alpha mean that the output is semantically grayscale,
+not that it has really just **2** channels. Actually it is the opposite -
+_WebP_ doesn't support grayscale and the _fPNG_ encoder neither (although
+PNG itself does).
+
+| config               | encode (s) | duration (altogether) | size (MB, excluding tiles) |
+| -------------------- | ---------- | --------------------- | -------------------------- |
+| -p green             | 0.71       | 1.54                  | 152.22                     |
+| -p -z 15 green       | 2.18       | 3.06                  | 152.22                     |
+| -p HONS              | 0.64       | 2.17                  | 205.68                     |
+| -p -z 15 HONS        | 2.17       | 3.78                  | 205.68                     |
+|                      |            |                       |                            |
+| -w -q 82 green       | 0.78       | 1.70                  |   4.91                     |
+| -w -q 82 -z 15 green | 2.00       | 2.85                  |   4.91                     |
+| -w -q 82 HONS        | 1.31       | 2.72                  |  16.33                     |
+| -w -q 82 -z 15 HONS  | 2.46       | 3.98                  |  16.33                     |
+
+
+As **PNG** encoders, _stb_image_writer_ and libpng were also considered, especially
+for the grayscale+alpha case. But in the best settings were slower, eg. for the green
+libpng took 2.5 sec and stb 3.5.
 
 # TODO
 
