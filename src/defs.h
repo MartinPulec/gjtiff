@@ -18,6 +18,7 @@ enum {
         LL_INFO = 0,
         LL_VERBOSE = 1,
         LL_DEBUG = 2,
+        LL_DEBUG2 = 3,
 };
 enum out_format {
         OUTF_NONE,

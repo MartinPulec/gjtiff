@@ -18,7 +18,8 @@ enum {
 struct webp_encoder {
         int quality;
         unsigned char chroma[(MAX_WEBP_DIMENSION + 1) / 2];
-        int req_method;
+        int req_method;  //  0 = fast (fails for bigger imgs+quality), 4 - default
+                         // -1 autoselect
 };
 
 static int my_write(const uint8_t *data, size_t data_size,
@@ -34,7 +35,7 @@ struct webp_encoder *webp_encoder_create(int quality)
         enc->quality = quality == -1 ? DEFAULT_WEBP_QUALITY : quality;
         memset(enc->chroma, CBCR_GRAY, sizeof enc->chroma);
 
-        enc->req_method = 2;    // 0 = fast (fails for bigger imgs+quality), 4 - default
+        enc->req_method = -1;
         const char *const req_method = getenv("WEBP_METHOD");
         if (req_method != nullptr) {
                 enc->req_method = atoi(req_method);
@@ -77,10 +78,20 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
 {
         struct WebPConfig webp_config;
 
+        int method = enc->req_method;
+        if (method == -1) {
+                if (enc->quality > 85 && img->width > 256) {
+                        method = 2;
+                } else {
+                        method = 0;
+                }
+        }
+        DEBUG2_MSG("[webp] Using method %d\n", method);
+
         int ok = WebPConfigInit(&webp_config);
         if (ok) {
                 webp_config.quality = enc->quality;
-                webp_config.method = enc->req_method;
+                webp_config.method = method;
                 webp_config.segments = 1; // 4 - max
                 webp_config.partitions = 3;
                 webp_config.thread_level = 1;

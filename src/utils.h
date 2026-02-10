@@ -98,6 +98,9 @@ extern cudaEvent_t cuda_event_stop;
 #define DEBUG_MSG(...)                                                         \
         if (log_level >= LL_DEBUG)                                             \
         fprintf(stderr, __VA_ARGS__)
+#define DEBUG2_MSG(...)                                                        \
+        if (log_level >= LL_DEBUG2)                                            \
+        fprintf(stderr, __VA_ARGS__)
 
 #if CUDART_VERSION <= 8000
 #define cudaFreeAsync(ptr, stream)                                             \
