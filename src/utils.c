@@ -277,20 +277,21 @@ struct owned_image *new_cuda_owned_image(const struct dec_image *in)
 //         return ret;
 // }
 
+extern bool backend_fpng; // defined in png.cpp
+
 static struct owned_image *convert_for_png(const struct dec_image *in,
                                            cudaStream_t stream)
 {
+        int comp_count = backend_fpng ? 4 : in->comp_count + 1;
         struct owned_image *ret = malloc(sizeof *ret);
         memcpy(&ret->img, in, sizeof *in);
-        const size_t size = (size_t)in->width * in->height * 4;
+        const size_t size = (size_t)in->width * in->height * comp_count;
         ret->img.alpha    = nullptr;
         ret->img.data     = malloc(size);
-        ret->img.comp_count = 4;
+        ret->img.comp_count = comp_count;
         ret->free         = release_owned_host_image;
 
-        /// @todo  1 channel
-
-        uint8_t *d_buf = convert_to_rgba(in, stream);
+        uint8_t *d_buf = convert_alpha_to_planar(in, stream, backend_fpng);
         CHECK_CUDA(cudaMemcpy(ret->img.data, d_buf, size, cudaMemcpyDefault));
         return ret;
 }

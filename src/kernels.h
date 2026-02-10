@@ -7,6 +7,7 @@ struct dec_image;
 #include <cstddef>
 #else
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stddef.h>
 #endif
 
@@ -39,8 +40,8 @@ void combine_images_cuda(struct dec_image *out, const struct dec_image *in1,
                                              cudaStream_t stream);
 [[nodiscard]] uint8_t *convert_y_full_to_limited(const struct dec_image *in,
                                                  cudaStream_t stream);
-[[nodiscard]] uint8_t *convert_to_rgba(const struct dec_image *in,
-                                       cudaStream_t stream);
+uint8_t *convert_alpha_to_planar(const struct dec_image *in,
+                                 cudaStream_t stream, bool enforce_rgba);
 
 void rotate_set_alpha(struct dec_image *in, double aDstQuad[4][2],
                       cudaStream_t stream);

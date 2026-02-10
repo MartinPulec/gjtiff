@@ -485,7 +485,7 @@ uint8_t *convert_rgb_to_yuv420(const struct dec_image *in, cudaStream_t stream)
         return state.d_yuv420;
 }
 
-template<int in_comp_count>
+template<int in_comp_count, int out_comp_count>
 struct rgb_to_rgba_converter {
     const uint8_t* rgb_ptr;
     const uint8_t *alpha_ptr;
@@ -500,25 +500,30 @@ struct rgb_to_rgba_converter {
     __device__ void operator()(size_t pixel_index) const
     {
             size_t rgb_idx         = pixel_index * in_comp_count;
-            size_t rgba_idx        = pixel_index * 4;
-            if (in_comp_count == 1) {
+            size_t rgba_idx        = pixel_index * out_comp_count;
+            if constexpr (in_comp_count == 1) {
                     uint8_t val = rgb_ptr[rgb_idx];
                     rgba_ptr[rgba_idx + 0] = val;   // R
-                    rgba_ptr[rgba_idx + 1] = val;   // G
-                    rgba_ptr[rgba_idx + 2] = val;   // B
+                    if (out_comp_count == 4) {
+                            rgba_ptr[rgba_idx + 1] = val; // G
+                            rgba_ptr[rgba_idx + 2] = val; // B
+                    }
             } else {
+                    static_assert(out_comp_count == 4);
                     rgba_ptr[rgba_idx + 0] = rgb_ptr[rgb_idx + 0];   // R
                     rgba_ptr[rgba_idx + 1] = rgb_ptr[rgb_idx + 1];   // G
                     rgba_ptr[rgba_idx + 2] = rgb_ptr[rgb_idx + 2];   // B
             }
-            rgba_ptr[rgba_idx + 3] = alpha_ptr[pixel_index]; // A
+            rgba_ptr[rgba_idx + out_comp_count - 1] = alpha_ptr[pixel_index]; // A
     }
 };
 
-uint8_t *convert_to_rgba(const struct dec_image *in, cudaStream_t stream)
+uint8_t *convert_alpha_to_planar(const struct dec_image *in, cudaStream_t stream,
+                           bool enforce_rgba)
 {
         assert(in->alpha != nullptr);
-        size_t len = ((size_t) in->width * in->height * 4);
+        int comp_count = enforce_rgba? 4 : in->comp_count + 1;
+        size_t len = ((size_t) in->width * in->height * comp_count);
         if (len > state.d_rgba_allocated) {
                 CHECK_CUDA(cudaFree(state.d_rgba));
                 CHECK_CUDA(cudaMalloc(&state.d_rgba, len));
@@ -526,18 +531,29 @@ uint8_t *convert_to_rgba(const struct dec_image *in, cudaStream_t stream)
         }
         assert(in->comp_count == 1 || in->comp_count == 3);
         if (in->comp_count == 1) {
-                thrust::for_each(thrust::cuda::par.on(stream),
-                                 thrust::counting_iterator<size_t>(0),
-                                 thrust::counting_iterator<size_t>(
-                                     (size_t)in->width * in->height),
-                                 rgb_to_rgba_converter<1>(in->data, in->alpha,
-                                                          state.d_rgba));
+                if (enforce_rgba) {
+                        thrust::for_each(
+                            thrust::cuda::par.on(stream),
+                            thrust::counting_iterator<size_t>(0),
+                            thrust::counting_iterator<size_t>(
+                                (size_t)in->width * in->height),
+                            rgb_to_rgba_converter<1, 4>(in->data, in->alpha,
+                                                        state.d_rgba));
+                } else {
+                        thrust::for_each(
+                            thrust::cuda::par.on(stream),
+                            thrust::counting_iterator<size_t>(0),
+                            thrust::counting_iterator<size_t>(
+                                (size_t)in->width * in->height),
+                            rgb_to_rgba_converter<1, 2>(in->data, in->alpha,
+                                                        state.d_rgba));
+                }
         } else {
                 thrust::for_each(thrust::cuda::par.on(stream),
                                  thrust::counting_iterator<size_t>(0),
                                  thrust::counting_iterator<size_t>(
                                      (size_t)in->width * in->height),
-                                 rgb_to_rgba_converter<3>(in->data, in->alpha,
+                                 rgb_to_rgba_converter<3, 4>(in->data, in->alpha,
                                                           state.d_rgba));
         }
         return state.d_rgba;
