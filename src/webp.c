@@ -139,6 +139,7 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         }
         webp_picture.a_stride = webp_picture.y_stride;
 
+retry:;
         FILE *outfile = fopen(ofname, "wb");
         if (outfile == NULL) {
                 ERROR_MSG( "[webp] cannot create %s!\n", ofname);
@@ -146,11 +147,13 @@ unsigned long encode_webp(struct webp_encoder *enc, const struct dec_image *img,
         }
         webp_picture.custom_ptr = outfile;
 
-retry:
         WebPEncode(&webp_config, &webp_picture);
         if (webp_picture.error_code == VP8_ENC_ERROR_PARTITION0_OVERFLOW &&
             webp_config.method < 4) {
                 webp_config.method += 1;
+                VERBOSE_MSG("[web] resetting, setting the method to %d\n",
+                            webp_config.method);
+                fclose(outfile);
                 goto retry;
         }
         if (webp_picture.error_code != VP8_ENC_OK) {
