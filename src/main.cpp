@@ -111,7 +111,7 @@ static const char *get_ext(enum out_format output_format)
 {
         switch (output_format) {
         case OUTF_NONE:
-                abort();
+                return ".nul";
         case OUTF_JPEG:
                 return ".jpg";
         case OUTF_WEBP:
