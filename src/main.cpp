@@ -672,7 +672,6 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
                          const char *ifname, const char *prefix,
                          int *zoom_levels)
 {
-        TIMER_START(encode_tiles, LL_VERBOSE);
         bool ret = true;
         char whole[PATH_MAX];
         snprintf(whole, sizeof whole, "%s", prefix);
@@ -697,10 +696,12 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         printf("\t\t\"infile\":\"%s\",\n", ifname);
         printf("\t\t\"outfile\":");
         printf("\"%s\"", whole);
+        TIMER_START(encode_tiles_only, LL_VERBOSE);
         while (*zoom_levels != -1) {
                 ret &= encode_tiles_z(s, uncomp, ifname, prefix, *zoom_levels);
                 zoom_levels++;
         }
+        TIMER_STOP(encode_tiles_only);
         printf("\n");
         // printf(",\n"); print_bbox(uncomp->coords);
         printf("\t}");
@@ -719,7 +720,6 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
                format_number_with_delim(len, buf, sizeof buf),
                 (ret ? "" : "un"));
 
-        TIMER_STOP(encode_tiles);
         return ret;
 }
 
