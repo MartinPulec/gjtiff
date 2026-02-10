@@ -677,9 +677,10 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         snprintf(whole, sizeof whole, "%s", prefix);
         get_ofname(ifname, whole + strlen(whole), sizeof whole - strlen(whole),
                    get_ext(s->opts.whole_image_fmt), nullptr);
+        size_t len = 0;
         if (s->opts.whole_image_fmt != OUTF_NONE) {
-                if (encode_gpu(s, uncomp, whole, s->opts.whole_image_fmt) ==
-                    0) {
+                len = encode_gpu(s, uncomp, whole, s->opts.whole_image_fmt);
+                if (len == 0) {
                         return false;
                 }
         }
@@ -698,8 +699,13 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         printf("\n");
         // printf(",\n"); print_bbox(uncomp->coords);
         printf("\t}");
-        INFO_MSG("%s encoded %ssuccessfully\n", whole,
-               (ret ? "" : "un"));
+
+        char buf[UINT64_ASCII_LEN + 1];
+        INFO_MSG("%s (%dx%d; %s B) encoded %ssuccessfully\n", whole,
+               uncomp->width, uncomp->height,
+               format_number_with_delim(len, buf, sizeof buf),
+                (ret ? "" : "un"));
+
         TIMER_STOP(encode_tiles);
         return ret;
 }
