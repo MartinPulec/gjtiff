@@ -191,11 +191,6 @@ Used images:
 - **T33UXQ_20251104T095211_B03_10m.jp2** - green band, _grayscale output_ (with alpha)
 - **HONS@T33UXQ_20251104T095211_B04,T33UXQ_20251104T095211_B03,T33UXQ_20251104T095211_B02** - Highlight Optimized Natural Color, _RGBA output_
 
-**Note:** Grayscale+alpha mean that the output is semantically grayscale,
-not that it has really just **2** channels. Actually it is the opposite -
-_WebP_ doesn't support grayscale and the _fPNG_ encoder neither (although
-PNG itself does).
-
 | config               | encode (s) | duration (altogether) | size (MB, excluding tiles**¹**) |
 | -------------------- | ---------- | --------------------- | ------------------------------- |
 | **PNG**              |            |                       |                                 |
