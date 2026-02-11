@@ -19,7 +19,13 @@ RUN git clone https://github.com/rapidsai/cuspatial.git && \
     cd cuspatial/cpp/cuproj && cmake -Wno-dev . && make install
 
 RUN curl -LOSs https://github.com/CESNET/GPUJPEG/releases/download/continuous/\
-GPUJPEG-Linux-all.tar.xz && tar xaf GPUJPEG*tar* && cp -r GPUJPEG/* /usr
+GPUJPEG-Linux-all.tar.xz && tar xaf GPUJPEG*tar*
+RUN ARCH_LEVEL=$(curl -LSfs https://raw.githubusercontent.com/HenrikBengtsson/\
+x86-64-level/refs/heads/develop/x86-64-level | bash) && \
+if [ "${ARCH_LEVEL}" -ge 3 ] && [ "${ARCH_LEVEL}" -le 4 ]; then \
+    suffix=-x86-64-v$ARCH_LEVEL; \
+fi \
+&& cp -r GPUJPEG$suffix/* /usr
 
 COPY .git gjtiff/.git/
 COPY Makefile gjtiff/
