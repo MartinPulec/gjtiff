@@ -207,7 +207,7 @@ Used images:
 
 **¹** for zoom-level=15, the tiles take approximately 7x more space than the image itself
 
-**PNG** is using [fpnge](https://github.com/animetosho/fpnge) encoder,
+**PNG** is using [fpnge](https://github.com/veluca93/fpnge) encoder,
 [fpng](https://github.com/richgel999/fpng) can be also used by setting
 environment variable _PNG_BACKEND=fpng_.
 
@@ -244,14 +244,21 @@ streams (as deployed now, it doesn't cause probbems right now)
 
 # Postprocess - output normalization/equalization
 
-The images are converted to visual representation by equalizing the input
-as present in _SNAP_ and applying **gamma=2** (not present in SNAP). The
+The **S1/tiff** images are converted to visual representation by
+equalizing the input as present in _SNAP_ <del>and applying **gamma=2**
+(not present in SNAP)</del>. The
 equalization is performed to scale input [0, µ + 2σ] to output [0,
 255]. If maximal sample in the set is less than µ  + 2σ, this is used
 instead (not likely but happens sometimes when the input values are very
 small). The value above are clamped to 255.
 
-For **3-channel J2K images** the normalization (neither Gamma-compression)
+**Sentinel-2 JP2** bands are equalized from range 1000-11000
+(_BOA_ADD_OFFSET_=1000 and _BOA_QUANTIFICATION_VALUE_=10000 in
+[MTD_MSIL2A.xml](doc/MTD_MSIL2A.xml), the later value also
+[here](https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l1c/)).
+
+For **3-channel J2K images** (_S2 TCI_) the normalization (neither
+Gamma-compression)
 doesn't take place because those seem to represent visual-range data
 (including the Gamma). Note that SNAP handles the image bands separately
 (as a grayscale) and it also undergoes the equalization (by default).
