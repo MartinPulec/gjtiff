@@ -193,6 +193,11 @@ Used images:
 
 | config               | encode (s) | duration (altogether) | size (MB, excluding tiles**¹**) |
 | -------------------- | ---------- | --------------------- | ------------------------------- |
+| **JPEG**             |            |                       |                                 |
+| -j -q 82 green       | 0.11       | 0.96                  |   9.56                          |
+| -j -q 82 -z 15 green | 1.67       | 2.63                  |   9.56                          |
+| -j -q 82 HONS        | 0.14       | 1.71                  |   8.18**²**                     |
+| -j -q 82 -z 15 HONS  | 2.23       | 3.80                  |   8.18**²**                     |
 | **PNG**              |            |                       |                                 |
 | -p green             | 0.13       | 1.03                  |  61.91                          |
 | -p -z 15 green       | 1.14       | 2.01                  |  61.91                          |
@@ -206,6 +211,9 @@ Used images:
 
 
 **¹** for zoom-level=15, the tiles take approximately 7x more space than the image itself
+
+**²** the whole image was downscaled to 5640x5656 (half in both
+dimensions) to reduce VRAM usage (GPUJPEG limitation)
 
 **PNG** is using [fpnge](https://github.com/veluca93/fpnge) encoder,
 [fpng](https://github.com/richgel999/fpng) can be also used by setting
