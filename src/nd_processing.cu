@@ -4,6 +4,10 @@
 #include <cmath>
 #include <cstdlib>  // for getenv
 
+#include <thrust/device_vector.h>
+#include <thrust/transform.h>
+#include <thrust/functional.h>
+
 #include "cuda_common.cuh"    // for bilinear_sample
 #include "defs.h"
 #include "utils.h"
@@ -246,9 +250,89 @@ static __global__ void nd_process(struct dec_image out, struct conbimend_data d,
         }
 }
 
+const static __constant__ uint32_t classify_map[] = {
+    0x000000, // 0: No Data (Missing data)
+    0xff0000, // 1: Saturated or defective pixel
+    0x2f2f2f, // 2: Topographic casted shadows (called "Dark features/Shadows" for
+              // data before 2022-01-25)
+    0x643200, // 3: Cloud shadows
+    0x00a000, // 4: Vegetation
+    0xffe65a, // 5: Not-vegetated
+    0x0000ff, // 6: Water
+    0x808080, // 7: Unclassified
+    0xc0c0c0, // 8: Cloud medium probability
+    0xffffff, // 9: Cloud high probability
+    0x64c8ff, // 10: Thin cirrus
+    0xff96ff, // 11: Snow or ice
+};
+
+struct classify {
+        const uint8_t *in_ptr;
+        const uint8_t *in_alpha_ptr;
+        uint8_t *out_rgb_ptr;
+        uint8_t *out_alpha_ptr;
+        uint8_t fill_color;
+
+        classify(const uint8_t *in, const uint8_t *alpha, uint8_t *rgb,
+                 uint8_t *oa, uint8_t fc)
+            : in_ptr(in), in_alpha_ptr(alpha), out_rgb_ptr(rgb),
+              out_alpha_ptr(oa), fill_color(fc)
+        {
+        }
+
+        __device__ void operator()(size_t pixel_index) const
+        {
+                size_t rgb_idx = pixel_index * 3;
+
+                uint32_t val = 0;
+                unsigned index = in_ptr[pixel_index];
+                if (index < countof(classify_map)) {
+                        val = classify_map[index];
+                }
+                /// @note on missing data (index == 0), we set alpha=0 + fill
+                /// color; in custom scripts they set [0,0,0], also for index>11
+                /// (out-of-bound)
+                if (val == 0 || in_alpha_ptr[pixel_index] != 255) {
+                        out_rgb_ptr[rgb_idx + 0] = fill_color; // R
+                        out_rgb_ptr[rgb_idx + 1] = fill_color; // G
+                        out_rgb_ptr[rgb_idx + 2] = fill_color; // B
+                        out_alpha_ptr[pixel_index] = 0;
+                        return;
+                }
+
+                out_alpha_ptr[pixel_index] = 255;
+                out_rgb_ptr[rgb_idx + 0] = val >> 16;
+                out_rgb_ptr[rgb_idx + 1] = (val >> 8) & 0xFF;
+                out_rgb_ptr[rgb_idx + 2] = val & 0xFF;
+        }
+};
+
+static void process_scl(struct dec_image *out, const struct input_band *in,
+                        cudaStream_t stream)
+{
+        GPU_TIMER_START(process_nd_features_cuda_scl, LL_DEBUG, stream);
+
+        size_t count = (size_t)in->width * in->height;
+        thrust::for_each(thrust::cuda::par.on(stream),
+                         thrust::counting_iterator<size_t>(0),
+                         thrust::counting_iterator<size_t>(count),
+                         classify{(uint8_t *)in->data, in->alpha, out->data,
+                                  out->alpha, fill_color});
+
+        GPU_TIMER_STOP(process_nd_features_cuda_scl);
+}
+
 void process_nd_features_cuda(struct dec_image *out, enum combined_feature feature,
                               const struct conbimend_data *in, cudaStream_t stream)
 {
+        if (feature == SCL) {
+                assert(in->count == 1);
+                assert(!in->is_16b);
+                process_scl(out, &in->img[0], stream);
+                return;
+        }
+
+        assert(in->is_16b);
         assert(feature != HONS || in->count == 3); //  HONS -> count=3
         assert(feature != NDSI || in->count == 4); //  NDSI -> count=4
         assert((feature == HONS || feature == NDSI) || in->count == 2); // !NDSI and !HONS -> count=2
@@ -262,6 +346,7 @@ void process_nd_features_cuda(struct dec_image *out, enum combined_feature featu
         auto *fn = nd_process<ND_UNSPEC>;
         switch (feature) {
         case FEAT_NONE:
+        case SCL: // already handled
                 abort();
         case HONS:
                 fn =  nd_process<HONS>;

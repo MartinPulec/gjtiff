@@ -131,8 +131,9 @@ enum combined_feature {
         NDWI,      ///< Normalized Difference Water Index (B3, B8)
         NDSI,      ///< Normalised Difference Snow Index (B3, B11i; additionally
                    ///< B04+B02 /red + blue/ for true color)
+        ND_UNSPEC, ///< generic ND, will render as a grayscale (2 bands)
         HONS,      ///< Highlight Optimized Natural Color Script (B04, B03, B02)
-        ND_UNSPEC, ///< generic ND, will render as a grayscale
+        SCL,       ///< Scene classification map (SCL)
 };
 
 #endif // ! defined DEFS_H_56B475E2_92D1_4894_BD86_866CE6EE0510

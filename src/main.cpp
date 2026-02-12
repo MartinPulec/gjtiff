@@ -314,13 +314,11 @@ static void print_bbox(const struct coordinate coords[4]) {
 static void get_ofname(const char *ifname, char *ofname, size_t buflen,
                        const char *suffix, char **endptr);
 
-static struct owned_image *combine_images(const struct ifiles *ifiles,
+static struct owned_image *process_images(const struct ifiles *ifiles,
                                           char *combined_ifname,
                                           const enum combined_feature feature,
                                           cudaStream_t stream)
 {
-        assert(ifiles->count > 1);
-
         struct dec_image dst_desc = ifiles->ifiles[0].img->img;
         dst_desc.comp_count = 3;
         dst_desc.is_16b = false;
@@ -330,9 +328,10 @@ static struct owned_image *combine_images(const struct ifiles *ifiles,
                 struct conbimend_data d{};
                 assert((unsigned)ifiles->count <= countof(d.img));
                 d.count = ifiles->count;
+                d.is_16b = ifiles->ifiles[0].img->img.is_16b;
                 for (int i = 0; i < ifiles->count; ++i) {
-                        assert(ifiles->ifiles[0].img->img.data != nullptr);
-                        assert(ifiles->ifiles[0].img->img.is_16b);
+                        assert(ifiles->ifiles[i].img->img.data != nullptr);
+                        assert(ifiles->ifiles[i].img->img.is_16b == d.is_16b);
                         d.img[i].width  = ifiles->ifiles[i].img->img.width;
                         d.img[i].height = ifiles->ifiles[i].img->img.height;
                         d.img[i].data   = ifiles->ifiles[i].img->img.data;
@@ -1046,7 +1045,7 @@ int main(int argc, char **argv)
                 if (feature != FEAT_NONE) {
                         alpha_wanted = true;
                 }
-                bool decode_16b = feature != FEAT_NONE;
+                bool decode_16b = feature != FEAT_NONE && feature != SCL;
                 TIMER_START(transcode, LL_VERBOSE);
                 bool err = false;
                 for (int i = 0; i < ifiles.count; ++i) {
@@ -1081,9 +1080,9 @@ int main(int argc, char **argv)
                 if (err) {
                         goto skip;
                 }
-                if (ifiles.count > 1) {
+                if (ifiles.count == 3 || feature != FEAT_NONE) {
                         char combined_ifname[PATH_MAX];
-                        struct owned_image *combined = combine_images(
+                        struct owned_image *combined = process_images(
                             &ifiles, combined_ifname, feature, state.stream);
                         ifiles_destroy(&ifiles);
                         ifiles.ifiles[0].img = combined;

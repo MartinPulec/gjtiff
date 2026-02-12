@@ -347,22 +347,15 @@ struct dec_image nvj2k_decode(struct nvj2k_state *s, const char *fname,
         }
         ret.alpha = s->alpha;
 
-        if (bps == 1) { // just TCI ?
+        if (bps == 1) { // SCL (1ch), TCI (3ch); or something else?)
                 assert(!decode_16b);
                 convert_remove_pitch(
                     s->decode_output, s->converted,
                     (int)(image_comp_info[0].component_width * image_info.num_components),
                     (int)s->pitch_in_bytes, (int)image_comp_info[0].component_height,
                     s->cuda_stream);
-                CHECK_CUDA(cudaMemsetAsync(ret.alpha, sample_count, 255,
+                CHECK_CUDA(cudaMemsetAsync(ret.alpha, 255, sample_count,
                                            s->cuda_stream));
-                if (ret.comp_count == 3) {
-                        return ret;
-                }
-                // this may not happen becuase 8-bit seem to curtrently be
-                // only the S2 TCI band
-                normalize_8(&ret, s->converted + conv_size / 2, s->cuda_stream);
-                ret.data = s->converted + conv_size / 2;
                 return ret;
         }
 
