@@ -1,6 +1,11 @@
 FROM debian:12
 WORKDIR /build
 
+COPY .git gjtiff/.git/
+COPY Makefile gjtiff/
+COPY src gjtiff/src/
+COPY tools gjtiff/tools/
+
 RUN apt-get -y update
 RUN apt-get -y install curl g++ gcc git libgdal-dev libtiff-dev libwebp-dev \
                    make pkgconf wget xz-utils
@@ -20,15 +25,10 @@ RUN git clone https://github.com/rapidsai/cuspatial.git && \
 
 RUN curl -LOSs https://github.com/CESNET/GPUJPEG/releases/download/continuous/\
 GPUJPEG-Linux-all.tar.xz && tar xaf GPUJPEG*tar*
-RUN ARCH_LEVEL=$(curl -LSfs https://raw.githubusercontent.com/HenrikBengtsson/\
-x86-64-level/refs/heads/develop/x86-64-level | bash) && \
+RUN ARCH_LEVEL=$(gjtiff/tools/x86-64-level) && \
 if [ "${ARCH_LEVEL}" -ge 3 ] && [ "${ARCH_LEVEL}" -le 4 ]; then \
     suffix=-x86-64-v$ARCH_LEVEL; \
 fi \
 && cp -r GPUJPEG$suffix/* /usr
-
-COPY .git gjtiff/.git/
-COPY Makefile gjtiff/
-COPY src gjtiff/src/
 
 RUN cd gjtiff && CFLAGS=-DINSIDE_DHR CXXFLAGS=$CFLAGS make -j $(nproc) install
