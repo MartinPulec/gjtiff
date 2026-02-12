@@ -133,10 +133,10 @@ and _oname1_ is '-' not at-sign).
 
 Required bands for features:
 - **HONS¹** (_Highlight Optimized Natural Color_): _B04_ (red), _B03_ (green), _B02_ (blue)
-- **NDVI²**: _B08_ (NIR - near infra red), _B04_ (red)
-- **NDWI**: _B03_ (green), _B08_ (NIR)
-- **NDMI**: _B8A_ (Narrow NIR), _B11_ (SWIR - short wave infrared)
-- **NDSI**: _B03_ (green), _B11_ (SWIR), _B04_ (red) , _B02_ (blue)
+- **NDVI²** (_Normalized Difference Vegetation Index_): _B08_ (NIR - near infra red), _B04_ (red)
+- **NDWI** (_〃 〃 Water Index_): _B03_ (green), _B08_ (NIR)
+- **NDMI** (_〃 〃 Moisture Index_): _B8A_ (Narrow NIR), _B11_ (SWIR - short wave infrared)
+- **NDSI** (_〃 〃 Snow Index_): _B03_ (green), _B11_ (SWIR), _B04_ (red) , _B02_ (blue)
 - **ND_GENERIC**: any1, any2
 
 Missing:
