@@ -21,7 +21,7 @@ instead.
 - [Build and running](#build-and-running)
 - [Usage](#usage)
   * [Combined features - RGB mapped](#combined-features---rgb-mapped)
-  * [Combined features - normalized differential](#combined-features---normalized-differential)
+  * [Combined features - normalized differential et al.](#combined-features---normalized-differential-et-al)
 - [Supported input formats](#supported-input-formats)
 - [Performance](#performance)
   * [Output format comparison](#output-format-comparison)
@@ -36,7 +36,8 @@ instead.
 
 ## 2026-02
 
-- [S2] add some normalized-differential features - HONS, NDVI, NDWI, NDMI, NDSI
+- [S2] add some normalized-differential features - HONS, NDVI, NDWI,
+NDMI, NDSI, SCL (details [below](#combined-features---normalized-differential-et-al))
 - for S2 features, the source areas without significant data (NODATA)
 are set transparent if WebP is output (alternatively in case of JPEG,
 it will be colored according to the user-selected fill-color)
@@ -119,7 +120,7 @@ output is `oname1-COMMA-oname2-COMMA-oname3.ext` where onameX=$(basename
 ${fnameX%.*}) (just filename without path and extension); _ext_ is jpeg
 or webp. There must be **3** input files.
 
-## Combined features - normalized differential
+## Combined features - normalized differential et al.
 
 (S2 only)
 
@@ -138,9 +139,7 @@ Required bands for features:
 - **NDMI**: _B8A_ (Narrow NIR), _B11_ (SWIR - short wave infrared)
 - **NDSI**: _B03_ (green), _B11_ (SWIR), _B04_ (red) , _B02_ (blue)
 - **ND_GENERIC**: any1, any2
-
-Missing:
-- **Scene classification map** - requires perhaps _SCL_ [L2A] band, which I don't have
+- **SCL**  (_Scene classification map_) - _SCL_ ([L2A] only)
 
 Notes:
 

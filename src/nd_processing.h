@@ -13,6 +13,7 @@ struct input_band {
 };
 
 struct conbimend_data {
+        bool is_16b;
         unsigned count;
         struct input_band img[4];
 };

@@ -425,6 +425,7 @@ static const struct {
     {/* "_B03", "_B08", */ F(NDWI)},
     {/* "_B03", "_B11", */ F(NDSI)},
     {/* "",     "",     */ F(ND_UNSPEC)},
+    {F(SCL)},
 #undef F
 };
 
