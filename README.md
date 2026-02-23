@@ -138,7 +138,7 @@ Required bands for features:
 - **NDWI** (_〃 〃 Water Index_): _B03_ (green), _B08_ (NIR)
 - **NDMI** (_〃 〃 Moisture Index_): _B8A_ (Narrow NIR), _B11_ (SWIR - short wave infrared)
 - **NDSI** (_〃 〃 Snow Index_): _B03_ (green), _B11_ (SWIR), _B04_ (red) , _B02_ (blue)
-- **ND_GENERIC**: any1, any2
+- **ND_UNSPEC** (generic Normalized Difference Index in form _(Bx-By)/(Bx+By)_)**³**: any1, any2
 - **SCL**  (_Scene classification map_): _SCL_ ([L2A] only)
 
 Notes:
@@ -166,6 +166,8 @@ described [here](https://web.archive.org/web/20251108154243/https://custom-scrip
    is < -0.5 if range is [-1,1], so that it should be all black according to the scale
    but it isn't in the reference NDVI render:
    [L2A NDVI reference](https://browser.dataspace.copernicus.eu/?zoom=13&lat=48.88351&lng=16.62918&themeId=DEFAULT-THEME&visualizationUrl=U2FsdGVkX1%2F9BT1QzDTrEyynQPU1mLZ92ge5e7gGxYW47%2F5lpyVIYO42IzCwh7cFEiXO5r4VkCtck4%2BKgUWkHtbp9v8%2BjbAjeQvzot6QRBvvwoU1S%2FC7%2BXerYW6lej1U&datasetId=S2_L2A_CDAS&fromTime=2025-11-04T00%3A00%3A00.000Z&toTime=2025-11-04T23%3A59%3A59.999Z&layerId=3_NDVI&demSource3D=%22MAPZEN%22&cloudCoverage=30&dateMode=SINGLE)
+
+3. S2 B bands are assumend, probably won't produce reasonable results for any other (if not fail)
 
 # Supported input formats
 
