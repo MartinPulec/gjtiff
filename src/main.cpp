@@ -82,8 +82,9 @@ struct options {
         int downscale_factor;
         bool use_libtiff;
         bool norotate;
-        enum out_format whole_image_fmt[OUTF_COUNT]; ///< can differ from output_format
-        unsigned whole_image_fmt_cnt;
+        enum out_format whole_image_fmt[OUTF_COUNT]; ///< can differ from
+                                                     ///< output_format,
+                                                     ///< 0-terminated
         int zoom_levels[MAX_ZOOM_COUNT];
         enum out_format output_format;
 #define OPTIONS_INIT                                                           \
@@ -92,7 +93,6 @@ struct options {
          .use_libtiff         = false,                                         \
          .norotate            = false,                                         \
          .whole_image_fmt     = {OUTF_NONE},                                   \
-         .whole_image_fmt_cnt = 0,                                             \
          .zoom_levels         = {-1},                                          \
          .output_format       = OUTF_JPEG}
 };
@@ -151,7 +151,7 @@ state_gjtiff::state_gjtiff(struct options opts)
         assert(state_nvtiff != nullptr);
         bool have_jpeg = opts.output_format == OUTF_JPEG;
         bool have_webp = opts.output_format == OUTF_WEBP;
-        for (unsigned i = 0; i < opts.whole_image_fmt_cnt; ++i) {
+        for (unsigned i = 0; opts.whole_image_fmt[i] != OUTF_NONE; ++i) {
                 have_jpeg |= opts.whole_image_fmt[i] == OUTF_JPEG;
                 have_webp |= opts.whole_image_fmt[i] == OUTF_WEBP;
         }
@@ -702,7 +702,7 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
 
         decltype(std::async(std::launch::deferred, encode_gpu, s, uncomp, "",
                             s->opts.whole_image_fmt[0])) a[OUTF_COUNT];
-        for (unsigned i = 0; i < s->opts.whole_image_fmt_cnt; ++i) {
+        for (unsigned i = 0; s->opts.whole_image_fmt[i] != OUTF_NONE; ++i) {
                 snprintf(name_whole[i], sizeof name_whole[i], "%s", prefix);
                 get_ofname(ifname, name_whole[i] + strlen(name_whole[i]),
                            sizeof name_whole[i] - strlen(name_whole[i]),
@@ -731,7 +731,7 @@ static bool encode_tiles(struct state_gjtiff *s, struct dec_image *const uncomp,
         printf("\t}");
 
         size_t len = 0;
-        for (unsigned i = 0; i < s->opts.whole_image_fmt_cnt; ++i) {
+        for (unsigned i = 0; s->opts.whole_image_fmt[i] != OUTF_NONE; ++i) {
                 len = a[i].get();
                 if (len == 0) {
                         return false;
@@ -948,6 +948,7 @@ int main(int argc, char **argv)
         char ofdir[PATH_MAX] = "./";
         struct options global_opts = OPTIONS_INIT;
         bool no_whole_image = false;
+        unsigned whole_image_fmt_cnt = 0;
 
         int opt = 0;
         while ((opt = getopt(argc, argv, "+D:F:I:JM:NPRQVWdhjlno:pq:rs:vwz:")) != -1) {
@@ -980,7 +981,7 @@ int main(int argc, char **argv)
                         break;
                 case 'J':
                         global_opts.whole_image_fmt
-                            [global_opts.whole_image_fmt_cnt++] = OUTF_JPEG;
+                            [whole_image_fmt_cnt++] = OUTF_JPEG;
                         break;
                 case 'l':
                         global_opts.use_libtiff = true;
@@ -999,7 +1000,7 @@ int main(int argc, char **argv)
                         break;
                 case 'P':
                         global_opts.whole_image_fmt
-                            [global_opts.whole_image_fmt_cnt++] = OUTF_PNG;
+                            [whole_image_fmt_cnt++] = OUTF_PNG;
                         break;
                 case 'q':
                         global_opts.req_quality = (int)strtol(
@@ -1010,7 +1011,7 @@ int main(int argc, char **argv)
                         break;
                 case 'R':
                         global_opts.whole_image_fmt
-                            [global_opts.whole_image_fmt_cnt++] = OUTF_RAW;
+                            [whole_image_fmt_cnt++] = OUTF_RAW;
                         break;
                 case 's':
                         ERROR_MSG("probably no longer working - will be likely upscaled later again (suggested size)!\n");
@@ -1026,7 +1027,7 @@ int main(int argc, char **argv)
                         break;
                 case 'W':
                         global_opts.whole_image_fmt
-                            [global_opts.whole_image_fmt_cnt++] = OUTF_WEBP;
+                            [whole_image_fmt_cnt++] = OUTF_WEBP;
                         break;
                 case 'z':
                         parse_zoom_levels(global_opts.zoom_levels, optarg);
@@ -1036,18 +1037,18 @@ int main(int argc, char **argv)
                         exit(EXIT_FAILURE);
                 }
         }
+        assert(whole_image_fmt_cnt <= countof(global_opts.whole_image_fmt));
 
         if (optind == argc) {
                 show_help(argv[0]);
                 return EXIT_FAILURE;
         }
 
-        if (not no_whole_image && global_opts.whole_image_fmt_cnt == 0) {
-                global_opts.whole_image_fmt[global_opts.whole_image_fmt_cnt++] =
-                    global_opts.output_format;
+        if (not no_whole_image && global_opts.whole_image_fmt[0] == OUTF_NONE) {
+                global_opts.whole_image_fmt[0] = global_opts.output_format;
         }
         alpha_wanted = FORMAT_SUPPORTS_ALPHA(global_opts.output_format);
-        for (unsigned i = 0; i < global_opts.whole_image_fmt_cnt; ++i) {
+        for (unsigned i = 0; global_opts.whole_image_fmt[i] != OUTF_NONE; ++i) {
                 alpha_wanted |= FORMAT_SUPPORTS_ALPHA(global_opts.whole_image_fmt[i]);
         }
 
