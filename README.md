@@ -34,6 +34,10 @@ instead.
 
 # NEWS
 
+## 2026-03-18
+
+- multiple "whole" images can now be prodced with more of -W/-P/-J
+
 ## 2026-02
 
 - [S2] add some normalized-differential features - HONS, NDVI, NDWI,

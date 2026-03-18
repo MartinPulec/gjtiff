@@ -26,6 +26,7 @@ enum out_format {
         OUTF_RAW,
         OUTF_WEBP,
         OUTF_PNG,
+        OUTF_COUNT,
 };
 
 #define FORMAT_SUPPORTS_ALPHA(out_format)                                      \
