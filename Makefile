@@ -46,6 +46,10 @@ $(BUILD_DIR)/%.o: src/%.cpp $(C_HEADERS) $(CPP_HEADERS)
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
+$(BUILD_DIR)/fpng.o: src/fpng.cpp $(C_HEADERS) $(CPP_HEADERS)
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -Wno-type-limits src/fpng.cpp -c -o $@
+
 $(BUILD_DIR)/%.o: src/%.c $(C_HEADERS)
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -c -o $@
