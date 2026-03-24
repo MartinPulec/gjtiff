@@ -181,7 +181,8 @@ Copernicus images), no fallback by now
 
 # Performance
 
-Using _AMD Ryzen 9 7900X_ and _NVIDIA GeForce RTX 4080_:
+Decoding + processing single S1 tile using _AMD Ryzen 9 7900X_ and
+_NVIDIA GeForce RTX 4080_ (net time without re/configuration):
 
 - 8K x 8K - 30 ms
 - 8K x 8K - 200 ms using CPU libtiff decoder
@@ -189,6 +190,9 @@ Using _AMD Ryzen 9 7900X_ and _NVIDIA GeForce RTX 4080_:
 
 As with GPUJPEG, it is advisable to process multiple images in a batch
 than calling it for a single image to amortize the initialization cost.
+
+**Note:** Sentinel J2K image decoding takes significantly more time than
+tiff decode, something like 500 ms or similar.
 
 ## Output format comparison
 
@@ -248,8 +252,6 @@ whole image will become the critical path).
 
 # TODO
 
-- improved nvjpeg2000 decoding performance if needed
-<https://developer.nvidia.com/blog/accelerating-jpeg-2000-decoding-for-digital-pathology-and-satellite-images-using-the-nvjpeg2000-library/>
 - various performance optimizations - eg. when image sizes change
 often, which is slow due to GPUJPEG reconfiguration
 - cudaMalloc/Free Async version should be used when used within
